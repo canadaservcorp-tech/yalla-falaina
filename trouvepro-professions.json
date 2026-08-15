@@ -1,0 +1,198 @@
+{
+  "version": "1.0",
+  "note": "Master service catalog for TrouvePro. licence: '' = open (no licence needed), 'rbq' = RBQ construction licence, 'order' = protected professional title (professional order), 'other' = another regulator. licence_note names the regulator. The app does NOT verify; the flag only drives the 'Licensed RBQ' badge (shown when a provider supplies a valid RBQ number) and disclaimers on protected titles.",
+  "categories": [
+    {
+      "id": "construction",
+      "name": { "fr": "Construction et rénovation", "en": "Construction & Renovation" },
+      "services": [
+        { "fr": "Entrepreneur général", "en": "General contractor", "licence": "rbq" },
+        { "fr": "Charpenterie-menuiserie", "en": "Framing & carpentry", "licence": "rbq" },
+        { "fr": "Fondations", "en": "Foundations", "licence": "rbq" },
+        { "fr": "Maçonnerie", "en": "Masonry", "licence": "rbq" },
+        { "fr": "Béton et coffrage", "en": "Concrete & formwork", "licence": "rbq" },
+        { "fr": "Excavation", "en": "Excavation", "licence": "rbq" },
+        { "fr": "Couvreur (toiture)", "en": "Roofing", "licence": "rbq" },
+        { "fr": "Imperméabilisation", "en": "Waterproofing", "licence": "rbq" },
+        { "fr": "Isolation", "en": "Insulation", "licence": "rbq" },
+        { "fr": "Gypse et plâtrage", "en": "Drywall & plastering", "licence": "rbq" },
+        { "fr": "Pose de revêtements de sol", "en": "Flooring installation", "licence": "rbq" },
+        { "fr": "Céramique et carrelage", "en": "Tiling & ceramics", "licence": "rbq" },
+        { "fr": "Peinture (entrepreneur)", "en": "Painting (contractor)", "licence": "rbq" },
+        { "fr": "Portes et fenêtres (installation)", "en": "Doors & windows (installation)", "licence": "rbq" },
+        { "fr": "Charpente métallique", "en": "Structural steel", "licence": "rbq" },
+        { "fr": "Ébénisterie et armoires", "en": "Cabinetry & millwork", "licence": "rbq" }
+      ]
+    },
+    {
+      "id": "mechanical_electrical",
+      "name": { "fr": "Électricité, plomberie et CVAC", "en": "Electrical, Plumbing & HVAC" },
+      "services": [
+        { "fr": "Électricien", "en": "Electrician", "licence": "rbq", "licence_note": "RBQ + CMEQ" },
+        { "fr": "Plomberie", "en": "Plumbing", "licence": "rbq", "licence_note": "RBQ + CMMTQ" },
+        { "fr": "Chauffage", "en": "Heating", "licence": "rbq", "licence_note": "RBQ + CMMTQ" },
+        { "fr": "Ventilation et climatisation (CVAC)", "en": "Ventilation & air conditioning (HVAC)", "licence": "rbq" },
+        { "fr": "Réfrigération", "en": "Refrigeration", "licence": "rbq" }
+      ]
+    },
+    {
+      "id": "home_services",
+      "name": { "fr": "Services résidentiels", "en": "Home Services" },
+      "services": [
+        { "fr": "Homme à tout faire (petits travaux)", "en": "Handyman (small jobs)", "licence": "" },
+        { "fr": "Montage de meubles", "en": "Furniture assembly", "licence": "" },
+        { "fr": "Réparation de portes et fenêtres", "en": "Doors & windows repair", "licence": "" },
+        { "fr": "Réparation d'électroménagers", "en": "Appliance repair", "licence": "" },
+        { "fr": "Serrurier", "en": "Locksmith", "licence": "" },
+        { "fr": "Nettoyage de gouttières", "en": "Gutter cleaning", "licence": "" },
+        { "fr": "Lavage à pression", "en": "Pressure washing", "licence": "" },
+        { "fr": "Nettoyage de conduits et filtres", "en": "Duct & filter cleaning", "licence": "" }
+      ]
+    },
+    {
+      "id": "cleaning",
+      "name": { "fr": "Nettoyage et entretien", "en": "Cleaning" },
+      "services": [
+        { "fr": "Ménage résidentiel", "en": "Residential cleaning", "licence": "" },
+        { "fr": "Entretien commercial", "en": "Commercial cleaning", "licence": "" },
+        { "fr": "Grand ménage", "en": "Deep cleaning", "licence": "" },
+        { "fr": "Nettoyage de tapis", "en": "Carpet cleaning", "licence": "" },
+        { "fr": "Lavage de vitres", "en": "Window washing", "licence": "" },
+        { "fr": "Nettoyage après construction", "en": "Post-construction cleaning", "licence": "" }
+      ]
+    },
+    {
+      "id": "outdoor",
+      "name": { "fr": "Extérieur et saisonnier", "en": "Outdoor & Seasonal" },
+      "services": [
+        { "fr": "Aménagement paysager", "en": "Landscaping", "licence": "" },
+        { "fr": "Entretien de pelouse", "en": "Lawn care", "licence": "" },
+        { "fr": "Jardinage", "en": "Gardening", "licence": "" },
+        { "fr": "Déneigement", "en": "Snow removal", "licence": "" },
+        { "fr": "Émondage et abattage d'arbres", "en": "Tree trimming & removal", "licence": "" },
+        { "fr": "Installation de clôtures", "en": "Fence installation", "licence": "" },
+        { "fr": "Terrasses et patios", "en": "Decks & patios", "licence": "" },
+        { "fr": "Entretien de piscine", "en": "Pool maintenance", "licence": "" }
+      ]
+    },
+    {
+      "id": "automotive",
+      "name": { "fr": "Automobile", "en": "Automotive" },
+      "services": [
+        { "fr": "Mécanicien (garagiste)", "en": "Mechanic", "licence": "" },
+        { "fr": "Mécanicien mobile", "en": "Mobile mechanic", "licence": "" },
+        { "fr": "Carrosserie", "en": "Auto body", "licence": "" },
+        { "fr": "Service de pneus", "en": "Tire service", "licence": "" },
+        { "fr": "Esthétique automobile", "en": "Auto detailing", "licence": "" },
+        { "fr": "Réparation de pare-brise", "en": "Windshield repair", "licence": "" }
+      ]
+    },
+    {
+      "id": "beauty",
+      "name": { "fr": "Beauté et bien-être", "en": "Beauty & Wellness" },
+      "services": [
+        { "fr": "Coiffeur(se)", "en": "Hairdresser", "licence": "" },
+        { "fr": "Barbier", "en": "Barber", "licence": "" },
+        { "fr": "Maquilleur(se)", "en": "Makeup artist", "licence": "" },
+        { "fr": "Esthéticien(ne)", "en": "Esthetician", "licence": "" },
+        { "fr": "Pose d'ongles", "en": "Nail technician", "licence": "" },
+        { "fr": "Extensions de cils", "en": "Eyelash extensions", "licence": "" },
+        { "fr": "Massothérapeute", "en": "Massage therapist", "licence": "" },
+        { "fr": "Entraîneur(se) personnel(le)", "en": "Personal trainer", "licence": "" }
+      ]
+    },
+    {
+      "id": "health_care",
+      "name": { "fr": "Santé et soins", "en": "Health & Care" },
+      "services": [
+        { "fr": "Infirmier(ère)", "en": "Nurse", "licence": "order", "licence_note": "OIIQ (titre protégé)" },
+        { "fr": "Préposé(e) aux bénéficiaires", "en": "Care aide", "licence": "" },
+        { "fr": "Aide à domicile", "en": "Home care aide", "licence": "" },
+        { "fr": "Soins aux aînés", "en": "Elderly care", "licence": "" },
+        { "fr": "Garde d'enfants", "en": "Childcare / babysitting", "licence": "" },
+        { "fr": "Physiothérapeute", "en": "Physiotherapist", "licence": "order", "licence_note": "OPPQ (titre protégé)" },
+        { "fr": "Nutritionniste-diététiste", "en": "Dietitian-nutritionist", "licence": "order", "licence_note": "ODNQ (titre protégé)" }
+      ]
+    },
+    {
+      "id": "education",
+      "name": { "fr": "Éducation et tutorat", "en": "Education & Tutoring" },
+      "services": [
+        { "fr": "Tuteur(trice) scolaire", "en": "Academic tutor", "licence": "" },
+        { "fr": "Professeur de langue", "en": "Language teacher", "licence": "" },
+        { "fr": "Cours de musique", "en": "Music lessons", "licence": "" },
+        { "fr": "Préparation aux examens", "en": "Test preparation", "licence": "" },
+        { "fr": "Moniteur(trice) de conduite", "en": "Driving instructor", "licence": "other", "licence_note": "SAAQ (école reconnue)" }
+      ]
+    },
+    {
+      "id": "professional",
+      "name": { "fr": "Services professionnels", "en": "Professional Services" },
+      "services": [
+        { "fr": "Teneur(se) de livres", "en": "Bookkeeper", "licence": "" },
+        { "fr": "Préparation de déclarations d'impôts", "en": "Tax preparation", "licence": "" },
+        { "fr": "Comptable (CPA)", "en": "Accountant (CPA)", "licence": "order", "licence_note": "CPA (titre protégé)" },
+        { "fr": "Consultant(e)", "en": "Consultant", "licence": "" },
+        { "fr": "Traduction", "en": "Translation", "licence": "", "licence_note": "OTTIAQ pour titre « traducteur agréé »" },
+        { "fr": "Courtier immobilier", "en": "Real estate broker", "licence": "other", "licence_note": "OACIQ" },
+        { "fr": "Notaire", "en": "Notary", "licence": "order", "licence_note": "Chambre des notaires (titre protégé)" },
+        { "fr": "Avocat(e)", "en": "Lawyer", "licence": "order", "licence_note": "Barreau (titre protégé)" }
+      ]
+    },
+    {
+      "id": "technology",
+      "name": { "fr": "Technologie", "en": "Technology" },
+      "services": [
+        { "fr": "Soutien informatique", "en": "IT support", "licence": "" },
+        { "fr": "Réparation d'ordinateurs", "en": "Computer repair", "licence": "" },
+        { "fr": "Réparation de téléphones", "en": "Phone repair", "licence": "" },
+        { "fr": "Développeur web", "en": "Web developer", "licence": "" },
+        { "fr": "Graphiste", "en": "Graphic designer", "licence": "" },
+        { "fr": "Gestionnaire de médias sociaux", "en": "Social media manager", "licence": "" }
+      ]
+    },
+    {
+      "id": "events",
+      "name": { "fr": "Événements et créatif", "en": "Events & Creative" },
+      "services": [
+        { "fr": "Photographe", "en": "Photographer", "licence": "" },
+        { "fr": "Vidéaste", "en": "Videographer", "licence": "" },
+        { "fr": "Traiteur", "en": "Caterer", "licence": "" },
+        { "fr": "Organisateur(trice) d'événements", "en": "Event planner", "licence": "" },
+        { "fr": "DJ", "en": "DJ", "licence": "" },
+        { "fr": "Musicien(ne)", "en": "Musician", "licence": "" },
+        { "fr": "Fleuriste", "en": "Florist", "licence": "" }
+      ]
+    },
+    {
+      "id": "pets",
+      "name": { "fr": "Animaux", "en": "Pets & Animals" },
+      "services": [
+        { "fr": "Promeneur(se) de chiens", "en": "Dog walker", "licence": "" },
+        { "fr": "Gardien(ne) d'animaux", "en": "Pet sitter", "licence": "" },
+        { "fr": "Toiletteur(se)", "en": "Pet groomer", "licence": "" },
+        { "fr": "Éducateur(trice) canin", "en": "Dog trainer", "licence": "" },
+        { "fr": "Vétérinaire", "en": "Veterinarian", "licence": "order", "licence_note": "OMVQ (titre protégé)" }
+      ]
+    },
+    {
+      "id": "moving_transport",
+      "name": { "fr": "Déménagement et transport", "en": "Moving & Transport" },
+      "services": [
+        { "fr": "Déménageur", "en": "Mover", "licence": "" },
+        { "fr": "Livraison", "en": "Delivery", "licence": "" },
+        { "fr": "Enlèvement de débris", "en": "Junk removal", "licence": "" },
+        { "fr": "Transport léger", "en": "Light hauling", "licence": "" }
+      ]
+    },
+    {
+      "id": "textile_misc",
+      "name": { "fr": "Couture et divers", "en": "Sewing & Misc" },
+      "services": [
+        { "fr": "Couturier(ère) / Retouches", "en": "Tailor / Alterations", "licence": "" },
+        { "fr": "Rembourrage", "en": "Upholstery", "licence": "" },
+        { "fr": "Cordonnier", "en": "Shoe repair", "licence": "" }
+      ]
+    }
+  ]
+}
