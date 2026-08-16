@@ -1,5 +1,5 @@
 -- TrouvePro Phase 2 — subscriptions + chat. Run in Supabase SQL editor.
--- (users already has stripe_customer_id / subscription_status / subscription_period_end from Phase 1.)
+-- (users already has paypal_subscription_id / subscription_status / subscription_period_end from Phase 1.)
 
 create table if not exists public.conversations (
   id bigserial primary key,
