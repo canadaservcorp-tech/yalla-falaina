@@ -31,6 +31,8 @@ router.post('/:id/photos', authenticate, async (req, res) => {
 
   // MODERATE before storing
   const verdict = await checkImage(base64);
+  if (verdict.unavailable && !verdict.safe)
+    return res.status(503).json({ error: 'Photo sharing is temporarily unavailable' });
   if (!verdict.safe) {
     await blockUser(req.user.id, 'explicit image in chat');
     await supabase.from('reports').insert({ reporter_id: null, conversation_id: convId, target_user_id: req.user.id, kind: 'sexual', reason: 'auto-detected explicit image', status: 'actioned' });
