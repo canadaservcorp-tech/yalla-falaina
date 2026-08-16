@@ -80,7 +80,20 @@
   .svc-list label{display:flex;gap:7px;font-size:13px;align-items:center;font-weight:500;color:var(--ink)}
   .count{font-size:12px;color:var(--muted)}
   footer{border-top:1px solid var(--line);padding:22px 0;color:var(--muted);font-size:13px}
-  @media(max-width:760px){ .hero{grid-template-columns:1fr;gap:8px} .hero h1{font-size:32px} .radar{max-width:230px} .svc-list{grid-template-columns:1fr} }
+  .chatwrap{display:grid;grid-template-columns:250px 1fr;gap:14px;align-items:start}
+  .convlist{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px;box-shadow:var(--sh2);max-height:520px;overflow:auto}
+  .conv{border:0;background:transparent;text-align:left;width:100%;padding:10px;border-radius:11px;cursor:pointer;font-family:Inter;font-size:14px;font-weight:600;color:var(--ink)}
+  .conv:hover{background:var(--bg)} .conv.on{background:#e7f4f2;color:var(--teal)}
+  .thread{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh2);display:flex;flex-direction:column;gap:10px}
+  .msgs{display:flex;flex-direction:column;gap:8px;min-height:220px;max-height:380px;overflow:auto}
+  .msg{max-width:76%;padding:9px 12px;border-radius:14px;font-size:14px;background:var(--bg)}
+  .msg.mine{align-self:flex-end;background:var(--teal);color:#fff}
+  .msg time{display:block;font-size:10px;opacity:.65;margin-top:3px}
+  .photostrip{display:flex;gap:8px;flex-wrap:wrap}
+  .photostrip img{width:74px;height:74px;object-fit:cover;border-radius:11px;border:1px solid var(--line)}
+  .sendrow{display:flex;gap:8px;align-items:center}
+  .subbox{background:#fff8ec;border:1px solid #f0dcb4;border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+  @media(max-width:760px){ .hero{grid-template-columns:1fr;gap:8px} .hero h1{font-size:32px} .radar{max-width:230px} .svc-list{grid-template-columns:1fr} .chatwrap{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -91,6 +104,7 @@
     <button id="lfr" class="on" onclick="setLang('fr')">FR</button>
     <button id="len" onclick="setLang('en')">EN</button>
   </div>
+  <button class="btn btn-ghost" id="navchat" style="display:none" onclick="openChat()">💬 <span id="navchatlbl">Messages</span></button>
   <button class="btn btn-ghost" id="navauth" onclick="openAuth('login')">Connexion</button>
 </div></header>
 
@@ -153,6 +167,12 @@
 </div></section></div>
 
 <div id="view-provider" class="view"><section class="pad"><div class="wrap" style="max-width:640px">
+  <div class="subbox" id="subbox">
+    <strong id="subtitle">Abonnement prestataire</strong>
+    <span class="muted" id="substate" style="font-size:13px"></span>
+    <button class="btn btn-primary" id="subbtn" onclick="startCheckout()">S'abonner — 15 $ les 3 premiers mois, puis 10 $/mois</button>
+    <div class="err" id="suberr"></div>
+  </div>
   <h1 id="pptitle" style="font-size:26px">Mon profil prestataire</h1>
   <p class="muted" id="ppsub">Renseignez votre profil pour apparaître dans les recherches près de chez vos clients.</p>
   <div class="stack">
@@ -179,6 +199,50 @@
     <button class="btn btn-primary btn-block" id="ppsave" onclick="saveProvider()">Enregistrer mon profil</button>
   </div>
 </div></section></div>
+
+<div id="view-chat" class="view"><section class="pad"><div class="wrap">
+  <div class="toolbar">
+    <h1 style="font-size:24px;margin:0" id="chattitle">Messages</h1>
+    <span class="spacer" style="flex:1"></span>
+    <button class="btn btn-ghost" onclick="go('search')" id="chatback">← Retour</button>
+  </div>
+  <div class="chatwrap">
+    <div class="convlist" id="convlist"></div>
+    <div class="thread">
+      <div style="display:flex;align-items:center;gap:10px">
+        <strong id="threadwith" class="muted">—</strong>
+        <span class="spacer" style="flex:1"></span>
+        <button class="btn btn-ghost" id="btnreport" style="font-size:12px;padding:6px 12px;display:none" onclick="openReport()">⚑ <span id="reportlbl">Signaler</span></button>
+      </div>
+      <div class="msgs" id="msgs"></div>
+      <div class="photostrip" id="photostrip"></div>
+      <div class="sendrow">
+        <input id="msgtext" placeholder="Votre message…" onkeydown="if(event.key==='Enter')sendMsg()">
+        <button class="btn btn-ghost" id="btnphoto" title="Photo" onclick="document.getElementById('photofile').click()">📷</button>
+        <button class="btn btn-teal" id="btnsend" onclick="sendMsg()">Envoyer</button>
+        <input type="file" id="photofile" accept="image/*" style="display:none" onchange="uploadPhoto(this)">
+      </div>
+      <div class="muted" style="font-size:12px" id="photohint">Max 3 photos par conversation — elles sont supprimées à la fermeture du chat.</div>
+      <div class="err" id="chaterr"></div>
+    </div>
+  </div>
+</div></section></div>
+
+<div class="sheet" id="reportsheet"><div class="modal">
+  <button class="x" onclick="closeReport()">×</button>
+  <h2 id="reporttitle">Signaler</h2>
+  <div class="stack">
+    <select id="r_kind">
+      <option value="sexual">Contenu sexuel / explicite</option>
+      <option value="harassment">Harcèlement</option>
+      <option value="scam">Fraude / arnaque</option>
+      <option value="other">Autre</option>
+    </select>
+    <textarea id="r_reason" rows="3" placeholder="Détails (optionnel)"></textarea>
+    <div class="err" id="reporterr"></div><div class="ok" id="reportok"></div>
+    <button class="btn btn-primary btn-block" id="reportsubmit" onclick="submitReport()">Envoyer le signalement</button>
+  </div>
+</div></div>
 
 <div class="sheet" id="authsheet"><div class="modal">
   <button class="x" onclick="closeAuth()">×</button>
@@ -214,7 +278,14 @@ const T = {
     profile:'Mon profil', myprofile:'Mon profil prestataire',
     authL:'Connexion', authR:'Créer un compte', toReg:"Pas de compte ? Créez-en un", toLog:'Déjà inscrit ? Connectez-vous',
     save:'Enregistrer mon profil', saved:'Profil enregistré ✓', locset:'Position enregistrée ✓',
-    checkmail:'Compte créé — vérifiez votre courriel pour confirmer.' },
+    checkmail:'Compte créé — vérifiez votre courriel pour confirmer.',
+    messages:'Messages', chatback:'← Retour', send:'Envoyer', msgph:'Votre message…',
+    noconv:'Aucune conversation pour le moment.', pickconv:'Choisissez une conversation.',
+    photohint:'Max 3 photos par conversation — elles sont supprimées à la fermeture du chat.',
+    report:'Signaler', reportsend:'Envoyer le signalement', reportsent:'Signalement envoyé ✓',
+    subtitle:'Abonnement prestataire', subbtn:"S'abonner — 15 $ les 3 premiers mois, puis 10 $/mois",
+    subactive:'Abonnement actif ✓', subinactive:'Aucun abonnement actif.', submanage:'Abonnement actif',
+    subok:'Abonnement activé ✓', subcancel:'Paiement annulé.' },
   en:{ login:'Log in', logout:'Log out', tag:'· Near To You',
     h1:'The right pro, <em>right nearby</em>.',
     hsub:"A nurse in your building, a plumber around the corner. TrouvePro shows the trusted providers closest to you — and connects you.",
@@ -224,7 +295,14 @@ const T = {
     profile:'My profile', myprofile:'My provider profile',
     authL:'Log in', authR:'Create account', toReg:"No account? Create one", toLog:'Already registered? Log in',
     save:'Save my profile', saved:'Profile saved ✓', locset:'Location saved ✓',
-    checkmail:'Account created — check your email to confirm.' },
+    checkmail:'Account created — check your email to confirm.',
+    messages:'Messages', chatback:'← Back', send:'Send', msgph:'Your message…',
+    noconv:'No conversations yet.', pickconv:'Pick a conversation.',
+    photohint:'Max 3 photos per chat — they are deleted when the chat closes.',
+    report:'Report', reportsend:'Send report', reportsent:'Report sent ✓',
+    subtitle:'Provider subscription', subbtn:'Subscribe — $15 for the first 3 months, then $10/month',
+    subactive:'Subscription active ✓', subinactive:'No active subscription.', submanage:'Subscription active',
+    subok:'Subscription activated ✓', subcancel:'Payment cancelled.' },
 };
 const t = k => T[S.lang][k];
 
@@ -248,6 +326,17 @@ function setLang(l){
   document.getElementById('rlblservice').textContent=t('service');
   document.getElementById('pptitle').textContent=t('myprofile');
   document.getElementById('ppsave').textContent=t('save');
+  document.getElementById('navchatlbl').textContent=t('messages');
+  document.getElementById('chattitle').textContent=t('messages');
+  document.getElementById('chatback').textContent=t('chatback');
+  document.getElementById('btnsend').textContent=t('send');
+  document.getElementById('msgtext').placeholder=t('msgph');
+  document.getElementById('photohint').textContent=t('photohint');
+  document.getElementById('reportlbl').textContent=t('report');
+  document.getElementById('reporttitle').textContent=t('report');
+  document.getElementById('reportsubmit').textContent=t('reportsend');
+  document.getElementById('subtitle').textContent=t('subtitle');
+  document.getElementById('subbtn').textContent=t('subbtn');
   radlbl(); rradlbl(); refreshNav(); fillServiceSelects();
 }
 function radlbl(){ const v=document.getElementById('fradius').value; document.getElementById('lblradius').textContent=`${t('radius')} : ${v} km`; }
@@ -255,6 +344,7 @@ function rradlbl(){ const v=document.getElementById('rradius').value; document.g
 
 function refreshNav(){
   const b=document.getElementById('navauth');
+  document.getElementById('navchat').style.display = (S.token&&S.user)?'inline-block':'none';
   if(S.token && S.user){
     b.textContent = S.user.role==='provider' ? t('profile') : t('logout');
     b.onclick = S.user.role==='provider' ? ()=>{loadProviderForm();go('provider');} : logout;
@@ -329,7 +419,7 @@ function renderResults(list){
         ${p.available_now?`<span class="pill pill-now">● ${t('now')}</span>`:''}
       </div>
       <div class="tags">${langs}</div>
-      ${ S.token ? `<button class="btn btn-teal" style="margin-top:6px">${t('contact')}</button>`
+      ${ S.token ? `<button class="btn btn-teal" style="margin-top:6px" onclick="startChat(${p.id})">${t('contact')}</button>`
                  : `<button class="btn btn-ghost" style="margin-top:6px" onclick="openAuth('register')">🔒 ${t('loginto')}</button>`}`;
     box.appendChild(c);
   });
@@ -370,6 +460,7 @@ async function submitAuth(){
 async function loadProviderForm(){
   if(!S.catalog.length) await loadCatalog();
   fillServiceChecklist();
+  loadSubscription();
   try{
     const j=await api('/api/providers/'+S.user.id); const p=j.provider||{};
     document.getElementById('pp_name').value=p.display_name||S.user.name||'';
@@ -400,7 +491,135 @@ async function saveProvider(){
   catch(e){ err.className='err'; err.textContent=e.message; }
 }
 
-(function(){ setLang('fr'); refreshNav(); loadCatalog(); })();
+/* ---------- Phase 2/3: chat, photos, subscription, reports ---------- */
+async function openChat(convId){
+  if(!S.token) return openAuth('login');
+  go('chat'); await loadConvs(convId);
+}
+async function startChat(providerId){
+  if(!S.token) return openAuth('register');
+  try{
+    const j=await api('/api/chat/start',{method:'POST',body:JSON.stringify({providerId})});
+    await openChat(j.conversation.id);
+  }catch(e){ document.getElementById('searcherr').textContent=e.message; }
+}
+async function loadConvs(select){
+  const box=document.getElementById('convlist'); box.innerHTML='';
+  const j=await api('/api/chat'); S.convs=j.conversations||[];
+  if(!S.convs.length){ box.innerHTML=`<p class="muted" style="font-size:13px;padding:8px">${t('noconv')}</p>`; }
+  S.convs.forEach(c=>{
+    const b=document.createElement('button'); b.className='conv'; b.dataset.id=c.id;
+    b.textContent=(c.other&&c.other.name)||('#'+c.id);
+    b.onclick=()=>openConv(c.id);
+    box.appendChild(b);
+  });
+  const target = select || (S.convs[0] && S.convs[0].id);
+  if(target) openConv(target); else { document.getElementById('threadwith').textContent=t('pickconv'); document.getElementById('msgs').innerHTML=''; }
+}
+async function openConv(id){
+  S.conv=id;
+  document.querySelectorAll('#convlist .conv').forEach(b=>b.classList.toggle('on', b.dataset.id==String(id)));
+  const c=(S.convs||[]).find(x=>x.id==id);
+  document.getElementById('threadwith').textContent=(c&&c.other&&c.other.name)||('#'+id);
+  document.getElementById('btnreport').style.display='inline-block';
+  await Promise.all([loadMsgs(), loadPhotos()]);
+}
+async function loadMsgs(){
+  const box=document.getElementById('msgs'); const err=document.getElementById('chaterr'); err.textContent='';
+  try{
+    const j=await api(`/api/chat/${S.conv}/messages`); box.innerHTML='';
+    (j.messages||[]).forEach(m=>{
+      const d=document.createElement('div'); d.className='msg'+(m.sender_id===S.user.id?' mine':'');
+      d.innerHTML=`${esc(m.body)}<time>${new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</time>`;
+      box.appendChild(d);
+    });
+    box.scrollTop=box.scrollHeight;
+  }catch(e){ err.textContent=e.message; }
+}
+async function sendMsg(){
+  const el=document.getElementById('msgtext'); const text=el.value.trim();
+  if(!text||!S.conv) return;
+  const err=document.getElementById('chaterr'); err.textContent='';
+  try{ await api(`/api/chat/${S.conv}/messages`,{method:'POST',body:JSON.stringify({text})}); el.value=''; await loadMsgs(); }
+  catch(e){ err.textContent=e.message; }
+}
+async function loadPhotos(){
+  const strip=document.getElementById('photostrip'); strip.innerHTML='';
+  try{
+    const j=await api(`/api/chat/${S.conv}/photos`);
+    (j.photos||[]).forEach(p=>{ const i=document.createElement('img'); i.src=p.url; i.alt='photo'; strip.appendChild(i); });
+    document.getElementById('btnphoto').disabled=(j.photos||[]).length>=3;
+  }catch(e){}
+}
+// compress client-side to ~1200px / 80% jpeg before upload
+function compress(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image(); const fr=new FileReader();
+    fr.onload=()=>{ img.src=fr.result; }; fr.onerror=reject; fr.readAsDataURL(file);
+    img.onerror=reject;
+    img.onload=()=>{
+      const max=1200, sc=Math.min(1, max/Math.max(img.width,img.height));
+      const cv=document.createElement('canvas'); cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      resolve(cv.toDataURL('image/jpeg',0.8));
+    };
+  });
+}
+async function uploadPhoto(input){
+  const file=input.files&&input.files[0]; input.value='';
+  const err=document.getElementById('chaterr'); err.textContent='';
+  if(!file||!S.conv) return;
+  if(file.size>10*1024*1024){ err.textContent='Max 10 MB'; return; }
+  try{
+    const dataUrl=await compress(file);
+    await api(`/api/chat/${S.conv}/photos`,{method:'POST',body:JSON.stringify({image:dataUrl})});
+    await loadPhotos();
+  }catch(e){ err.textContent=e.message; }
+}
+// ephemeral: wipe photos when the chat page is left
+function wipePhotos(){
+  if(!S.conv||!S.token) return;
+  const url=`/api/chat/${S.conv}/photos`;
+  fetch(url,{method:'DELETE',headers:{Authorization:'Bearer '+S.token},keepalive:true}).catch(()=>{});
+}
+window.addEventListener('pagehide', wipePhotos);
+
+function openReport(){ document.getElementById('reportsheet').classList.add('on'); document.getElementById('reporterr').textContent=''; document.getElementById('reportok').textContent=''; }
+function closeReport(){ document.getElementById('reportsheet').classList.remove('on'); }
+async function submitReport(){
+  const c=(S.convs||[]).find(x=>x.id==S.conv);
+  const body={ conversationId:S.conv, targetUserId:c&&c.other?c.other.id:null,
+    kind:document.getElementById('r_kind').value, reason:document.getElementById('r_reason').value };
+  try{ await api('/api/report',{method:'POST',body:JSON.stringify(body)});
+    document.getElementById('reportok').textContent=t('reportsent'); document.getElementById('r_reason').value='';
+  }catch(e){ document.getElementById('reporterr').textContent=e.message; }
+}
+
+async function loadSubscription(){
+  const box=document.getElementById('subbox'), state=document.getElementById('substate'), btn=document.getElementById('subbtn');
+  if(!S.user||S.user.role!=='provider'){ box.style.display='none'; return; }
+  box.style.display='flex';
+  try{
+    const j=await api('/api/subscription/status');
+    const active=j.status==='active';
+    state.textContent = active ? (t('subactive')+(j.periodEnd?` (${new Date(j.periodEnd).toLocaleDateString()})`:'')) : t('subinactive');
+    btn.style.display = active?'none':'inline-block';
+  }catch(e){ state.textContent=e.message; }
+}
+async function startCheckout(){
+  const err=document.getElementById('suberr'); err.textContent='';
+  try{ const j=await api('/api/subscription/checkout',{method:'POST'}); window.location.href=j.url; }
+  catch(e){ err.textContent=e.message; }
+}
+
+(function(){
+  setLang('fr'); refreshNav(); loadCatalog();
+  const sub=new URLSearchParams(location.search).get('sub');
+  if(sub && S.token && S.user){
+    if(S.user.role==='provider'){ loadProviderForm(); go('provider'); }
+    setTimeout(()=>{ const el=document.getElementById('substate'); if(el) el.textContent = sub==='success'?t('subok'):t('subcancel'); }, 600);
+  }
+})();
 </script>
 </body>
 </html>
