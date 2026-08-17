@@ -75,6 +75,7 @@
   .stack{display:flex;flex-direction:column;gap:11px;margin-top:6px}
   .err{color:var(--red);font-size:13px;min-height:16px}
   .ok{color:#2e7d43;font-size:14px}
+  .locked{color:var(--muted);font-size:13px;background:#f3f4f6;border-radius:10px;padding:8px 12px;display:inline-block}
   .x{background:transparent;border:0;font-size:22px;cursor:pointer;color:var(--muted);float:right;line-height:1}
   .svc-list{display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:10px}
   .svc-list label{display:flex;gap:7px;font-size:13px;align-items:center;font-weight:500;color:var(--ink)}
@@ -172,6 +173,16 @@
     <span class="muted" id="substate" style="font-size:13px"></span>
     <button class="btn btn-primary" id="subbtn" onclick="startCheckout()">S'abonner avec PayPal — 15 $ les 3 premiers mois, puis 10 $/mois</button>
     <div class="err" id="suberr"></div>
+  </div>
+  <div class="card" id="claimbox" style="box-shadow:none;margin-bottom:14px">
+    <h3 id="claimtitle" style="margin:0">Réclamer votre fiche RBQ</h3>
+    <div class="muted" id="claimsub" style="font-size:13px">Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.</div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <input id="claim_q" placeholder="Nom de l'entreprise">
+      <button class="btn btn-ghost" id="claimsearchbtn" onclick="claimSearch()">Chercher</button>
+    </div>
+    <div id="claim_results" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+    <div class="ok" id="claim_msg"></div>
   </div>
   <h1 id="pptitle" style="font-size:26px">Mon profil prestataire</h1>
   <p class="muted" id="ppsub">Renseignez votre profil pour apparaître dans les recherches près de chez vos clients.</p>
@@ -285,7 +296,11 @@ const T = {
     report:'Signaler', reportsend:'Envoyer le signalement', reportsent:'Signalement envoyé ✓',
     subtitle:'Abonnement prestataire', subbtn:"S'abonner avec PayPal — 15 $ les 3 premiers mois, puis 10 $/mois",
     subactive:'Abonnement actif ✓', subinactive:'Aucun abonnement actif.', submanage:'Abonnement actif',
-    subok:'Abonnement activé ✓', subcancel:'Paiement annulé.' },
+    subok:'Abonnement activé ✓', subcancel:'Paiement annulé.',
+    unclaimed:'Fiche RBQ non réclamée — est-ce vous ?', notavail:'Non disponible',
+    claimtitle:'Réclamer votre fiche RBQ', claimsub:"Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.",
+    claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
+    claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.' },
   en:{ login:'Log in', logout:'Log out', tag:'· Near To You',
     h1:'The right pro, <em>right nearby</em>.',
     hsub:"A nurse in your building, a plumber around the corner. TrouvePro shows the trusted providers closest to you — and connects you.",
@@ -302,7 +317,11 @@ const T = {
     report:'Report', reportsend:'Send report', reportsent:'Report sent ✓',
     subtitle:'Provider subscription', subbtn:'Subscribe with PayPal — $15 for the first 3 months, then $10/month',
     subactive:'Subscription active ✓', subinactive:'No active subscription.', submanage:'Subscription active',
-    subok:'Subscription activated ✓', subcancel:'Payment cancelled.' },
+    subok:'Subscription activated ✓', subcancel:'Payment cancelled.',
+    unclaimed:'Unclaimed RBQ listing — is this you?', notavail:'Not available',
+    claimtitle:'Claim your RBQ listing', claimsub:'Your business may already be listed (RBQ registry). Search for it and claim it.',
+    claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
+    claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.' },
 };
 const t = k => T[S.lang][k];
 
@@ -337,6 +356,10 @@ function setLang(l){
   document.getElementById('reportsubmit').textContent=t('reportsend');
   document.getElementById('subtitle').textContent=t('subtitle');
   document.getElementById('subbtn').textContent=t('subbtn');
+  document.getElementById('claimtitle').textContent=t('claimtitle');
+  document.getElementById('claimsub').textContent=t('claimsub');
+  document.getElementById('claim_q').placeholder=t('claimq');
+  document.getElementById('claimsearchbtn').textContent=t('claimsearch');
   radlbl(); rradlbl(); refreshNav(); fillServiceSelects();
 }
 function radlbl(){ const v=document.getElementById('fradius').value; document.getElementById('lblradius').textContent=`${t('radius')} : ${v} km`; }
@@ -419,8 +442,13 @@ function renderResults(list){
         ${p.available_now?`<span class="pill pill-now">● ${t('now')}</span>`:''}
       </div>
       <div class="tags">${langs}</div>
-      ${ S.token ? `<button class="btn btn-teal" style="margin-top:6px" onclick="startChat(${p.id})">${t('contact')}</button>`
-                 : `<button class="btn btn-ghost" style="margin-top:6px" onclick="openAuth('register')">🔒 ${t('loginto')}</button>`}`;
+      ${ p.claimed===false
+          ? `<div class="locked" style="margin-top:6px">🏷️ ${t('unclaimed')}</div>`
+          : (!S.token
+              ? `<button class="btn btn-ghost" style="margin-top:6px" onclick="openAuth('register')">🔒 ${t('loginto')}</button>`
+              : (p.contactable===false
+                  ? `<div class="locked" style="margin-top:6px">${t('notavail')}</div>`
+                  : `<button class="btn btn-teal" style="margin-top:6px" onclick="startChat(${p.id})">${t('contact')}</button>`)) }`;
     box.appendChild(c);
   });
 }
@@ -610,6 +638,34 @@ async function startCheckout(){
   const err=document.getElementById('suberr'); err.textContent='';
   try{ const j=await api('/api/subscription/checkout',{method:'POST'}); window.location.href=j.url; }
   catch(e){ err.textContent=e.message; }
+}
+
+async function claimSearch(){
+  const q=document.getElementById('claim_q').value.trim();
+  const box=document.getElementById('claim_results'), msg=document.getElementById('claim_msg');
+  box.innerHTML=''; msg.className='ok'; msg.textContent=''; if(!q) return;
+  try{
+    const j=await api('/api/claim/search?q='+encodeURIComponent(q));
+    const matches=j.matches||[];
+    if(!matches.length){ msg.textContent=t('claimnone'); return; }
+    matches.forEach(m=>{
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:8px';
+      row.innerHTML=`<span style="flex:1;font-size:14px">${esc(m.display_name)} <span class="muted">${esc(m.city||'')} · RBQ ${esc(m.rbq_licence||'')}</span></span>`;
+      const b=document.createElement('button'); b.className='btn btn-teal'; b.textContent=t('claimbtn');
+      b.onclick=()=>claimListing(m.user_id);
+      row.appendChild(b); box.appendChild(row);
+    });
+  }catch(e){ msg.className='err'; msg.textContent=e.message; }
+}
+async function claimListing(seedUserId){
+  const msg=document.getElementById('claim_msg');
+  try{
+    await api('/api/claim',{method:'POST',body:JSON.stringify({seedUserId})});
+    msg.className='ok'; msg.textContent=t('claimed');
+    document.getElementById('claim_results').innerHTML='';
+    loadProviderForm();
+  }catch(e){ msg.className='err'; msg.textContent=e.message; }
 }
 
 (function(){

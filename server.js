@@ -21,6 +21,7 @@ app.use('/api/chat', require('./routes/chat'));
 app.use('/api/chat', require('./routes/photos'));    // /api/chat/:id/photos
 app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/report', require('./routes/report'));
+app.use('/api/claim', require('./routes/claim'));    // claim an unclaimed RBQ seed listing
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, phase: 3 }));
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

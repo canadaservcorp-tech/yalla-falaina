@@ -31,6 +31,8 @@ router.get('/', async (req, res) => {
       neighbourhood: r.neighbourhood, languages: r.languages, availability: r.availability,
       available_now: r.available_now, is_licensed: r.is_licensed, featured: r.featured,
       rating: r.rating, review_count: r.review_count,
+      claimed: r.claimed !== false,                 // unclaimed RBQ seeds show but can't be contacted
+      contactable: r.contactable !== undefined ? r.contactable : true,
       distance_label: approx(r.distance_m, lang),   // approximate only — never exact address
     }));
     res.json({ success: true, count: providers.length, paywall: PAYWALL, providers });

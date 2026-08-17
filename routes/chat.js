@@ -21,6 +21,10 @@ router.post('/start', authenticate, async (req, res) => {
     if (!prov || prov.role !== 'provider') return res.status(404).json({ error: 'Provider not found' });
     if (PAYWALL && prov.subscription_status !== 'active')
       return res.status(403).json({ error: 'This provider is not currently subscribed' });
+    // unclaimed RBQ seed listings are visible in search but have no real owner to talk to
+    const { data: profile } = await supabase.from('providers').select('claimed').eq('user_id', providerId).maybeSingle();
+    if (profile && profile.claimed === false)
+      return res.status(403).json({ error: 'This listing has not been claimed by its owner yet' });
 
     const seekerId = req.user.id;
     let { data: conv } = await supabase.from('conversations')
