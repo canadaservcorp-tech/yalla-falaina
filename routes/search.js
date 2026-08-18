@@ -3,7 +3,8 @@ const supabase = require('../db');
 const { approx } = require('../lib/distance');
 const router = express.Router();
 
-// Toggle: when false, show all providers (thin-launch); when true, only subscribed appear.
+// Toggle: when false, every provider is treated as online (thin-launch); when true, only
+// providers with an active subscription get distance, availability and a contact button.
 const PAYWALL = process.env.PAYWALL_ENFORCED === 'true';
 
 // GET /api/search?lat=&lng=&radius_km=&profession_id=&category=&q=&lang=
@@ -34,8 +35,10 @@ router.get('/', async (req, res) => {
       available_now: r.available_now, is_licensed: r.is_licensed, featured: r.featured,
       rating: r.rating, review_count: r.review_count,
       claimed: r.claimed !== false,                 // unclaimed RBQ seeds show but can't be contacted
+      subscribed: r.subscribed === true,
       contactable: r.contactable !== undefined ? r.contactable : true,
-      distance_label: approx(r.distance_m, lang),   // approximate only — never exact address
+      // offline providers get no distance at all — the SQL returns null for them
+      distance_label: r.distance_m == null ? null : approx(r.distance_m, lang),
     }));
     res.json({ success: true, count: providers.length, paywall: PAYWALL, providers });
   } catch (e) { console.error('search', e); res.status(500).json({ error: 'Search failed' }); }

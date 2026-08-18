@@ -59,6 +59,8 @@
   .pill-dist{background:#e7f4f2;color:var(--teal)}
   .pill-lic{background:#eaf6ec;color:#2e7d43}
   .pill-now{background:#fff2e8;color:var(--coral)}
+  .pill-off{background:#f1f5f9;color:var(--muted)}
+  .hours{font-size:13px;color:var(--muted);margin-top:4px}
   .pill-lang{background:#f1f0ec;color:var(--muted)}
   .tags{display:flex;gap:6px;flex-wrap:wrap}
   .muted{color:var(--muted)} .center{text-align:center}
@@ -328,6 +330,8 @@ const T = {
     subactive:'Abonnement actif ✓', subinactive:'Aucun abonnement actif.', submanage:'Abonnement actif',
     subok:'Abonnement activé ✓', subcancel:'Paiement annulé.',
     unclaimed:'Fiche RBQ non réclamée — est-ce vous ?', notavail:'Non disponible',
+    offline:'Hors ligne', offlinehint:"Ce prestataire n'a pas d'abonnement actif : distance masquée, contact impossible.",
+    hours:'Heures',
     claimtitle:'Réclamer votre fiche RBQ', claimsub:"Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.",
     claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
     claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.',
@@ -354,6 +358,8 @@ const T = {
     subactive:'Subscription active ✓', subinactive:'No active subscription.', submanage:'Subscription active',
     subok:'Subscription activated ✓', subcancel:'Payment cancelled.',
     unclaimed:'Unclaimed RBQ listing — is this you?', notavail:'Not available',
+    offline:'Offline', offlinehint:'This provider has no active subscription: distance hidden, contact unavailable.',
+    hours:'Hours',
     claimtitle:'Claim your RBQ listing', claimsub:'Your business may already be listed (RBQ registry). Search for it and claim it.',
     claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
     claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.',
@@ -370,7 +376,12 @@ function api(path, opts={}){
   if(S.token) opts.headers.Authorization = 'Bearer '+S.token;
   return fetch(path, opts).then(async r=>{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||'Error'); return j; });
 }
-function go(v){ document.querySelectorAll('.view').forEach(e=>e.classList.remove('on')); document.getElementById('view-'+v).classList.add('on'); window.scrollTo(0,0); }
+function go(v){
+  document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
+  document.getElementById('view-'+v).classList.add('on');
+  if(v!=='legal' && (location.pathname==='/terms'||location.pathname==='/privacy')) history.replaceState(null,'','/');
+  window.scrollTo(0,0);
+}
 
 function setLang(l){
   S.lang=l; document.documentElement.lang=l;
@@ -487,17 +498,20 @@ function renderResults(list){
       ${p.featured?`<span class="badge-featured">★</span>`:''}
       <h3>${esc(p.name||'—')}</h3>
       <div class="tags">
-        <span class="pill pill-dist">📍 ${esc(p.distance_label||'')}</span>
+        ${p.distance_label
+            ? `<span class="pill pill-dist">📍 ${esc(p.distance_label)}</span>`
+            : `<span class="pill pill-off">○ ${t('offline')}</span>`}
         ${p.is_licensed?`<span class="pill pill-lic">✓ ${t('licensed')}</span>`:''}
         ${p.available_now?`<span class="pill pill-now">● ${t('now')}</span>`:''}
       </div>
       <div class="tags">${langs}</div>
+      ${p.distance_label && p.availability?`<div class="hours">🕑 ${t('hours')} : ${esc(p.availability)}</div>`:''}
       ${ p.claimed===false
           ? `<div class="locked" style="margin-top:6px">🏷️ ${t('unclaimed')}</div>`
           : (!S.token
               ? `<button class="btn btn-ghost" style="margin-top:6px" onclick="openAuth('register')">🔒 ${t('loginto')}</button>`
               : (p.contactable===false
-                  ? `<div class="locked" style="margin-top:6px">${t('notavail')}</div>`
+                  ? `<div class="locked" style="margin-top:6px">${t('offlinehint')}</div>`
                   : `<button class="btn btn-teal" style="margin-top:6px" onclick="startChat(${p.id})">${t('contact')}</button>`)) }`;
     box.appendChild(c);
   });
