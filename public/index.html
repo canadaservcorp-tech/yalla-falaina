@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TrouvePro — Près de toi</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0E7C86">
+<link rel="icon" href="/icons/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -122,6 +126,7 @@
   </div>
   <button class="btn btn-ghost" id="navchat" style="display:none" onclick="openChat()">💬 <span id="navchatlbl">Messages</span></button>
   <button class="btn btn-ghost" id="navauth" onclick="openAuth('login')">Connexion</button>
+  <button class="btn btn-ghost" id="navout" style="display:none" onclick="logout()">Déconnexion</button>
 </div></header>
 
 <div id="view-search" class="view on"><section class="pad"><div class="wrap">
@@ -176,6 +181,17 @@
       <label id="rlblradius" class="radiuslabel">Rayon : 5 km</label>
       <input type="range" id="rradius" min="1" max="25" value="5" oninput="rradlbl()" onchange="doSearch()">
     </div>
+    <div class="field" style="max-width:150px">
+      <label id="rlbllang" class="radiuslabel">Langue</label>
+      <select id="rlangs" onchange="doSearch()">
+        <option value="">—</option><option value="fr">fr</option><option value="en">en</option>
+        <option value="ar">ar</option><option value="es">es</option><option value="it">it</option>
+      </select>
+    </div>
+    <label class="radiuslabel" style="display:flex;align-items:center;gap:6px">
+      <input type="checkbox" id="ronlynow" onchange="doSearch()" style="width:auto">
+      <span id="rlblnow">Disponible maintenant</span>
+    </label>
     <button class="btn btn-ghost" onclick="go('search')" id="btnback">← Nouvelle recherche</button>
   </div>
   <p class="muted" id="rcount"></p>
@@ -219,6 +235,10 @@
       <select id="pp_avail"><option value="available">Disponible</option><option value="busy">Occupé</option><option value="away">Absent</option></select>
     </div>
     <div class="field"><label>Horaire (ex. soirs & week-ends, à domicile)</label><input id="pp_hours"></div>
+    <label class="radiuslabel" style="display:flex;align-items:center;gap:6px">
+      <input type="checkbox" id="pp_now" style="width:auto">
+      <span id="lb_now">Disponible maintenant (prêt à recevoir une demande)</span>
+    </label>
     <div class="field"><label id="lb_price">Tarifs (ex. 80 $/h — estimation gratuite)</label><input id="pp_price" maxlength="200"></div>
     <div class="row" style="display:flex;gap:10px">
       <div class="field"><label id="lb_cmail">Courriel affiché</label><input id="pp_cmail" type="email" maxlength="120"></div>
@@ -349,6 +369,7 @@ const T = {
     service:'Quel service ?', allsvc:'Tous les services', radius:'Rayon', search:'📍 Voir qui est près de moi',
     back:'← Nouvelle recherche', count:(n)=>`${n} prestataire(s) près de vous`, none:'Aucun prestataire dans ce rayon. Élargissez la recherche.',
     licensed:'Licencié RBQ', now:'Disponible', contact:'Contacter', loginto:'Connectez-vous pour contacter',
+    flang:'Langue', fnow:'Disponible maintenant', lbnow:'Disponible maintenant (prêt à recevoir une demande)',
     profile:'Mon profil', myprofile:'Mon profil prestataire',
     authL:'Connexion', authR:'Créer un compte', toReg:"Pas de compte ? Créez-en un", toLog:'Déjà inscrit ? Connectez-vous',
     save:'Enregistrer mon profil', saved:'Profil enregistré ✓', locset:'Position enregistrée ✓',
@@ -387,6 +408,7 @@ const T = {
     service:'What service?', allsvc:'All services', radius:'Radius', search:'📍 See who’s near me',
     back:'← New search', count:(n)=>`${n} provider(s) near you`, none:'No providers in this radius. Widen the search.',
     licensed:'RBQ licensed', now:'Available', contact:'Contact', loginto:'Log in to contact',
+    flang:'Language', fnow:'Available now', lbnow:'Available now (ready to take a request)',
     profile:'My profile', myprofile:'My provider profile',
     authL:'Log in', authR:'Create account', toReg:"No account? Create one", toLog:'Already registered? Log in',
     save:'Save my profile', saved:'Profile saved ✓', locset:'Location saved ✓',
@@ -477,6 +499,9 @@ function setLang(l){
   document.getElementById('legalback').textContent=t('legalback');
   document.getElementById('acceptlbl').innerHTML=t('accept');
   if(document.getElementById('view-legal').classList.contains('on')) renderLegal();
+  document.getElementById('rlbllang').textContent=t('flang');
+  document.getElementById('rlblnow').textContent=t('fnow');
+  document.getElementById('lb_now').textContent=t('lbnow');
   radlbl(); rradlbl(); refreshNav(); fillServiceSelects();
   // results already on screen must follow the new language (incl. server-side distance labels)
   if(document.getElementById('view-results').classList.contains('on')) doSearch();
@@ -485,8 +510,11 @@ function radlbl(){ const v=document.getElementById('fradius').value; document.ge
 function rradlbl(){ const v=document.getElementById('rradius').value; document.getElementById('rlblradius').textContent=`${t('radius')} : ${v} km`; }
 
 function refreshNav(){
-  const b=document.getElementById('navauth');
+  const b=document.getElementById('navauth'), out=document.getElementById('navout');
   document.getElementById('navchat').style.display = (S.token&&S.user)?'inline-block':'none';
+  // providers get their profile on the main button, so logout needs its own
+  out.style.display = (S.token&&S.user&&S.user.role==='provider')?'inline-block':'none';
+  out.textContent = t('logout');
   if(S.token && S.user){
     b.textContent = S.user.role==='provider' ? t('profile') : t('logout');
     b.onclick = S.user.role==='provider' ? ()=>{loadProviderForm();go('provider');} : logout;
@@ -540,6 +568,9 @@ async function doSearch(){
   try{
     const qs=new URLSearchParams({lat,lng,radius_km:rad,lang:S.lang});
     if(svc) qs.set('profession_id',svc);
+    if(document.getElementById('ronlynow').checked) qs.set('available_now','true');
+    const spoken=document.getElementById('rlangs').value;
+    if(spoken) qs.set('languages',spoken);
     const j=await api('/api/search?'+qs.toString());
     document.getElementById('rservice').value=svc; document.getElementById('rradius').value=rad; rradlbl();
     renderResults(j.providers||[]);
@@ -629,6 +660,7 @@ async function loadProviderForm(){
     document.getElementById('pp_city').value=p.city||'';
     document.getElementById('pp_lang').value=(p.languages||[]).join(', ');
     document.getElementById('pp_avail').value=p.availability||'available';
+    document.getElementById('pp_now').checked=!!p.available_now;
     document.getElementById('pp_hours').value=p.hours_note||'';
     document.getElementById('pp_price').value=p.price_note||'';
     document.getElementById('pp_cmail').value=p.contact_email||'';
@@ -651,6 +683,7 @@ async function saveProvider(){
   const body={ display_name:document.getElementById('pp_name').value, bio:document.getElementById('pp_bio').value,
     city:document.getElementById('pp_city').value, languages, availability:document.getElementById('pp_avail').value,
     hours_note:document.getElementById('pp_hours').value, rbq_licence:document.getElementById('pp_rbq').value,
+    available_now:document.getElementById('pp_now').checked,
     price_note:document.getElementById('pp_price').value, contact_email:document.getElementById('pp_cmail').value,
     contact_phone:document.getElementById('pp_cphone').value, services };
   if(S._lat){ body.lat=S._lat; body.lng=S._lng; }
@@ -941,6 +974,7 @@ function renderLegal(){
   if(new URLSearchParams(location.search).get('boost') && S.token && S.user && S.user.role==='provider'){
     loadProviderForm(); go('provider'); finishBoostReturn();
   }
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 })();
 </script>
 </body>

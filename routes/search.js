@@ -7,7 +7,7 @@ const router = express.Router();
 // providers with an active subscription get distance, availability and a contact button.
 const PAYWALL = process.env.PAYWALL_ENFORCED === 'true';
 
-// GET /api/search?lat=&lng=&radius_km=&profession_id=&category=&q=&lang=
+// GET /api/search?lat=&lng=&radius_km=&profession_id=&category=&q=&lang=&available_now=&languages=
 // Returns providers sorted NEAREST-FIRST, with approximate (privacy-safe) distance.
 router.get('/', async (req, res) => {
   try {
@@ -20,12 +20,18 @@ router.get('/', async (req, res) => {
     const professionId = /^\d{1,9}$/.test(String(req.query.profession_id || '')) ? parseInt(req.query.profession_id) : null;
     const category = typeof req.query.category === 'string' ? req.query.category.slice(0, 60) : null;
     const q = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim().slice(0, 80) : null;
+    const availableNow = req.query.available_now === 'true' || req.query.available_now === '1';
+    const languages = typeof req.query.languages === 'string'
+      ? req.query.languages.split(',').map(l => l.trim().slice(0, 20)).filter(Boolean).slice(0, 6)
+      : [];
 
     // Raw SQL via RPC for the distance sort + radius filter (earthdistance).
     const { data, error } = await supabase.rpc('search_providers', {
       p_lat: lat, p_lng: lng, p_radius_m: radiusM,
       p_profession_id: professionId, p_category: category, p_q: q,
       p_paywall: PAYWALL,
+      p_available_now: availableNow,
+      p_languages: languages.length ? languages : null,
     });
     if (error) throw error;
 
