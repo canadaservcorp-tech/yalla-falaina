@@ -3,6 +3,7 @@ const express = require('express');
 const supabase = require('../db');
 const { authenticate } = require('../lib/auth-mw');
 const { configured, pp } = require('../lib/paypal');
+const sec = require('../lib/security');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
@@ -10,7 +11,7 @@ const WEBHOOK_ID = process.env.PAYPAL_WEBHOOK_ID || '';
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
 
 // Start a subscription (provider only) — returns the PayPal approval URL.
-router.post('/checkout', authenticate, async (req, res) => {
+router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, async (req, res) => {
   if (req.user.role !== 'provider') return res.status(403).json({ error: 'Providers only' });
   if (!configured() || !PLAN) return res.status(500).json({ error: 'PayPal not configured' });
   try {
@@ -30,10 +31,10 @@ router.post('/checkout', authenticate, async (req, res) => {
     const approve = (sub.links || []).find(l => l.rel === 'approve');
     if (!approve) return res.status(500).json({ error: 'PayPal returned no approval link' });
     res.json({ success: true, url: approve.href });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('paypal checkout', e); res.status(500).json({ error: 'Could not start checkout' }); }
 });
 
-router.get('/status', authenticate, async (req, res) => {
+router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
   const { data } = await supabase.from('users').select('subscription_status, subscription_period_end').eq('id', req.user.id).maybeSingle();
   res.json({ success: true, status: data?.subscription_status || 'inactive', periodEnd: data?.subscription_period_end || null });
 });
@@ -42,7 +43,7 @@ const ACTIVE = new Set(['BILLING.SUBSCRIPTION.ACTIVATED', 'BILLING.SUBSCRIPTION.
 const DEAD = new Set(['BILLING.SUBSCRIPTION.CANCELLED', 'BILLING.SUBSCRIPTION.EXPIRED', 'BILLING.SUBSCRIPTION.SUSPENDED', 'BILLING.SUBSCRIPTION.PAYMENT.FAILED']);
 
 // PayPal webhook — raw body is kept (see server.js) so the signature is checked against the exact payload.
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
   if (!configured() || !WEBHOOK_ID) return res.status(500).end();
   let event;
   try { event = JSON.parse(req.body.toString('utf8')); }
@@ -58,7 +59,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       webhook_event: event,
     });
     if (check.verification_status !== 'SUCCESS') return res.status(400).send('Invalid signature');
-  } catch (e) { return res.status(400).send(`Verification failed: ${e.message}`); }
+  } catch (e) { console.error('paypal webhook verify', e); return res.status(400).send('Verification failed'); }
 
   try {
     const r = event.resource || {};
@@ -68,10 +69,11 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     if (status) {
       const end = r.billing_info?.next_billing_time || null;
       const patch = { subscription_status: status, subscription_period_end: end, paypal_subscription_id: subId };
-      if (userId) await supabase.from('users').update(patch).eq('id', userId);
+      if (userId) sec.dropUserFromCache(userId);
+      if (sec.isId(userId)) await supabase.from('users').update(patch).eq('id', Number(userId));
       else if (subId) await supabase.from('users').update(patch).eq('paypal_subscription_id', subId);
     }
     res.json({ received: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('paypal webhook', e); res.status(500).json({ error: 'Internal error' }); }
 });
 module.exports = router;
