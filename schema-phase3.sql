@@ -16,7 +16,7 @@ create table if not exists public.reports (
   reporter_id bigint references public.users(id) on delete set null,
   conversation_id bigint,
   target_user_id bigint references public.users(id) on delete set null,
-  kind text,                       -- 'sexual' | 'abuse' | 'other'
+  kind text,                       -- 'sexual' | 'abuse' | 'harassment' | 'scam' | 'other'
   reason text,
   status text default 'open',      -- open | actioned | dismissed
   created_at timestamptz default now()
