@@ -13,7 +13,7 @@ create table if not exists public.users (
   role text not null default 'seeker',          -- 'seeker' | 'provider' | 'admin'
   email_verified boolean not null default false,
   verify_token text,
-  stripe_customer_id text,
+  paypal_subscription_id text,
   subscription_status text default 'inactive',   -- active|canceled|past_due|inactive
   subscription_period_end timestamptz,
   banned boolean not null default false,
