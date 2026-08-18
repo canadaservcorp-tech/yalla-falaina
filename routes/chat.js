@@ -5,6 +5,7 @@ const express = require('express');
 const supabase = require('../db');
 const { authenticate } = require('../lib/auth-mw');
 const sec = require('../lib/security');
+const moderation = require('../lib/moderation');
 const router = express.Router();
 const PAYWALL = process.env.PAYWALL_ENFORCED === 'true';
 const MAX_MESSAGE = 2000;
@@ -79,6 +80,11 @@ router.post('/:id/messages', sec.limits.write, async (req, res) => {
   if (conv.closed) return res.status(403).json({ error: 'This conversation is closed' });
   const body = (typeof req.body.text === 'string' ? req.body.text : '').trim().slice(0, MAX_MESSAGE);
   if (!body) return res.status(400).json({ error: 'Empty message' });
+  const verdict = moderation.checkText(body);
+  if (!verdict.safe) {
+    await moderation.flagText(req.user.id, verdict.term, 'chat message');
+    return res.status(403).json({ error: 'This message breaks our rules (illegal or sexual services) and was not sent. Repeated violations end your account and subscription without refund.' });
+  }
   const { data, error } = await supabase.from('messages')
     .insert({ conversation_id: req.params.id, sender_id: req.user.id, body }).select('*').single();
   if (error) { console.error('send message', error); return res.status(500).json({ error: 'Could not send message' }); }

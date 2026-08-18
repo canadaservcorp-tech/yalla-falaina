@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
     const providers = (data || []).map(r => ({
       id: r.user_id, name: r.display_name, bio: r.bio, city: r.city,
       neighbourhood: r.neighbourhood, languages: r.languages, availability: r.availability,
-      available_now: r.available_now, is_licensed: r.is_licensed, featured: r.featured,
+      available_now: r.available_now, price_note: r.price_note, is_licensed: r.is_licensed, featured: r.featured,
       rating: r.rating, review_count: r.review_count,
       claimed: r.claimed !== false,                 // unclaimed RBQ seeds show but can't be contacted
       subscribed: r.subscribed === true,

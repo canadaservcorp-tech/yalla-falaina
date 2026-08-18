@@ -61,6 +61,9 @@
   .pill-now{background:#fff2e8;color:var(--coral)}
   .pill-off{background:#f1f5f9;color:var(--muted)}
   .hours{font-size:13px;color:var(--muted);margin-top:4px}
+  .shot{width:74px;height:74px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+  .shotwrap{position:relative;display:inline-block}
+  .shotwrap button{position:absolute;top:-6px;right:-6px;border:0;background:var(--coral);color:#fff;border-radius:999px;width:20px;height:20px;line-height:18px;cursor:pointer}
   .pill-lang{background:#f1f0ec;color:var(--muted)}
   .tags{display:flex;gap:6px;flex-wrap:wrap}
   .muted{color:var(--muted)} .center{text-align:center}
@@ -208,7 +211,19 @@
       <select id="pp_avail"><option value="available">Disponible</option><option value="busy">Occupé</option><option value="away">Absent</option></select>
     </div>
     <div class="field"><label>Horaire (ex. soirs & week-ends, à domicile)</label><input id="pp_hours"></div>
+    <div class="field"><label id="lb_price">Tarifs (ex. 80 $/h — estimation gratuite)</label><input id="pp_price" maxlength="200"></div>
+    <div class="row" style="display:flex;gap:10px">
+      <div class="field"><label id="lb_cmail">Courriel affiché</label><input id="pp_cmail" type="email" maxlength="120"></div>
+      <div class="field"><label id="lb_cphone">Mobile affiché</label><input id="pp_cphone" maxlength="25" placeholder="514 555-0123"></div>
+    </div>
+    <div class="muted" id="contacthint" style="font-size:12px;margin-top:-4px"></div>
     <div class="field"><label>Licence RBQ (optionnel — pour le badge « Licencié »)</label><input id="pp_rbq" placeholder="ex. 1234-5678-01"></div>
+    <div>
+      <label class="radiuslabel" id="lb_portfolio">Photos de vos réalisations (max 6)</label>
+      <div class="tags" id="pp_portfolio"></div>
+      <input type="file" id="pp_portfile" accept="image/*" style="margin-top:6px" onchange="uploadPortfolio(this)">
+      <div class="err" id="pperrphoto"></div>
+    </div>
     <div>
       <label class="radiuslabel">Vos services (max 4) — <span class="count" id="svccount">0/4</span></label>
       <div class="svc-list" id="pp_services"></div>
@@ -260,6 +275,11 @@
     </div>
   </div>
 </div></section></div>
+
+<div class="sheet" id="prosheet"><div class="modal">
+  <button class="x" onclick="closePro()">×</button>
+  <div id="probody"></div>
+</div></div>
 
 <div class="sheet" id="reportsheet"><div class="modal">
   <button class="x" onclick="closeReport()">×</button>
@@ -331,7 +351,11 @@ const T = {
     subok:'Abonnement activé ✓', subcancel:'Paiement annulé.',
     unclaimed:'Fiche RBQ non réclamée — est-ce vous ?', notavail:'Non disponible',
     offline:'Hors ligne', offlinehint:"Ce prestataire n'a pas d'abonnement actif : distance masquée, contact impossible.",
-    hours:'Heures',
+    hours:'Heures', prices:'Tarifs', details:'Voir la fiche',
+    contactlocked:'Coordonnées visibles seulement aux membres connectés, pour les prestataires abonnés.',
+    lbprice:'Tarifs (ex. 80 $/h — estimation gratuite)', lbcmail:'Courriel affiché', lbcphone:'Mobile affiché',
+    lbportfolio:'Photos de vos réalisations (max 6)',
+    contacthint:'Laissez vide pour utiliser le courriel et le mobile de votre compte. Vos coordonnées ne sont montrées qu’aux membres connectés, et seulement si votre abonnement est actif.',
     claimtitle:'Réclamer votre fiche RBQ', claimsub:"Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.",
     claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
     claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.',
@@ -359,7 +383,11 @@ const T = {
     subok:'Subscription activated ✓', subcancel:'Payment cancelled.',
     unclaimed:'Unclaimed RBQ listing — is this you?', notavail:'Not available',
     offline:'Offline', offlinehint:'This provider has no active subscription: distance hidden, contact unavailable.',
-    hours:'Hours',
+    hours:'Hours', prices:'Rates', details:'View profile',
+    contactlocked:'Contact details are shown to logged-in members only, for subscribed providers.',
+    lbprice:'Rates (e.g. $80/h — free estimate)', lbcmail:'Public email', lbcphone:'Public mobile',
+    lbportfolio:'Photos of your work (max 6)',
+    contacthint:'Leave empty to use your account email and mobile. Your details are only shown to logged-in members, and only while your subscription is active.',
     claimtitle:'Claim your RBQ listing', claimsub:'Your business may already be listed (RBQ registry). Search for it and claim it.',
     claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
     claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.',
@@ -396,6 +424,11 @@ function setLang(l){
   document.getElementById('rlblservice').textContent=t('service');
   document.getElementById('pptitle').textContent=t('myprofile');
   document.getElementById('ppsave').textContent=t('save');
+  document.getElementById('lb_price').textContent=t('lbprice');
+  document.getElementById('lb_cmail').textContent=t('lbcmail');
+  document.getElementById('lb_cphone').textContent=t('lbcphone');
+  document.getElementById('lb_portfolio').textContent=t('lbportfolio');
+  document.getElementById('contacthint').textContent=t('contacthint');
   document.getElementById('navchatlbl').textContent=t('messages');
   document.getElementById('chattitle').textContent=t('messages');
   document.getElementById('chatback').textContent=t('chatback');
@@ -506,6 +539,8 @@ function renderResults(list){
       </div>
       <div class="tags">${langs}</div>
       ${p.distance_label && p.availability?`<div class="hours">🕑 ${t('hours')} : ${esc(p.availability)}</div>`:''}
+      ${p.distance_label && p.price_note?`<div class="hours">💰 ${t('prices')} : ${esc(p.price_note)}</div>`:''}
+      ${p.claimed!==false?`<button class="btn btn-ghost" style="margin-top:6px" onclick="openPro(${p.id})">${t('details')}</button>`:''}
       ${ p.claimed===false
           ? `<div class="locked" style="margin-top:6px">🏷️ ${t('unclaimed')}</div>`
           : (!S.token
@@ -568,7 +603,11 @@ async function loadProviderForm(){
     document.getElementById('pp_lang').value=(p.languages||[]).join(', ');
     document.getElementById('pp_avail').value=p.availability||'available';
     document.getElementById('pp_hours').value=p.hours_note||'';
+    document.getElementById('pp_price').value=p.price_note||'';
+    document.getElementById('pp_cmail').value=p.contact_email||'';
+    document.getElementById('pp_cphone').value=p.contact_phone||'';
     document.getElementById('pp_rbq').value=p.rbq_licence||'';
+    loadPortfolio();
     if(p.lat&&p.lng){ S._lat=p.lat;S._lng=p.lng; document.getElementById('pplocval').textContent=`✓ ${p.lat.toFixed(3)}, ${p.lng.toFixed(3)}`; }
     (p.services||[]).forEach(s=>{ const cb=document.querySelector(`#pp_services input[value="${s.profession_id}"]`); if(cb)cb.checked=true; });
     document.getElementById('svccount').textContent=`${Math.min([...document.querySelectorAll('#pp_services input:checked')].length,4)}/4`;
@@ -584,10 +623,61 @@ async function saveProvider(){
   const languages=document.getElementById('pp_lang').value.split(',').map(x=>x.trim()).filter(Boolean);
   const body={ display_name:document.getElementById('pp_name').value, bio:document.getElementById('pp_bio').value,
     city:document.getElementById('pp_city').value, languages, availability:document.getElementById('pp_avail').value,
-    hours_note:document.getElementById('pp_hours').value, rbq_licence:document.getElementById('pp_rbq').value, services };
+    hours_note:document.getElementById('pp_hours').value, rbq_licence:document.getElementById('pp_rbq').value,
+    price_note:document.getElementById('pp_price').value, contact_email:document.getElementById('pp_cmail').value,
+    contact_phone:document.getElementById('pp_cphone').value, services };
   if(S._lat){ body.lat=S._lat; body.lng=S._lng; }
   try{ await api('/api/providers/me',{method:'PUT',body:JSON.stringify(body)}); err.className='ok'; err.textContent=t('saved'); }
   catch(e){ err.className='err'; err.textContent=e.message; }
+}
+
+/* ---------- portfolio photos (provider's own work samples) ---------- */
+async function loadPortfolio(){
+  const box=document.getElementById('pp_portfolio'); if(!box) return;
+  try{
+    const j=await api('/api/providers/'+S.user.id+'/portfolio');
+    box.innerHTML=(j.photos||[]).map(ph=>
+      `<span class="shotwrap"><img class="shot" src="${esc(ph.url)}" alt="">`+
+      `<button title="✕" onclick="delPortfolio(${ph.id})">×</button></span>`).join('');
+    document.getElementById('pp_portfile').style.display=(j.photos||[]).length>=6?'none':'';
+  }catch(e){}
+}
+async function uploadPortfolio(input){
+  const err=document.getElementById('pperrphoto'); err.textContent='';
+  const file=input.files&&input.files[0]; input.value='';
+  if(!file) return;
+  try{
+    if(file.size>10*1024*1024){ err.textContent='Max 10 MB'; return; }
+    const b64=await compress(file);
+    await api('/api/providers/me/portfolio',{method:'POST',body:JSON.stringify({image:b64})});
+    loadPortfolio();
+  }catch(e){ err.textContent=e.message; }
+}
+async function delPortfolio(id){
+  try{ await api('/api/providers/me/portfolio/'+id,{method:'DELETE'}); loadPortfolio(); }
+  catch(e){ document.getElementById('pperrphoto').textContent=e.message; }
+}
+
+/* ---------- provider details sheet (prices, contact, portfolio) ---------- */
+function closePro(){ document.getElementById('prosheet').classList.remove('on'); }
+async function openPro(id){
+  const box=document.getElementById('probody');
+  box.textContent='…'; document.getElementById('prosheet').classList.add('on');
+  try{
+    const [j,ph]=await Promise.all([api('/api/providers/'+id), api('/api/providers/'+id+'/portfolio')]);
+    const p=j.provider||{};
+    const shots=(ph.photos||[]).map(x=>`<img class="shot" src="${esc(x.url)}" alt="">`).join('');
+    const contact = p.contact_locked
+      ? `<div class="locked">${t('contactlocked')}</div>`
+      : `<p>${p.contact_email?`✉️ <a href="mailto:${esc(p.contact_email)}">${esc(p.contact_email)}</a><br>`:''}`
+        + `${p.contact_phone?`📱 <a href="tel:${esc(p.contact_phone)}">${esc(p.contact_phone)}</a>`:''}</p>`;
+    box.innerHTML = `<h2>${esc(p.display_name||'—')}</h2>`
+      + (p.bio?`<p class="muted">${esc(p.bio)}</p>`:'')
+      + (p.price_note?`<p><b>${t('prices')} :</b> ${esc(p.price_note)}</p>`:'')
+      + (p.hours_note?`<p><b>${t('hours')} :</b> ${esc(p.hours_note)}</p>`:'')
+      + contact
+      + (shots?`<div class="tags" style="margin-top:8px">${shots}</div>`:'');
+  }catch(e){ box.textContent=e.message; }
 }
 
 /* ---------- Phase 2/3: chat, photos, subscription, reports ---------- */

@@ -21,6 +21,7 @@ app.use(express.static('public', { dotfiles: 'ignore', index: false }));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api', require('./routes/catalog'));       // GET /api/catalog
+app.use('/api/providers', require('./routes/portfolio'));  // /api/providers/:id/portfolio
 app.use('/api/providers', require('./routes/providers'));
 app.use('/api/search', require('./routes/search'));  // GET /api/search?lat&lng&...
 app.use('/api/chat', require('./routes/chat'));

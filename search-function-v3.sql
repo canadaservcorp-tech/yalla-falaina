@@ -11,14 +11,14 @@ create or replace function public.search_providers(
 )
 returns table (
   user_id bigint, display_name text, bio text, city text, neighbourhood text,
-  languages text[], availability text, available_now boolean, is_licensed boolean,
+  languages text[], availability text, available_now boolean, price_note text, is_licensed boolean,
   featured boolean, rating numeric, review_count int, claimed boolean,
   subscribed boolean, contactable boolean, distance_m double precision
 )
 language sql stable as $$
   with matched as (
     select distinct p.user_id, p.display_name, p.bio, p.city, p.neighbourhood,
-           p.languages, p.availability, p.available_now, p.is_licensed, p.featured,
+           p.languages, p.availability, p.available_now, p.price_note, p.is_licensed, p.featured,
            p.rating, p.review_count, p.claimed,
            (p.claimed and u.subscription_status = 'active') as subscribed,
            earth_distance(ll_to_earth(p.lat, p.lng), ll_to_earth(p_lat, p_lng)) as distance_m
@@ -36,6 +36,7 @@ language sql stable as $$
   )
   select user_id, display_name, bio, city, neighbourhood, languages, availability,
          (available_now and (subscribed or p_paywall = false)) as available_now,
+         case when subscribed or p_paywall = false then price_note else null end as price_note,
          is_licensed, featured, rating, review_count, claimed, subscribed,
          (subscribed or p_paywall = false) as contactable,
          case when subscribed or p_paywall = false then distance_m else null end as distance_m

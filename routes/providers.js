@@ -2,13 +2,15 @@ const express = require('express');
 const supabase = require('../db');
 const { authenticate, optionalAuth } = require('../lib/auth-mw');
 const sec = require('../lib/security');
+const moderation = require('../lib/moderation');
 const router = express.Router();
 
 const AVAILABILITY = ['available', 'busy', 'away'];
+const PAYWALL = process.env.PAYWALL_ENFORCED === 'true';
 // exposed to anyone; exact coordinates and licence stay private (search returns approximate distance only)
 const PUBLIC_FIELDS = ['user_id', 'display_name', 'bio', 'city', 'neighbourhood', 'languages',
-  'availability', 'available_now', 'hours_note', 'is_licensed', 'featured', 'rating', 'review_count',
-  'avatar_url', 'claimed'];
+  'availability', 'available_now', 'hours_note', 'price_note', 'is_licensed', 'featured', 'rating',
+  'review_count', 'avatar_url', 'claimed'];
 
 // Provider updates their own profile (location, bio, languages, availability, up to 4 services)
 router.put('/me', authenticate, sec.requireActiveUser, sec.limits.write, async (req, res) => {
@@ -25,6 +27,17 @@ router.put('/me', authenticate, sec.requireActiveUser, sec.limits.write, async (
     if (b.city !== undefined) patch.city = sec.clean(b.city, 80) || '';
     if (b.neighbourhood !== undefined) patch.neighbourhood = sec.clean(b.neighbourhood, 80) || '';
     if (b.hours_note !== undefined) patch.hours_note = sec.clean(b.hours_note, 200) || '';
+    if (b.price_note !== undefined) patch.price_note = sec.clean(b.price_note, 200) || '';
+    if (b.contact_email !== undefined) {
+      const mail = (sec.clean(b.contact_email, 120) || '').toLowerCase();
+      if (mail && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(mail)) return res.status(400).json({ error: 'Invalid contact email' });
+      patch.contact_email = mail;
+    }
+    if (b.contact_phone !== undefined) {
+      const tel = sec.clean(b.contact_phone, 25) || '';
+      if (tel && !/^[0-9+()\s.-]{7,25}$/.test(tel)) return res.status(400).json({ error: 'Invalid contact phone' });
+      patch.contact_phone = tel;
+    }
     if (b.avatar_url !== undefined) {
       const url = sec.clean(b.avatar_url, 500) || '';
       if (url && !/^https:\/\//.test(url)) return res.status(400).json({ error: 'avatar_url must be https' });
@@ -49,6 +62,15 @@ router.put('/me', authenticate, sec.requireActiveUser, sec.limits.write, async (
       const lic = sec.clean(b.rbq_licence, 20) || '';
       if (lic && !/^[0-9-]{4,20}$/.test(lic)) return res.status(400).json({ error: 'Invalid RBQ licence' });
       patch.rbq_licence = lic; patch.is_licensed = !!lic;
+    }
+
+    // profiles are public: screen the free text for the conduct banned by the Terms
+    const screened = [patch.display_name, patch.bio, patch.price_note, patch.hours_note,
+      patch.city, patch.neighbourhood].filter(Boolean).join(' \n ');
+    const verdict = moderation.checkText(screened);
+    if (!verdict.safe) {
+      await moderation.flagText(req.user.id, verdict.term, 'provider profile');
+      return res.status(403).json({ error: 'Your profile text breaks our rules (illegal or sexual services) and was not saved.' });
     }
 
     if (Object.keys(patch).length) {
@@ -81,6 +103,19 @@ router.get('/:id', optionalAuth, async (req, res) => {
     .select('profession_id, professions(name_fr,name_en,licence,licence_note)').eq('provider_id', id);
   const mine = req.user && req.user.id === id;
   const provider = mine ? p : Object.fromEntries(PUBLIC_FIELDS.map(k => [k, p[k]]));
+
+  // Email + phone are only released to a logged-in user, and only while the provider's
+  // subscription is active — keeps them off scrapers and out of lapsed listings.
+  if (!mine) {
+    const { data: acct } = await supabase.from('users')
+      .select('email, phone, subscription_status').eq('id', id).maybeSingle();
+    const subscribed = acct && (acct.subscription_status === 'active' || !PAYWALL);
+    if (req.user && subscribed && p.claimed) {
+      provider.contact_email = p.contact_email || (acct ? acct.email : null);
+      provider.contact_phone = p.contact_phone || (acct ? acct.phone : null);
+    }
+    provider.contact_locked = !(req.user && subscribed && p.claimed);
+  }
   res.json({ success: true, provider: { ...provider, services: svc || [] } });
 });
 module.exports = router;
