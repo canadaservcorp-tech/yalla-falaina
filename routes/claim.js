@@ -4,14 +4,17 @@
 const express = require('express');
 const supabase = require('../db');
 const { authenticate } = require('../lib/auth-mw');
+const sec = require('../lib/security');
 const router = express.Router();
+
+router.use(authenticate, sec.requireActiveUser);
 
 const escapeLike = s => s.replace(/[%_\\]/g, c => '\\' + c);
 
 // GET /api/claim/search?q=CompanyName  -> find unclaimed RBQ listings to claim
-router.get('/search', authenticate, async (req, res) => {
+router.get('/search', sec.limits.claim, async (req, res) => {
   try {
-    const q = (req.query.q || '').trim();
+    const q = (typeof req.query.q === 'string' ? req.query.q : '').trim().slice(0, 80);
     if (q.length < 2) return res.json({ success: true, matches: [] });
     const { data, error } = await supabase.from('providers')
       .select('user_id, display_name, city, rbq_licence')
@@ -19,11 +22,11 @@ router.get('/search', authenticate, async (req, res) => {
       .ilike('display_name', `%${escapeLike(q)}%`).limit(10);
     if (error) throw error;
     res.json({ success: true, matches: data || [] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('claim search', e); res.status(500).json({ error: 'Search failed' }); }
 });
 
 // POST /api/claim  { seedUserId }  -> transfer that seed listing to the logged-in provider
-router.post('/', authenticate, async (req, res) => {
+router.post('/', sec.limits.claim, async (req, res) => {
   try {
     if (req.user.role !== 'provider') return res.status(403).json({ error: 'Providers only' });
     const seedUserId = Number(req.body.seedUserId);
@@ -64,6 +67,6 @@ router.post('/', authenticate, async (req, res) => {
     if (delUser.error) throw delUser.error;
 
     res.json({ success: true, message: 'Listing claimed — set your location & subscribe to go live.' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('claim', e); res.status(500).json({ error: 'Could not claim this listing' }); }
 });
 module.exports = router;
