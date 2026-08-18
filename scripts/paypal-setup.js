@@ -1,10 +1,15 @@
-// One-time PayPal setup: creates the product, the billing plan ($5/mo for 3 cycles, then $10/mo)
-// and the webhook, then prints PAYPAL_PLAN_ID / PAYPAL_WEBHOOK_ID for the environment.
+// One-time PayPal setup: creates the product, the billing plan and the webhook, then prints
+// PAYPAL_PLAN_ID / PAYPAL_WEBHOOK_ID for the environment.
+// Prices are grossed up so that ~$10/month is left after PayPal's fee (2.9% + $0.30 on the
+// tax-inclusive amount), and GST+QST (14.975%) is added on top of the price by PayPal.
 // Usage: PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... PUBLIC_URL=https://... node scripts/paypal-setup.js
 const { configured, pp, BASE } = require('../lib/paypal');
 
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
 const CURRENCY = process.env.PAYPAL_CURRENCY || 'CAD';
+const TAX_PERCENT = process.env.PAYPAL_TAX_PERCENT || '14.975';  // GST 5% + QST 9.975%
+const INTRO_PRICE = process.env.PAYPAL_INTRO_PRICE || '5.49';    // nets ~$5.00 after fees
+const PRICE = process.env.PAYPAL_PRICE || '10.66';               // nets ~$10.00 after fees
 const EVENTS = [
   'BILLING.SUBSCRIPTION.ACTIVATED',
   'BILLING.SUBSCRIPTION.RE-ACTIVATED',
@@ -29,24 +34,25 @@ async function main() {
   const plan = await pp('POST', '/v1/billing/plans', {
     product_id: product.id,
     name: 'Provider monthly — intro 3 months',
-    description: '$15 for the first 3 months, then $10/month',
+    description: `${INTRO_PRICE}/month for the first 3 months, then ${PRICE}/month, plus GST/QST`,
     billing_cycles: [
       {
         tenure_type: 'TRIAL',
         sequence: 1,
         total_cycles: 3,
         frequency: { interval_unit: 'MONTH', interval_count: 1 },
-        pricing_scheme: { fixed_price: { value: '5.00', currency_code: CURRENCY } },
+        pricing_scheme: { fixed_price: { value: INTRO_PRICE, currency_code: CURRENCY } },
       },
       {
         tenure_type: 'REGULAR',
         sequence: 2,
         total_cycles: 0,
         frequency: { interval_unit: 'MONTH', interval_count: 1 },
-        pricing_scheme: { fixed_price: { value: '10.00', currency_code: CURRENCY } },
+        pricing_scheme: { fixed_price: { value: PRICE, currency_code: CURRENCY } },
       },
     ],
     payment_preferences: { auto_bill_outstanding: true, setup_fee_failure_action: 'CANCEL', payment_failure_threshold: 1 },
+    taxes: { percentage: TAX_PERCENT, inclusive: false },
   });
   console.log('PAYPAL_PLAN_ID=' + plan.id);
 

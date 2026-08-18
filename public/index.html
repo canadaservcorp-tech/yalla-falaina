@@ -94,6 +94,15 @@
   .photostrip img{width:74px;height:74px;object-fit:cover;border-radius:11px;border:1px solid var(--line)}
   .sendrow{display:flex;gap:8px;align-items:center}
   .subbox{background:#fff8ec;border:1px solid #f0dcb4;border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+  .legal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;box-shadow:var(--sh2);max-width:780px;margin:0 auto}
+  .legal h2{font-size:22px;margin:0 0 2px}
+  .legal h3{font-size:16px;margin:20px 0 4px}
+  .legal p{margin:0;color:var(--ink);font-size:14px;line-height:1.6}
+  .legal .updated{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .accept{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.45}
+  .accept input{width:16px;height:16px;flex:0 0 auto;margin-top:2px}
+  .accept a{color:var(--teal)}
+  footer a{color:var(--teal);text-decoration:none;margin-left:12px}
   @media(max-width:760px){ .hero{grid-template-columns:1fr;gap:8px} .hero h1{font-size:32px} .radar{max-width:230px} .svc-list{grid-template-columns:1fr} .chatwrap{grid-template-columns:1fr} }
 </style>
 </head>
@@ -171,7 +180,7 @@
   <div class="subbox" id="subbox">
     <strong id="subtitle">Abonnement prestataire</strong>
     <span class="muted" id="substate" style="font-size:13px"></span>
-    <button class="btn btn-primary" id="subbtn" onclick="startCheckout()">S'abonner avec PayPal — 15 $ les 3 premiers mois, puis 10 $/mois</button>
+    <button class="btn btn-primary" id="subbtn" onclick="startCheckout()">S'abonner avec PayPal — 5,49 $/mois les 3 premiers mois, puis 10,66 $/mois + taxes</button>
     <div class="err" id="suberr"></div>
   </div>
   <div class="card" id="claimbox" style="box-shadow:none;margin-bottom:14px">
@@ -209,6 +218,17 @@
     <div class="err" id="pperr"></div>
     <button class="btn btn-primary btn-block" id="ppsave" onclick="saveProvider()">Enregistrer mon profil</button>
   </div>
+</div></section></div>
+
+<div id="view-legal" class="view"><section class="pad"><div class="wrap">
+  <div class="toolbar">
+    <div class="seg" style="max-width:420px;flex:1">
+      <button id="tabterms" class="on" onclick="openLegal('terms')">Conditions d'utilisation</button>
+      <button id="tabprivacy" onclick="openLegal('privacy')">Politique de confidentialité</button>
+    </div>
+    <button class="btn btn-ghost" onclick="go('search')" id="legalback">← Retour</button>
+  </div>
+  <div class="legal" id="legalbody"></div>
 </div></section></div>
 
 <div id="view-chat" class="view"><section class="pad"><div class="wrap">
@@ -268,14 +288,23 @@
     <input id="a_phone" placeholder="Téléphone" style="display:none">
     <input id="a_pass" placeholder="Mot de passe" type="password" minlength="10" autocomplete="current-password">
     <div class="muted" id="pwhint" style="font-size:12px;display:none">Minimum 10 caractères.</div>
+    <label class="accept" id="acceptwrap" style="display:none">
+      <input type="checkbox" id="a_terms">
+      <span id="acceptlbl"></span>
+    </label>
     <div class="err" id="autherr"></div><div class="ok" id="authok"></div>
     <button class="btn btn-primary btn-block" id="authsubmit" onclick="submitAuth()">Se connecter</button>
     <p class="center muted" style="font-size:13px" id="authswitch"></p>
   </div>
 </div></div>
 
-<footer><div class="wrap" id="foot">TrouvePro — Près de toi · Near To You · Laval, QC</div></footer>
+<footer><div class="wrap" id="foot">
+  <span id="footco">TrouvePro — Près de toi · Near To You · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC</span>
+  <a href="/terms" id="footterms" onclick="openLegal('terms');return false">Conditions d'utilisation</a>
+  <a href="/privacy" id="footprivacy" onclick="openLegal('privacy');return false">Politique de confidentialité</a>
+</div></footer>
 
+<script src="/legal.js"></script>
 <script>
 const S = { lang:'fr', token:localStorage.getItem('tp_token')||null, user:null, catalog:[], mode:'login', role:'seeker' };
 try{ S.user = JSON.parse(localStorage.getItem('tp_user')||'null'); }catch(e){}
@@ -295,14 +324,18 @@ const T = {
     noconv:'Aucune conversation pour le moment.', pickconv:'Choisissez une conversation.',
     photohint:'Max 3 photos par conversation — elles sont supprimées à la fermeture du chat.',
     report:'Signaler', reportsend:'Envoyer le signalement', reportsent:'Signalement envoyé ✓',
-    subtitle:'Abonnement prestataire', subbtn:"S'abonner avec PayPal — 15 $ les 3 premiers mois, puis 10 $/mois",
+    subtitle:'Abonnement prestataire', subbtn:"S'abonner avec PayPal — 5,49 $/mois les 3 premiers mois, puis 10,66 $/mois + TPS/TVQ",
     subactive:'Abonnement actif ✓', subinactive:'Aucun abonnement actif.', submanage:'Abonnement actif',
     subok:'Abonnement activé ✓', subcancel:'Paiement annulé.',
     unclaimed:'Fiche RBQ non réclamée — est-ce vous ?', notavail:'Non disponible',
     claimtitle:'Réclamer votre fiche RBQ', claimsub:"Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.",
     claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
     claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.',
-    pwhint:'Mot de passe : 10 caractères minimum.' },
+    pwhint:'Mot de passe : 10 caractères minimum.',
+    terms:"Conditions d'utilisation", privacy:'Politique de confidentialité', legalback:'← Retour',
+    accept:`J'ai lu et j'accepte les <a href="/terms" target="_blank">conditions d'utilisation</a> et la <a href="/privacy" target="_blank">politique de confidentialité</a>. Je comprends que TrouvePro met en relation et ne vérifie pas les prestataires.`,
+    acceptreq:"Vous devez accepter les conditions d'utilisation.",
+    foot:'TrouvePro — Près de toi · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC' },
   en:{ login:'Log in', logout:'Log out', tag:'· Near To You',
     h1:'The right pro, <em>right nearby</em>.',
     hsub:"A nurse in your building, a plumber around the corner. TrouvePro shows the trusted providers closest to you — and connects you.",
@@ -317,14 +350,18 @@ const T = {
     noconv:'No conversations yet.', pickconv:'Pick a conversation.',
     photohint:'Max 3 photos per chat — they are deleted when the chat closes.',
     report:'Report', reportsend:'Send report', reportsent:'Report sent ✓',
-    subtitle:'Provider subscription', subbtn:'Subscribe with PayPal — $15 for the first 3 months, then $10/month',
+    subtitle:'Provider subscription', subbtn:'Subscribe with PayPal — $5.49/mo for the first 3 months, then $10.66/mo + GST/QST',
     subactive:'Subscription active ✓', subinactive:'No active subscription.', submanage:'Subscription active',
     subok:'Subscription activated ✓', subcancel:'Payment cancelled.',
     unclaimed:'Unclaimed RBQ listing — is this you?', notavail:'Not available',
     claimtitle:'Claim your RBQ listing', claimsub:'Your business may already be listed (RBQ registry). Search for it and claim it.',
     claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
     claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.',
-    pwhint:'Password: 10 characters minimum.' },
+    pwhint:'Password: 10 characters minimum.',
+    terms:'Terms of Use', privacy:'Privacy Policy', legalback:'← Back',
+    accept:`I have read and accept the <a href="/terms" target="_blank">Terms of Use</a> and the <a href="/privacy" target="_blank">Privacy Policy</a>. I understand TrouvePro connects people and does not verify providers.`,
+    acceptreq:'You must accept the Terms of Use.',
+    foot:'TrouvePro — Near To You · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC' },
 };
 const t = k => T[S.lang][k];
 
@@ -363,6 +400,14 @@ function setLang(l){
   document.getElementById('claimsub').textContent=t('claimsub');
   document.getElementById('claim_q').placeholder=t('claimq');
   document.getElementById('claimsearchbtn').textContent=t('claimsearch');
+  document.getElementById('footco').textContent=t('foot');
+  document.getElementById('footterms').textContent=t('terms');
+  document.getElementById('footprivacy').textContent=t('privacy');
+  document.getElementById('tabterms').textContent=t('terms');
+  document.getElementById('tabprivacy').textContent=t('privacy');
+  document.getElementById('legalback').textContent=t('legalback');
+  document.getElementById('acceptlbl').innerHTML=t('accept');
+  if(document.getElementById('view-legal').classList.contains('on')) renderLegal();
   radlbl(); rradlbl(); refreshNav(); fillServiceSelects();
   // results already on screen must follow the new language (incl. server-side distance labels)
   if(document.getElementById('view-results').classList.contains('on')) doSearch();
@@ -470,6 +515,9 @@ function renderAuth(){
   document.getElementById('a_phone').style.display = reg?'block':'none';
   document.getElementById('pwhint').style.display = reg?'block':'none';
   document.getElementById('pwhint').textContent = t('pwhint');
+  document.getElementById('acceptwrap').style.display = reg?'flex':'none';
+  document.getElementById('acceptlbl').innerHTML = t('accept');
+  document.getElementById('a_terms').checked = false;
   document.getElementById('a_pass').autocomplete = reg?'new-password':'current-password';
   document.getElementById('authsubmit').textContent = reg?t('authR'):t('authL');
   document.getElementById('autherr').textContent=''; document.getElementById('authok').textContent='';
@@ -482,7 +530,8 @@ async function submitAuth(){
   try{
     if(S.mode==='register'){
       const name=document.getElementById('a_name').value.trim(), phone=document.getElementById('a_phone').value.trim();
-      await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password:pass,name,phone,role:S.role})});
+      if(!document.getElementById('a_terms').checked){ er.textContent=t('acceptreq'); return; }
+      await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password:pass,name,phone,role:S.role,acceptTerms:true})});
       okEl.textContent=t('checkmail');
     }else{
       const j=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password:pass})});
@@ -676,8 +725,27 @@ async function claimListing(seedUserId){
   }catch(e){ msg.className='err'; msg.textContent=e.message; }
 }
 
+let legalTab='terms';
+function openLegal(which){
+  legalTab = which==='privacy'?'privacy':'terms';
+  document.getElementById('tabterms').classList.toggle('on',legalTab==='terms');
+  document.getElementById('tabprivacy').classList.toggle('on',legalTab==='privacy');
+  renderLegal(); go('legal');
+  history.replaceState(null,'', legalTab==='privacy'?'/privacy':'/terms');
+}
+function renderLegal(){
+  const L=window.LEGAL, box=document.getElementById('legalbody');
+  if(!L){ box.textContent='—'; return; }
+  const pack=L[S.lang], sections=pack[legalTab];
+  box.innerHTML = `<h2>${legalTab==='privacy'?pack.tabPrivacy:pack.tabTerms}</h2>`
+    + `<div class="updated">${pack.updated}</div>`
+    + sections.map(([h,body])=>`<h3>${h}</h3><p>${body}</p>`).join('');
+}
+
 (function(){
   setLang('fr'); refreshNav(); loadCatalog();
+  if(location.pathname==='/terms') openLegal('terms');
+  if(location.pathname==='/privacy') openLegal('privacy');
   const sub=new URLSearchParams(location.search).get('sub');
   if(sub && S.token && S.user){
     if(S.user.role==='provider'){ loadProviderForm(); go('provider'); }

@@ -9,6 +9,7 @@ const router = express.Router();
 const { JWT_SECRET } = process.env;
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
 const BCRYPT_ROUNDS = 12;
+const TERMS_VERSION = '2026-08-18';
 
 // compared against when no account matches, so timing doesn't reveal existence
 const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), BCRYPT_ROUNDS);
@@ -28,6 +29,7 @@ router.post('/register', sec.limits.credentials, async (req, res) => {
     const pwProblem = sec.passwordProblem(password);
     if (pwProblem) return res.status(400).json({ error: pwProblem });
     if (!['seeker', 'provider'].includes(role)) return res.status(400).json({ error: 'role must be seeker or provider' });
+    if (req.body.acceptTerms !== true) return res.status(400).json({ error: 'You must accept the Terms of Use' });
 
     const { data: banned } = await supabase.from('banned_emails').select('email').eq('email', email).maybeSingle();
     if (banned) return res.status(403).json({ error: 'This email is blocked' });
@@ -42,7 +44,10 @@ router.post('/register', sec.limits.credentials, async (req, res) => {
     const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const verify_token = crypto.randomBytes(32).toString('hex');
     const { data: user, error } = await supabase.from('users')
-      .insert({ email, password_hash, name, phone, role, verify_token })
+      .insert({
+        email, password_hash, name, phone, role, verify_token,
+        terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION,
+      })
       .select('id, email, name, role').single();
     if (error) throw error;
     if (role === 'provider') await supabase.from('providers').insert({ user_id: user.id, display_name: name });
