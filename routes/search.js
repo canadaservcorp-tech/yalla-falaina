@@ -12,11 +12,13 @@ router.get('/', async (req, res) => {
   try {
     const lat = parseFloat(req.query.lat), lng = parseFloat(req.query.lng);
     if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'lat and lng required' });
-    const radiusM = (parseFloat(req.query.radius_km) || 10) * 1000;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return res.status(400).json({ error: 'lat/lng out of range' });
+    const radiusKm = Math.min(Math.max(parseFloat(req.query.radius_km) || 10, 1), 200);
+    const radiusM = radiusKm * 1000;
     const lang = req.query.lang === 'en' ? 'en' : 'fr';
-    const professionId = req.query.profession_id ? parseInt(req.query.profession_id) : null;
-    const category = req.query.category || null;
-    const q = req.query.q ? String(req.query.q).trim() : null;
+    const professionId = /^\d{1,9}$/.test(String(req.query.profession_id || '')) ? parseInt(req.query.profession_id) : null;
+    const category = typeof req.query.category === 'string' ? req.query.category.slice(0, 60) : null;
+    const q = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim().slice(0, 80) : null;
 
     // Raw SQL via RPC for the distance sort + radius filter (earthdistance).
     const { data, error } = await supabase.rpc('search_providers', {
@@ -36,6 +38,6 @@ router.get('/', async (req, res) => {
       distance_label: approx(r.distance_m, lang),   // approximate only — never exact address
     }));
     res.json({ success: true, count: providers.length, paywall: PAYWALL, providers });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('search', e); res.status(500).json({ error: 'Search failed' }); }
 });
 module.exports = router;

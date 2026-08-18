@@ -266,7 +266,8 @@
     <input id="a_name" placeholder="Nom complet" style="display:none">
     <input id="a_email" placeholder="Courriel" type="email">
     <input id="a_phone" placeholder="Téléphone" style="display:none">
-    <input id="a_pass" placeholder="Mot de passe" type="password">
+    <input id="a_pass" placeholder="Mot de passe" type="password" minlength="10" autocomplete="current-password">
+    <div class="muted" id="pwhint" style="font-size:12px;display:none">Minimum 10 caractères.</div>
     <div class="err" id="autherr"></div><div class="ok" id="authok"></div>
     <button class="btn btn-primary btn-block" id="authsubmit" onclick="submitAuth()">Se connecter</button>
     <p class="center muted" style="font-size:13px" id="authswitch"></p>
@@ -300,7 +301,8 @@ const T = {
     unclaimed:'Fiche RBQ non réclamée — est-ce vous ?', notavail:'Non disponible',
     claimtitle:'Réclamer votre fiche RBQ', claimsub:"Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.",
     claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
-    claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.' },
+    claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.',
+    pwhint:'Mot de passe : 10 caractères minimum.' },
   en:{ login:'Log in', logout:'Log out', tag:'· Near To You',
     h1:'The right pro, <em>right nearby</em>.',
     hsub:"A nurse in your building, a plumber around the corner. TrouvePro shows the trusted providers closest to you — and connects you.",
@@ -321,7 +323,8 @@ const T = {
     unclaimed:'Unclaimed RBQ listing — is this you?', notavail:'Not available',
     claimtitle:'Claim your RBQ listing', claimsub:'Your business may already be listed (RBQ registry). Search for it and claim it.',
     claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
-    claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.' },
+    claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.',
+    pwhint:'Password: 10 characters minimum.' },
 };
 const t = k => T[S.lang][k];
 
@@ -361,6 +364,8 @@ function setLang(l){
   document.getElementById('claim_q').placeholder=t('claimq');
   document.getElementById('claimsearchbtn').textContent=t('claimsearch');
   radlbl(); rradlbl(); refreshNav(); fillServiceSelects();
+  // results already on screen must follow the new language (incl. server-side distance labels)
+  if(document.getElementById('view-results').classList.contains('on')) doSearch();
 }
 function radlbl(){ const v=document.getElementById('fradius').value; document.getElementById('lblradius').textContent=`${t('radius')} : ${v} km`; }
 function rradlbl(){ const v=document.getElementById('rradius').value; document.getElementById('rlblradius').textContent=`${t('radius')} : ${v} km`; }
@@ -463,6 +468,9 @@ function renderAuth(){
   document.getElementById('rolewrap').style.display = reg?'flex':'none';
   document.getElementById('a_name').style.display = reg?'block':'none';
   document.getElementById('a_phone').style.display = reg?'block':'none';
+  document.getElementById('pwhint').style.display = reg?'block':'none';
+  document.getElementById('pwhint').textContent = t('pwhint');
+  document.getElementById('a_pass').autocomplete = reg?'new-password':'current-password';
   document.getElementById('authsubmit').textContent = reg?t('authR'):t('authL');
   document.getElementById('autherr').textContent=''; document.getElementById('authok').textContent='';
   const sw=document.getElementById('authswitch'); sw.textContent = reg?t('toLog'):t('toReg');
