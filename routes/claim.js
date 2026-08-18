@@ -66,6 +66,13 @@ router.post('/', sec.limits.claim, async (req, res) => {
     const delUser = await supabase.from('users').delete().eq('id', seedUserId);
     if (delUser.error) throw delUser.error;
 
+    // converted: stop the marketing list from emailing this licence again
+    if (seed.rbq_licence) {
+      const stop = await supabase.from('outreach_contacts')
+        .update({ claimed_user_id: req.user.id }).eq('rbq_licence', seed.rbq_licence);
+      if (stop.error) console.error('outreach claim link', stop.error);
+    }
+
     res.json({ success: true, message: 'Listing claimed — set your location & subscribe to go live.' });
   } catch (e) { console.error('claim', e); res.status(500).json({ error: 'Could not claim this listing' }); }
 });

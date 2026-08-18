@@ -28,6 +28,7 @@ app.use('/api/chat', require('./routes/photos'));    // /api/chat/:id/photos
 app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/report', require('./routes/report'));
 app.use('/api/claim', require('./routes/claim'));    // claim an unclaimed RBQ seed listing
+app.use('/api/outreach', require('./routes/outreach')); // marketing list opt-out (CASL)
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, phase: 3 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
