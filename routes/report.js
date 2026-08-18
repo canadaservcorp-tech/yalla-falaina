@@ -5,7 +5,7 @@ const { authenticate } = require('../lib/auth-mw');
 const { blockUser } = require('../lib/moderation');
 const sec = require('../lib/security');
 const router = express.Router();
-const KINDS = ['sexual', 'abuse', 'other'];
+const KINDS = ['sexual', 'abuse', 'harassment', 'scam', 'other'];
 
 router.use(authenticate, sec.requireActiveUser);
 
@@ -17,7 +17,9 @@ function adminOnly(req, res, next) {
 // anyone in a chat can report content (while it's still open — photos are ephemeral)
 router.post('/', sec.limits.report, async (req, res) => {
   const { conversationId, targetUserId } = req.body;
-  const kind = KINDS.includes(req.body.kind) ? req.body.kind : 'other';
+  if (req.body.kind !== undefined && !KINDS.includes(req.body.kind))
+    return res.status(400).json({ error: 'Invalid report kind' });
+  const kind = req.body.kind || 'other';
   const reason = sec.clean(req.body.reason, 1000) || '';
   let convId = null, targetId = null;
 

@@ -87,7 +87,7 @@
   .conv:hover{background:var(--bg)} .conv.on{background:#e7f4f2;color:var(--teal)}
   .thread{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh2);display:flex;flex-direction:column;gap:10px}
   .msgs{display:flex;flex-direction:column;gap:8px;min-height:220px;max-height:380px;overflow:auto}
-  .msg{max-width:76%;padding:9px 12px;border-radius:14px;font-size:14px;background:var(--bg)}
+  .msg{max-width:76%;padding:9px 12px;border-radius:14px;font-size:14px;background:var(--bg);overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap}
   .msg.mine{align-self:flex-end;background:var(--teal);color:#fff}
   .msg time{display:block;font-size:10px;opacity:.65;margin-top:3px}
   .photostrip{display:flex;gap:8px;flex-wrap:wrap}
@@ -188,7 +188,7 @@
   <p class="muted" id="ppsub">Renseignez votre profil pour apparaître dans les recherches près de chez vos clients.</p>
   <div class="stack">
     <div class="field"><label>Nom affiché</label><input id="pp_name"></div>
-    <div class="field"><label>À propos (bio)</label><textarea id="pp_bio" rows="2"></textarea></div>
+    <div class="field"><label>À propos (bio)</label><textarea id="pp_bio" rows="2" maxlength="1000"></textarea></div>
     <div class="row" style="display:flex;gap:10px">
       <div class="field"><label>Ville</label><input id="pp_city" placeholder="Laval"></div>
       <div class="field"><label>Langues</label><input id="pp_lang" placeholder="fr, en, ar"></div>
@@ -228,7 +228,7 @@
       <div class="msgs" id="msgs"></div>
       <div class="photostrip" id="photostrip"></div>
       <div class="sendrow">
-        <input id="msgtext" placeholder="Votre message…" onkeydown="if(event.key==='Enter')sendMsg()">
+        <input id="msgtext" maxlength="2000" placeholder="Votre message…" onkeydown="if(event.key==='Enter')sendMsg()">
         <button class="btn btn-ghost" id="btnphoto" title="Photo" onclick="document.getElementById('photofile').click()">📷</button>
         <button class="btn btn-teal" id="btnsend" onclick="sendMsg()">Envoyer</button>
         <input type="file" id="photofile" accept="image/*" style="display:none" onchange="uploadPhoto(this)">
@@ -249,7 +249,7 @@
       <option value="scam">Fraude / arnaque</option>
       <option value="other">Autre</option>
     </select>
-    <textarea id="r_reason" rows="3" placeholder="Détails (optionnel)"></textarea>
+    <textarea id="r_reason" rows="3" maxlength="1000" placeholder="Détails (optionnel)"></textarea>
     <div class="err" id="reporterr"></div><div class="ok" id="reportok"></div>
     <button class="btn btn-primary btn-block" id="reportsubmit" onclick="submitReport()">Envoyer le signalement</button>
   </div>
