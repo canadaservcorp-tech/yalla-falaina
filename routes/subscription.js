@@ -4,6 +4,7 @@ const supabase = require('../db');
 const { authenticate } = require('../lib/auth-mw');
 const { configured, pp } = require('../lib/paypal');
 const sec = require('../lib/security');
+const boost = require('./boost');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
@@ -64,7 +65,21 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
   try {
     const r = event.resource || {};
     const subId = r.id || r.billing_agreement_id;
-    const userId = r.custom_id || r.custom;
+    const custom = r.custom_id || r.custom || '';
+
+    // Auto-renewing top placement uses its own PayPal plan, tagged "boost:<userId>"
+    const boostMatch = /^boost:(\d+)$/.exec(String(custom));
+    if (boostMatch) {
+      const providerId = Number(boostMatch[1]);
+      if (ACTIVE.has(event.event_type) || event.event_type === 'PAYMENT.SALE.COMPLETED') {
+        await boost.extendBoost(providerId, boost.BOOST_PLANS.auto30.days, 'auto30', subId);
+      } else if (DEAD.has(event.event_type)) {
+        await supabase.from('providers').update({ boost_subscription_id: null }).eq('user_id', providerId);
+      }
+      return res.json({ received: true });
+    }
+
+    const userId = custom;
     const status = ACTIVE.has(event.event_type) ? 'active' : DEAD.has(event.event_type) ? 'canceled' : null;
     if (status) {
       const end = r.billing_info?.next_billing_time || null;

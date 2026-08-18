@@ -60,6 +60,7 @@
   .pill-lic{background:#eaf6ec;color:#2e7d43}
   .pill-now{background:#fff2e8;color:var(--coral)}
   .pill-off{background:#f1f5f9;color:var(--muted)}
+  .pill-boost{background:#eef6ff;color:#1d5c9e}
   .hours{font-size:13px;color:var(--muted);margin-top:4px}
   .shot{width:74px;height:74px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
   .shotwrap{position:relative;display:inline-block}
@@ -187,6 +188,13 @@
     <span class="muted" id="substate" style="font-size:13px"></span>
     <button class="btn btn-primary" id="subbtn" onclick="startCheckout()">S'abonner avec PayPal — 5,49 $/mois les 3 premiers mois, puis 10,66 $/mois + taxes</button>
     <div class="err" id="suberr"></div>
+  </div>
+  <div class="subbox" id="boostbox" style="display:none;background:#eef6ff;border-color:#c9def7">
+    <strong id="boosttitle">Placement en tête de liste</strong>
+    <span class="muted" id="booststate" style="font-size:13px"></span>
+    <div class="tags" id="boostplans"></div>
+    <button class="btn btn-ghost" id="boostcancel" style="display:none" onclick="cancelAutoBoost()"></button>
+    <div class="err" id="boosterr"></div>
   </div>
   <div class="card" id="claimbox" style="box-shadow:none;margin-bottom:14px">
     <h3 id="claimtitle" style="margin:0">Réclamer votre fiche RBQ</h3>
@@ -326,6 +334,9 @@
   <a href="/privacy" id="footprivacy" onclick="openLegal('privacy');return false">Politique de confidentialité</a>
 </div></footer>
 
+<!-- optional client-side NSFW pre-filter; server-side moderation stays authoritative -->
+<script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/nsfwjs@4.1.0/dist/nsfwjs.min.js"></script>
 <script src="/legal.js"></script>
 <script>
 const S = { lang:'fr', token:localStorage.getItem('tp_token')||null, user:null, catalog:[], mode:'login', role:'seeker' };
@@ -355,6 +366,12 @@ const T = {
     contactlocked:'Coordonnées visibles seulement aux membres connectés, pour les prestataires abonnés.',
     lbprice:'Tarifs (ex. 80 $/h — estimation gratuite)', lbcmail:'Courriel affiché', lbcphone:'Mobile affiché',
     lbportfolio:'Photos de vos réalisations (max 6)',
+    boosttitle:'Placement en tête de liste', boostactive:'Placement en tête actif jusqu’au',
+    boostwhy:(n)=>`${n} prestataires abonnés couvrent déjà votre métier près de vous : payez pour apparaître en tête.`,
+    boostfree:(n)=>`Vous êtes encore parmi les ${n} premiers résultats — aucun placement payé nécessaire.`,
+    boostdays:(d)=>`${d} jours`, boostauto:(d)=>`${d} jours — renouvellement automatique`,
+    boostcancel:'Arrêter le renouvellement automatique', taxin:'taxes incluses',
+    boosted:'En tête',
     contacthint:'Laissez vide pour utiliser le courriel et le mobile de votre compte. Vos coordonnées ne sont montrées qu’aux membres connectés, et seulement si votre abonnement est actif.',
     claimtitle:'Réclamer votre fiche RBQ', claimsub:"Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.",
     claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
@@ -387,6 +404,12 @@ const T = {
     contactlocked:'Contact details are shown to logged-in members only, for subscribed providers.',
     lbprice:'Rates (e.g. $80/h — free estimate)', lbcmail:'Public email', lbcphone:'Public mobile',
     lbportfolio:'Photos of your work (max 6)',
+    boosttitle:'Top-of-list placement', boostactive:'Top placement active until',
+    boostwhy:(n)=>`${n} subscribed providers already cover your trade nearby — pay to appear at the top.`,
+    boostfree:(n)=>`You are still within the first ${n} results — no paid placement needed.`,
+    boostdays:(d)=>`${d} days`, boostauto:(d)=>`${d} days — auto-renewing`,
+    boostcancel:'Stop auto-renewal', taxin:'taxes included',
+    boosted:'Top',
     contacthint:'Leave empty to use your account email and mobile. Your details are only shown to logged-in members, and only while your subscription is active.',
     claimtitle:'Claim your RBQ listing', claimsub:'Your business may already be listed (RBQ registry). Search for it and claim it.',
     claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
@@ -440,6 +463,8 @@ function setLang(l){
   document.getElementById('reportsubmit').textContent=t('reportsend');
   document.getElementById('subtitle').textContent=t('subtitle');
   document.getElementById('subbtn').textContent=t('subbtn');
+  document.getElementById('boosttitle').textContent=t('boosttitle');
+  if(S.user&&S.user.role==='provider'&&document.getElementById('boostbox').style.display!=='none') loadBoost();
   document.getElementById('claimtitle').textContent=t('claimtitle');
   document.getElementById('claimsub').textContent=t('claimsub');
   document.getElementById('claim_q').placeholder=t('claimq');
@@ -534,7 +559,8 @@ function renderResults(list){
         ${p.distance_label
             ? `<span class="pill pill-dist">📍 ${esc(p.distance_label)}</span>`
             : `<span class="pill pill-off">○ ${t('offline')}</span>`}
-        ${p.is_licensed?`<span class="pill pill-lic">✓ ${t('licensed')}</span>`:''}
+        ${p.boosted?`<span class="pill pill-boost">★ ${t('boosted')}</span>`:''}
+      ${p.is_licensed?`<span class="pill pill-lic">✓ ${t('licensed')}</span>`:''}
         ${p.available_now?`<span class="pill pill-now">● ${t('now')}</span>`:''}
       </div>
       <div class="tags">${langs}</div>
@@ -595,6 +621,7 @@ async function loadProviderForm(){
   if(!S.catalog.length) await loadCatalog();
   fillServiceChecklist();
   loadSubscription();
+  loadBoost();
   try{
     const j=await api('/api/providers/'+S.user.id); const p=j.provider||{};
     document.getElementById('pp_name').value=p.display_name||S.user.name||'';
@@ -649,6 +676,7 @@ async function uploadPortfolio(input){
   try{
     if(file.size>10*1024*1024){ err.textContent='Max 10 MB'; return; }
     const b64=await compress(file);
+    if(!await nsfwOk(b64)){ err.textContent=S.lang==='fr'?'Photo refusée : contenu explicite.':'Photo refused: explicit content.'; return; }
     await api('/api/providers/me/portfolio',{method:'POST',body:JSON.stringify({image:b64})});
     loadPortfolio();
   }catch(e){ err.textContent=e.message; }
@@ -741,6 +769,18 @@ async function loadPhotos(){
   }catch(e){}
 }
 // compress client-side to ~1200px / 80% jpeg before upload
+/* Client-side pre-filter only: it saves a round trip and gives instant feedback.
+   The server re-checks every image and refuses uploads when moderation is down. */
+let _nsfwModel=null,_nsfwLoading=null;
+async function nsfwOk(dataUrl){
+  try{
+    if(typeof nsfwjs==='undefined') return true;
+    if(!_nsfwModel){ _nsfwLoading=_nsfwLoading||nsfwjs.load(); _nsfwModel=await _nsfwLoading; }
+    const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=dataUrl; });
+    const s={}; (await _nsfwModel.classify(img)).forEach(p=>{ s[p.className]=p.probability; });
+    return !((s.Porn||0)>0.6||(s.Hentai||0)>0.6||(s.Sexy||0)>0.8);
+  }catch(e){ return true; }
+}
 function compress(file){
   return new Promise((resolve,reject)=>{
     const img=new Image(); const fr=new FileReader();
@@ -761,6 +801,7 @@ async function uploadPhoto(input){
   if(file.size>10*1024*1024){ err.textContent='Max 10 MB'; return; }
   try{
     const dataUrl=await compress(file);
+    if(!await nsfwOk(dataUrl)){ err.textContent=S.lang==='fr'?'Photo refusée : contenu explicite.':'Photo refused: explicit content.'; return; }
     await api(`/api/chat/${S.conv}/photos`,{method:'POST',body:JSON.stringify({image:dataUrl})});
     await loadPhotos();
   }catch(e){ err.textContent=e.message; }
@@ -799,6 +840,48 @@ async function startCheckout(){
   const err=document.getElementById('suberr'); err.textContent='';
   try{ const j=await api('/api/subscription/checkout',{method:'POST'}); window.location.href=j.url; }
   catch(e){ err.textContent=e.message; }
+}
+
+/* ---------- paid top placement (Boost) — providers only ---------- */
+async function loadBoost(){
+  const box=document.getElementById('boostbox');
+  if(!S.user||S.user.role!=='provider'){ box.style.display='none'; return; }
+  const state=document.getElementById('booststate'), plans=document.getElementById('boostplans');
+  const cancel=document.getElementById('boostcancel');
+  document.getElementById('boosttitle').textContent=t('boosttitle');
+  try{
+    const j=await api('/api/boost/plans');
+    if(!j.subscribed){ box.style.display='none'; return; }
+    box.style.display='flex';
+    state.textContent = j.boost.active
+      ? t('boostactive')+' '+new Date(j.boost.until).toLocaleDateString()
+      : (j.eligible ? t('boostwhy')(j.competitors) : t('boostfree')(j.topSlots));
+    plans.innerHTML = j.eligible ? (j.plans||[]).map(p=>
+      `<button class="btn btn-teal" onclick="startBoost('${p.id}')">`
+      + `${p.recurring?t('boostauto')(p.days):t('boostdays')(p.days)} — ${p.total} $ ${t('taxin')}</button>`).join('') : '';
+    cancel.style.display = j.boost.auto?'inline-block':'none';
+    cancel.textContent = t('boostcancel');
+  }catch(e){ box.style.display='none'; }
+}
+async function startBoost(plan){
+  const err=document.getElementById('boosterr'); err.textContent='';
+  try{ const j=await api('/api/boost/checkout',{method:'POST',body:JSON.stringify({plan})}); window.location.href=j.url; }
+  catch(e){ err.textContent=e.message; }
+}
+async function cancelAutoBoost(){
+  const err=document.getElementById('boosterr'); err.textContent='';
+  try{ await api('/api/boost/cancel-auto',{method:'POST'}); loadBoost(); }
+  catch(e){ err.textContent=e.message; }
+}
+// PayPal sends the provider back with ?boost=success&token=<orderId> for one-time plans
+async function finishBoostReturn(){
+  const q=new URLSearchParams(location.search);
+  if(q.get('boost')!=='success' || !S.token) return;
+  const orderId=q.get('token');
+  history.replaceState(null,'','/');
+  if(!orderId) return;
+  try{ await api('/api/boost/capture',{method:'POST',body:JSON.stringify({orderId})}); }catch(e){}
+  loadBoost();
 }
 
 async function claimSearch(){
@@ -854,6 +937,9 @@ function renderLegal(){
   if(sub && S.token && S.user){
     if(S.user.role==='provider'){ loadProviderForm(); go('provider'); }
     setTimeout(()=>{ const el=document.getElementById('substate'); if(el) el.textContent = sub==='success'?t('subok'):t('subcancel'); }, 600);
+  }
+  if(new URLSearchParams(location.search).get('boost') && S.token && S.user && S.user.role==='provider'){
+    loadProviderForm(); go('provider'); finishBoostReturn();
   }
 })();
 </script>
