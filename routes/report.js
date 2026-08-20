@@ -53,12 +53,27 @@ router.get('/admin/queue', adminOnly, async (_req, res) => {
   res.json({ success: true, reports: data || [] });
 });
 
-// admin: act on a report -> block (ban + forfeit + email blocklist) or dismiss
+// admin: act on a report -> block (ban + forfeit + email blocklist), escalate or dismiss
+const ACTIONS = ['block', 'escalate', 'dismiss'];
 router.post('/admin/:id/action', adminOnly, async (req, res) => {
   const action = req.body.action;
+  if (!ACTIONS.includes(action)) return res.status(400).json({ error: 'Invalid action' });
   if (!sec.isId(req.params.id)) return res.status(400).json({ error: 'Invalid report id' });
   const { data: rep } = await supabase.from('reports').select('*').eq('id', Number(req.params.id)).maybeSingle();
   if (!rep) return res.status(404).json({ error: 'Report not found' });
+  // illegal content (child sexual abuse material above all): ban at once and keep the record.
+  // Canada's mandatory reporting act requires notifying Cybertip.ca / police and preserving
+  // the evidence for 21 days, so the report is never dismissed or deleted.
+  if (action === 'escalate' && rep.target_user_id) {
+    await blockUser(rep.target_user_id, `report #${rep.id}: illegal content`);
+    sec.dropUserFromCache(rep.target_user_id);
+    const until = new Date(Date.now() + 21 * 86400e3).toISOString().slice(0, 10);
+    await supabase.from('reports').update({
+      status: 'escalated',
+      reason: `${rep.reason || ''} | ESCALATED: illegal content — report to Cybertip.ca, preserve until ${until}`,
+    }).eq('id', rep.id);
+    return res.json({ success: true, escalated: rep.target_user_id, preserve_until: until });
+  }
   if (action === 'block' && rep.target_user_id) {
     await blockUser(rep.target_user_id, `report #${rep.id}: ${rep.kind}`);
     sec.dropUserFromCache(rep.target_user_id);

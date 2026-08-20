@@ -2,7 +2,7 @@
 const express = require('express');
 const supabase = require('../db');
 const { authenticate, optionalAuth } = require('../lib/auth-mw');
-const { checkImage, blockUser } = require('../lib/moderation');
+const { checkImage, strikeImage } = require('../lib/moderation');
 const sec = require('../lib/security');
 const router = express.Router();
 const BUCKET = 'portfolio-photos';
@@ -41,9 +41,12 @@ router.post('/me/portfolio', authenticate, sec.requireActiveUser, sec.limits.upl
   if (verdict.unavailable && !verdict.safe)
     return res.status(503).json({ error: 'Photo upload is temporarily unavailable' });
   if (!verdict.safe) {
-    await blockUser(req.user.id, 'explicit image in portfolio');
-    await supabase.from('reports').insert({ reporter_id: null, target_user_id: req.user.id, kind: 'sexual', reason: 'auto-detected explicit portfolio image', status: 'actioned' });
-    return res.status(403).json({ error: 'Prohibited content detected. Your account has been blocked.' });
+    // photo is never stored; a moderator decides on the account
+    await strikeImage(req.user.id, 'portfolio', verdict);
+    return res.status(403).json({
+      code: 'photo_blocked',
+      error: 'This photo was blocked as explicit content and sent for review. Repeated violations can close your account.',
+    });
   }
 
   const buf = Buffer.from(base64, 'base64');

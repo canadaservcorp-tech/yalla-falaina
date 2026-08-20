@@ -32,7 +32,7 @@
 <body>
 <div class="wrap">
   <h1>Admin · Moderation Queue</h1>
-  <p class="muted">Paste your admin JWT, then load the open reports. Block bans the user (forfeit + email blocklist); Dismiss clears the report.</p>
+  <p class="muted">Paste your admin JWT, then load the open reports. Block bans the user (forfeit + email blocklist); Illegal — escalate bans and keeps the record for reporting to Cybertip.ca; Dismiss clears the report. <code>image_strike</code> rows are photos automatically blocked by SafeSearch and never delivered — confirm before banning, false positives happen.</p>
   <div class="row">
     <input id="token" placeholder="Admin JWT (Bearer token)">
     <button class="btn btn-teal" onclick="saveTokenAndLoad()">Load queue</button>
@@ -86,7 +86,7 @@
       '<th>ID</th><th>Kind</th><th>Target user</th><th>Conv.</th><th>Reason</th><th>Created</th><th>Actions</th>'+
       '</tr></thead><tbody>';
     reports.forEach(r=>{
-      const kindClass = r.kind === 'sexual' ? 'kind sexual' : 'kind';
+      const kindClass = (r.kind === 'sexual' || r.kind === 'image_strike') ? 'kind sexual' : 'kind';
       html += '<tr>'+
         `<td>${esc(r.id)}</td>`+
         `<td><span class="${kindClass}">${esc(r.kind)}</span></td>`+
@@ -96,6 +96,7 @@
         `<td class="muted">${esc((r.created_at||'').slice(0,19).replace('T',' '))}</td>`+
         `<td class="row">`+
           `<button class="btn btn-red" onclick="act(${r.id},'block')">Block</button>`+
+          `<button class="btn btn-red" onclick="act(${r.id},'escalate')">Illegal — escalate</button>`+
           `<button class="btn btn-ghost" onclick="act(${r.id},'dismiss')">Dismiss</button>`+
         `</td>`+
       '</tr>';
@@ -108,7 +109,8 @@
     setMsg(`${action}…`, true);
     try{
       await api('/api/report/admin/'+id+'/action', { method:'POST', body: JSON.stringify({ action }) });
-      setMsg(`Report #${id} ${action === 'block' ? 'blocked' : 'dismissed'}.`, true);
+      const done = { block: 'blocked', escalate: 'escalated \u2014 report it to Cybertip.ca and keep the record 21 days', dismiss: 'dismissed' }[action];
+      setMsg(`Report #${id} ${done}.`, true);
       loadQueue(); // refresh
     }catch(e){
       setMsg('Error: ' + e.message, false);
