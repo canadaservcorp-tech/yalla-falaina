@@ -1,6 +1,6 @@
 const { test, after, beforeEach } = require('node:test');
 const assert = require('node:assert');
-const { getApp } = require('./helpers/appHarness');
+const { getApp, actor, auth } = require('./helpers/appHarness');
 
 const h = getApp();
 const realFetch = globalThis.fetch;
@@ -117,6 +117,25 @@ test('one visitor cannot burn the model budget', async () => {
   let limited = false;
   for (let i = 0; i < 12 && !limited; i++) limited = (await ask(said('bonjour'), ip)).status === 429;
   assert.ok(limited, 'the per-minute concierge limit must bite');
+});
+
+test('the diagnostic is admin-only, by database role and not by token claim', async () => {
+  const jwt = require('jsonwebtoken');
+  const diag = token => fetch(h.base + '/api/concierge/diag', { headers: auth(token) });
+  assert.equal((await diag(actor(h, { id: 701, role: 'seeker' }))).status, 403);
+  h.mock.__set('users', { data: { id: 702, role: 'seeker', banned: false, email_verified: true }, error: null });
+  assert.equal((await diag(jwt.sign({ id: 702, role: 'admin' }, process.env.JWT_SECRET))).status, 403);
+  assert.equal((await fetch(h.base + '/api/concierge/diag')).status, 401);
+});
+
+test('the diagnostic tells an admin what the model upstream answered', async () => {
+  respond = () => ({ status: 404, body: '{"error":{"message":"model: nope"}}' });
+  const res = await fetch(h.base + '/api/concierge/diag', { headers: auth(actor(h, { id: 703, role: 'admin' })) });
+  assert.equal(res.status, 200);
+  const j = await res.json();
+  assert.deepEqual([j.configured, j.upstream], [true, 404]);
+  assert.match(j.detail, /model: nope/);
+  assert.ok(!/test-key/.test(JSON.stringify(j)), 'the key is never echoed back');
 });
 
 test('/api/health reports whether the concierge is configured', async () => {
