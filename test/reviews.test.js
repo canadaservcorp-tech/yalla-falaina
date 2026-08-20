@@ -75,6 +75,47 @@ test('a valid review is stored and the rating recomputed', async () => {
   assert.deepEqual(h.mock.__lastRpc('recompute_provider_rating').args, { p_provider: 5 });
 });
 
+test('a failed write is reported as an error, never as published -> 500', async () => {
+  const token = actor(h, { id: 16 });
+  h.mock.__set('providers', { data: { user_id: 5, claimed: true }, error: null });
+  h.mock.__set('conversations', { data: { id: 7 }, error: null });
+  h.mock.__set('reviews', { data: null, error: null });
+  h.mock.__setOp('reviews', 'insert', { data: null, error: { message: 'relation does not exist' } });
+  const r = await post('/api/reviews', token, { providerId: 5, rating: 5, body: 'Bon service' });
+  assert.equal(r.status, 500);
+  assert.equal(h.mock.__rpcCalls('recompute_provider_rating').length, 0);
+});
+
+test('editing a review clears the provider answer written under the old text', async () => {
+  const token = actor(h, { id: 17 });
+  h.mock.__set('providers', { data: { user_id: 5, claimed: true }, error: null });
+  h.mock.__set('conversations', { data: { id: 7 }, error: null });
+  h.mock.__set('reviews', { data: { id: 3 }, error: null });
+  const r = await post('/api/reviews', token, { providerId: 5, rating: 1, body: 'Finalement décevant' });
+  assert.equal(r.status, 200);
+  const upd = h.mock.__writes('reviews', 'update').pop();
+  assert.equal(upd.payload.provider_reply, null);
+  assert.equal(upd.payload.replied_at, null);
+});
+
+test('reporting your own review -> 400', async () => {
+  const token = actor(h, { id: 18 });
+  h.mock.__set('reviews', { data: { id: 3, seeker_id: 18 }, error: null });
+  const r = await post('/api/reviews/3/report', token, { reason: 'oops' });
+  assert.equal(r.status, 400);
+  assert.equal(h.mock.__writes('reports', 'insert').length, 0);
+});
+
+test('reporting someone else\'s review is queued for moderation -> 200', async () => {
+  const token = actor(h, { id: 19 });
+  h.mock.__set('reviews', { data: { id: 3, seeker_id: 42 }, error: null });
+  const r = await post('/api/reviews/3/report', token, { reason: 'contenu interdit' });
+  assert.equal(r.status, 200);
+  const rep = h.mock.__writes('reports', 'insert').pop();
+  assert.equal(rep.payload.target_user_id, 42);
+  assert.equal(rep.payload.kind, 'other');
+});
+
 test('public list returns a short author name and no seeker id', async () => {
   h.mock.__set('providers', { data: { user_id: 5, claimed: true }, error: null });
   h.mock.__set('reviews', {

@@ -50,12 +50,18 @@ router.post('/', authenticate, sec.requireActiveUser, sec.limits.write, async (r
     const { data: existing } = await supabase.from('reviews').select('id')
       .eq('provider_id', providerId).eq('seeker_id', req.user.id).maybeSingle();
     if (existing) {
-      await supabase.from('reviews')
-        .update({ rating, body, updated_at: new Date().toISOString() }).eq('id', existing.id);
+      // an edited review invalidates the answer written under the previous text
+      const { error } = await supabase.from('reviews')
+        .update({ rating, body, provider_reply: null, replied_at: null, updated_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      if (error) { console.error('review update', error); return res.status(500).json({ error: 'Server error' }); }
     } else {
-      await supabase.from('reviews').insert({ provider_id: providerId, seeker_id: req.user.id, rating, body });
+      const { error } = await supabase.from('reviews')
+        .insert({ provider_id: providerId, seeker_id: req.user.id, rating, body });
+      if (error) { console.error('review insert', error); return res.status(500).json({ error: 'Server error' }); }
     }
-    await supabase.rpc('recompute_provider_rating', { p_provider: providerId });
+    const { error: rpcErr } = await supabase.rpc('recompute_provider_rating', { p_provider: providerId });
+    if (rpcErr) console.error('recompute_provider_rating', rpcErr);
     res.json({ success: true });
   } catch (e) { console.error('review create', e); res.status(500).json({ error: 'Server error' }); }
 });
@@ -110,8 +116,9 @@ router.post('/:id/reply', authenticate, sec.requireActiveUser, sec.limits.write,
     if (rev.provider_id !== req.user.id) return res.status(403).json({ error: 'Not your review' });
     if (rev.provider_reply) return res.status(409).json({ error: 'Already replied' });
 
-    await supabase.from('reviews')
+    const { error } = await supabase.from('reviews')
       .update({ provider_reply: reply, replied_at: new Date().toISOString() }).eq('id', rev.id);
+    if (error) { console.error('review reply save', error); return res.status(500).json({ error: 'Server error' }); }
     res.json({ success: true });
   } catch (e) { console.error('review reply', e); res.status(500).json({ error: 'Server error' }); }
 });
@@ -123,10 +130,12 @@ router.post('/:id/report', authenticate, sec.requireActiveUser, sec.limits.repor
     const { data: rev } = await supabase.from('reviews')
       .select('id, seeker_id').eq('id', Number(req.params.id)).maybeSingle();
     if (!rev) return res.status(404).json({ error: 'Review not found' });
-    await supabase.from('reports').insert({
+    if (rev.seeker_id === req.user.id) return res.status(400).json({ error: 'Cannot report yourself' });
+    const { error } = await supabase.from('reports').insert({
       reporter_id: req.user.id, target_user_id: rev.seeker_id, kind: 'other',
       reason: `review#${rev.id}: ${sec.clean(req.body.reason, 400) || ''}`, status: 'open',
     });
+    if (error) { console.error('review report', error); return res.status(500).json({ error: 'Server error' }); }
     res.json({ success: true });
   } catch (e) { console.error('review report', e); res.status(500).json({ error: 'Server error' }); }
 });

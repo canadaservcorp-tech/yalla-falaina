@@ -787,7 +787,8 @@ async function submitReview(providerId){
     await api('/api/reviews',{method:'POST',body:JSON.stringify({
       providerId, rating:Number(document.getElementById('rvrating').value),
       body:document.getElementById('rvbody').value })});
-    err.textContent=t('rvsaved'); loadReviews(providerId);
+    await loadReviews(providerId);
+    const e2=document.getElementById('rverr'); if(e2) e2.textContent=t('rvsaved');
   }catch(e){ err.textContent=e.message; }
 }
 async function replyReview(id,providerId){
