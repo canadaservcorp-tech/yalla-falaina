@@ -61,10 +61,15 @@ probe burns the credential bucket for 15 minutes for that email/IP pair, so use 
 email like `ratelimit-probe@example.com` and do it last.
 
 Counters live in Postgres (`rate_hits` + `rate_hit()`, see `lib/rate-store.js`), so a limit is
-one global limit across Railway instances. Two things follow for testing:
-- The limits are now deterministic sequentially — a documented cap that does not trigger is a
-  real finding, not instance spread. Read the draft-7 `ratelimit` / `ratelimit-policy` headers
-  to confirm which limiter you hit.
+one global limit across Railway instances. Three things follow for testing:
+- Still probe with a **concurrent burst**, not a sequential loop: the windows are rolling and a
+  `curl` loop is slow enough to straddle two of them, so 70 sequential searches all return 200
+  against the 60/min cap. `seq 1 150 | xargs -P 50 -I{} curl -o /dev/null -w '%{http_code}\n'
+  ".../api/search?lat=45.5&lng=-73.6&radius=10&profession=plumber"` returns 429 on every
+  request (verified on prod 2026-08-16).
+- Read the draft-7 `ratelimit` / `ratelimit-policy` headers to confirm which limiter you hit.
+  `remaining` decreasing in one monotonic sequence across parallel requests is the evidence the
+  shared store is live; per-instance counters instead show it grouped into several sequences.
 - Before it was Postgres-backed the store was per process, so old sessions saw 18 fresh
   registrations pass an 8/hour cap. If that reappears, suspect the migration is missing on the
   target database: the store logs `shared store unavailable, counting in memory` once and
