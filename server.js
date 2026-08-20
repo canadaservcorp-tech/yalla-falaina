@@ -43,7 +43,12 @@ app.use('/api/report', require('./routes/report'));
 app.use('/api/claim', require('./routes/claim'));    // claim an unclaimed RBQ seed listing
 app.use('/api/outreach', require('./routes/outreach')); // marketing list opt-out (CASL)
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, phase: 3 }));
+// booleans only: enough to tell a missing key from a rejected one without revealing either
+app.get('/api/health', (_req, res) => res.json({
+  ok: true, phase: 3,
+  paywall: process.env.PAYWALL_ENFORCED === 'true',
+  moderation: Boolean(process.env.GOOGLE_VISION_API_KEY),
+}));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
