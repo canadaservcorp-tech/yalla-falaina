@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>TrouvePro — Près de toi</title>
+<!--seo:start-->
+<title>TrouvePro — Services près de chez vous à Laval et Montréal</title>
+<meta name="description" content="Trouvez un plombier, un électricien, une infirmière ou un homme à tout faire près de chez vous à Laval, Montréal et sur la Rive-Nord. Recherche gratuite par proximité, prestataires licenciés RBQ.">
+<!--seo:end-->
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0E7C86">
 <link rel="icon" href="/icons/icon-32.png" sizes="32x32">
@@ -567,6 +570,7 @@ function go(v){
 
 function setLang(l){
   S.lang=l; document.documentElement.lang=l;
+  try{ localStorage.setItem('tp_lang',l); }catch(e){}
   document.getElementById('lfr').classList.toggle('on',l==='fr');
   document.getElementById('len').classList.toggle('on',l==='en');
   document.getElementById('tag').textContent=t('tag');
@@ -1342,7 +1346,9 @@ function renderLegal(){
 }
 
 (function(){
-  setLang('fr'); refreshNav(); loadCatalog();
+  const asked=new URLSearchParams(location.search).get('lang');
+  const saved=(()=>{ try{ return localStorage.getItem('tp_lang'); }catch(e){ return null; } })();
+  setLang([asked,saved].includes('en')?'en':'fr'); refreshNav(); loadCatalog();
   if(location.pathname==='/terms') openLegal('terms');
   if(location.pathname==='/privacy') openLegal('privacy');
   if(location.pathname==='/faq') openFaq();
