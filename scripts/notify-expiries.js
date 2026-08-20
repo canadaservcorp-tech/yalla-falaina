@@ -34,4 +34,5 @@ async function run() {
   console.log(`notify-expiries: ${subs} subscription reminder(s), ${boosts} boost reminder(s)`);
 }
 
-run().catch(e => { console.error('notify-expiries failed', e); process.exit(1); });
+if (require.main === module) run().catch(e => { console.error('notify-expiries failed', e); process.exit(1); });
+module.exports = { run };

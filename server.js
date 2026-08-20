@@ -49,5 +49,8 @@ app.use((err, _req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-if (require.main === module) app.listen(PORT, () => console.log(`TrouvePro on ${PORT} — proximity engine live`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`TrouvePro on ${PORT} — proximity engine live`));
+  require('./lib/scheduler').start();
+}
 module.exports = app;
