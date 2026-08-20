@@ -126,6 +126,7 @@
   </div>
   <button class="btn btn-ghost" id="navchat" style="display:none" onclick="openChat()">💬 <span id="navchatlbl">Messages</span></button>
   <button class="btn btn-ghost" id="navfav" style="display:none" onclick="openFavorites()">★ <span id="navfavlbl">Favoris</span></button>
+  <button class="btn btn-ghost" id="navbook" style="display:none" onclick="openBookings()">📅 <span id="navbooklbl">Réservations</span></button>
   <button class="btn btn-ghost" id="navnotif" style="display:none" onclick="openNotifications()">🔔<span id="notifbadge" style="display:none;margin-left:4px;background:#c0392b;color:#fff;border-radius:10px;padding:0 6px;font-size:11px">0</span></button>
   <button class="btn btn-ghost" id="navauth" onclick="openAuth('login')">Connexion</button>
   <button class="btn btn-ghost" id="navout" style="display:none" onclick="logout()">Déconnexion</button>
@@ -288,6 +289,16 @@
   <div class="grid" id="favlist"></div>
 </div></section></div>
 
+<div id="view-bookings" class="view"><section class="pad"><div class="wrap">
+  <div class="toolbar">
+    <h1 style="font-size:24px;margin:0" id="booktitle">Réservations</h1>
+    <span class="spacer" style="flex:1"></span>
+    <button class="btn btn-ghost" onclick="go('search')" id="bookback">← Retour</button>
+  </div>
+  <p class="muted" id="bookempty" style="display:none">Aucune réservation.</p>
+  <div class="grid" id="booklist"></div>
+</div></section></div>
+
 <div id="view-notifications" class="view"><section class="pad"><div class="wrap">
   <div class="toolbar">
     <h1 style="font-size:24px;margin:0" id="notiftitle">Notifications</h1>
@@ -414,6 +425,18 @@ const T = {
     rvreport:'Signaler cet avis', rvreported:'Signalé — merci',
     notifs:'Notifications', notifnone:'Aucune notification.', notifread:'Tout marquer comme lu',
     notifoff:'Se désabonner des courriels', notifon:'Recevoir les courriels',
+    books:'Réservations', booknone:'Aucune réservation.', bookbtn:'📅 Réserver',
+    bookwhen:'Date et heure du rendez-vous', bookamount:'Prix estimé convenu (CAD)',
+    booknotelbl:'Détails (optionnel)', bookdep:'Dépôt à autoriser',
+    booksend:'Demander ce rendez-vous', booksent:'Demande envoyée ✓',
+    bookacc:'Accepter', bookdec:'Refuser', bookauth:'Autoriser le dépôt',
+    bookdone:'Marquer comme terminé', bookcancel:'Annuler', booknoshow:'Signaler une absence',
+    bookauthlater:(d)=>`Dépôt à autoriser à partir du ${d}`,
+    st_requested:'Demande envoyée — en attente du prestataire',
+    st_declined:'Refusée par le prestataire', st_accepted:'Acceptée — dépôt à autoriser',
+    st_authorized:'Confirmée — dépôt autorisé (non prélevé)', st_completed:'Terminée — dépôt prélevé',
+    st_cancelled_void:'Annulée — aucun frais', st_cancelled_charged:'Annulée tardivement — dépôt prélevé',
+    st_expired:'Autorisation expirée — aucun frais',
     favs:'Favoris', favnone:'Aucun favori pour le moment.', favadd:'Ajouter aux favoris',
     favremove:'Retirer des favoris', favoff:'Hors ligne — ville et contact masqués',
     contactlocked:'Coordonnées visibles seulement aux membres connectés, pour les prestataires abonnés.',
@@ -461,6 +484,18 @@ const T = {
     rvreport:'Report this review', rvreported:'Reported — thank you',
     notifs:'Notifications', notifnone:'No notifications.', notifread:'Mark all read',
     notifoff:'Unsubscribe from emails', notifon:'Receive emails',
+    books:'Bookings', booknone:'No bookings.', bookbtn:'📅 Book',
+    bookwhen:'Appointment date and time', bookamount:'Agreed estimated price (CAD)',
+    booknotelbl:'Details (optional)', bookdep:'Deposit to authorize',
+    booksend:'Request this appointment', booksent:'Request sent ✓',
+    bookacc:'Accept', bookdec:'Decline', bookauth:'Authorize the deposit',
+    bookdone:'Mark as completed', bookcancel:'Cancel', booknoshow:'Report a no-show',
+    bookauthlater:(d)=>`Deposit can be authorized from ${d}`,
+    st_requested:'Requested — waiting for the provider',
+    st_declined:'Declined by the provider', st_accepted:'Accepted — deposit to authorize',
+    st_authorized:'Confirmed — deposit authorized (not charged)', st_completed:'Completed — deposit captured',
+    st_cancelled_void:'Cancelled — no charge', st_cancelled_charged:'Cancelled late — deposit captured',
+    st_expired:'Authorization expired — no charge',
     favs:'Favorites', favnone:'No favorites yet.', favadd:'Add to favorites',
     favremove:'Remove from favorites', favoff:'Offline — city and contact hidden',
     contactlocked:'Contact details are shown to logged-in members only, for subscribed providers.',
@@ -518,6 +553,9 @@ function setLang(l){
   document.getElementById('navfavlbl').textContent=t('favs');
   document.getElementById('favtitle').textContent=t('favs');
   document.getElementById('favback').textContent=t('chatback');
+  document.getElementById('navbooklbl').textContent=t('books');
+  document.getElementById('booktitle').textContent=t('books');
+  document.getElementById('bookback').textContent=t('chatback');
   document.getElementById('notiftitle').textContent=t('notifs');
   document.getElementById('notifback').textContent=t('chatback');
   document.getElementById('notifread').textContent=t('notifread');
@@ -561,6 +599,7 @@ function refreshNav(){
   document.getElementById('navchat').style.display = (S.token&&S.user)?'inline-block':'none';
   document.getElementById('navfav').style.display = (S.token&&S.user&&S.user.role==='seeker')?'inline-block':'none';
   document.getElementById('navnotif').style.display = (S.token&&S.user)?'inline-block':'none';
+  document.getElementById('navbook').style.display = (S.token&&S.user)?'inline-block':'none';
   if(S.token&&S.user) loadUnread();
   // providers get their profile on the main button, so logout needs its own
   out.style.display = (S.token&&S.user&&S.user.role==='provider')?'inline-block':'none';
@@ -794,6 +833,8 @@ async function openPro(id){
         `<button class="btn btn-ghost" id="btnfav" style="float:right;font-size:12px;padding:6px 12px"
            onclick="toggleFavorite(${Number(id)})">☆ ${t('favadd')}</button>`);
       loadFavIds().then(()=>favBtn(id));
+      // booking presupposes an agreed price, so it is only offered where contact is
+      if(!p.contact_locked) bookingForm(Number(id));
     }
     loadReviews(id);
   }catch(e){ box.textContent=e.message; }
@@ -840,6 +881,111 @@ async function openFavorites(){
       </article>`).join('');
   }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
 }
+/* ---------- bookings (deposit is authorized on PayPal, not charged) ---------- */
+const bookMoney = c => S.lang==='en' ? `$${(c/100).toFixed(2)}` : `${(c/100).toFixed(2)} $`;
+const bookWhen = d => new Date(d).toLocaleString(S.lang==='en'?'en-CA':'fr-CA',
+  { dateStyle:'medium', timeStyle:'short' });
+
+// the policy and the deposit both come from the server, so the seeker accepts the real rule
+async function bookingForm(providerId){
+  const box=document.getElementById('probody');
+  box.insertAdjacentHTML('beforeend', `<div id="bookbox" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      <button class="btn btn-teal" id="bookopen" onclick="showBookingFields(${providerId})">${t('bookbtn')}</button>
+      <div id="bookfields" style="display:none;margin-top:10px">
+        <div class="field"><label>${t('bookwhen')}</label><input type="datetime-local" id="bk_when"></div>
+        <div class="field"><label>${t('bookamount')}</label>
+          <input type="number" id="bk_amount" min="1" step="0.01" oninput="bookingPolicy()"></div>
+        <div class="field"><label>${t('booknotelbl')}</label><input id="bk_note" maxlength="500"></div>
+        <div class="locked" id="bk_policy" style="font-size:12px"></div>
+        <label class="radiuslabel" style="display:flex;align-items:center;gap:6px;margin-top:8px">
+          <input type="checkbox" id="bk_accept" style="width:auto"><span id="bk_acceptlbl"></span>
+        </label>
+        <button class="btn btn-primary btn-block" style="margin-top:8px"
+          onclick="requestBooking(${providerId})">${t('booksend')}</button>
+        <div class="err" id="bk_err"></div>
+      </div>
+    </div>`);
+}
+function showBookingFields(){
+  document.getElementById('bookopen').style.display='none';
+  document.getElementById('bookfields').style.display='block';
+  bookingPolicy();
+}
+async function bookingPolicy(){
+  const amount=Number(document.getElementById('bk_amount').value)||0;
+  try{
+    const j=await api('/api/bookings/policy?amount='+encodeURIComponent(amount));
+    const p=j[S.lang]||j.fr;
+    document.getElementById('bk_policy').innerHTML=
+      `<b>${esc(p.title)}</b><ul style="margin:6px 0 0 16px;padding:0">`
+      + p.lines.map(l=>`<li>${esc(l)}</li>`).join('') + '</ul>';
+    document.getElementById('bk_acceptlbl').textContent=p.accept;
+  }catch(e){ document.getElementById('bk_err').textContent=e.message; }
+}
+async function requestBooking(providerId){
+  const err=document.getElementById('bk_err'); err.className='err'; err.textContent='';
+  const when=document.getElementById('bk_when').value;
+  const amount=Number(document.getElementById('bk_amount').value);
+  if(!when||!amount){ err.textContent=t('bookwhen'); return; }
+  try{
+    await api('/api/bookings',{method:'POST',body:JSON.stringify({
+      providerId:Number(providerId), scheduledAt:new Date(when).toISOString(),
+      amount, note:document.getElementById('bk_note').value,
+      acceptPolicy:document.getElementById('bk_accept').checked })});
+    err.className='ok'; err.textContent=t('booksent');
+    document.getElementById('bookfields').style.display='none';
+  }catch(e){ err.textContent=e.message; }
+}
+
+async function openBookings(){
+  go('bookings');
+  const list=document.getElementById('booklist'), empty=document.getElementById('bookempty');
+  list.innerHTML='…'; empty.style.display='none';
+  try{
+    const j=await api('/api/bookings');
+    const rows=j.bookings||[];
+    empty.textContent=t('booknone');
+    empty.style.display=rows.length?'none':'block';
+    list.innerHTML=rows.map(b=>`<article class="card">
+        <h3 style="font-size:15px">${bookWhen(b.scheduledAt)}</h3>
+        <p class="muted">${t('st_'+b.status)}</p>
+        <p class="muted" style="font-size:12px">${t('bookdep')} : ${bookMoney(Math.round(Number(b.deposit)*100))}
+          ${b.note?' · '+esc(b.note):''}</p>
+        ${b.status==='accepted'&&b.role==='seeker'&&!b.canAuthorize
+          ? `<p class="muted" style="font-size:12px">${esc(t('bookauthlater')(bookWhen(b.authorizeFrom)))}</p>` : ''}
+        <div class="row">${bookActions(b)}</div>
+        <div class="err" id="bkerr${b.id}"></div>
+      </article>`).join('');
+  }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
+}
+function bookActions(b){
+  const btn=(action,label,cls)=>`<button class="btn ${cls||'btn-ghost'}" onclick="bookAction(${b.id},'${action}')">${label}</button>`;
+  const out=[];
+  if(b.role==='provider' && b.status==='requested'){ out.push(btn('accept',t('bookacc'),'btn-teal'), btn('decline',t('bookdec'))); }
+  if(b.role==='seeker' && b.status==='accepted' && b.canAuthorize) out.push(btn('authorize',t('bookauth'),'btn-primary'));
+  if(b.role==='provider' && b.status==='authorized') out.push(btn('complete',t('bookdone'),'btn-teal'));
+  if(b.status==='authorized' && new Date(b.scheduledAt).getTime()<Date.now()) out.push(btn('no-show',t('booknoshow')));
+  if(['requested','accepted','authorized'].includes(b.status)) out.push(btn('cancel',t('bookcancel')));
+  return out.join('');
+}
+async function bookAction(id,action){
+  const err=document.getElementById('bkerr'+id); if(err) err.textContent='';
+  try{
+    const j=await api(`/api/bookings/${id}/${action}`,{method:'POST',body:JSON.stringify({})});
+    // the hold is placed by PayPal, so the seeker approves there and comes back to /?booking=<id>
+    if(action==='authorize' && j.url){ sessionStorage.setItem('tp_book_order', j.orderId||''); location.href=j.url; return; }
+    openBookings(); loadUnread();
+  }catch(e){ if(err) err.textContent=e.message; }
+}
+// back from PayPal: turn the approved order into the actual hold
+async function finishBookingReturn(id){
+  const orderId=sessionStorage.getItem('tp_book_order')||'';
+  sessionStorage.removeItem('tp_book_order');
+  try{ if(orderId) await api(`/api/bookings/${id}/confirm`,{method:'POST',body:JSON.stringify({orderId})}); }
+  catch(e){}
+  openBookings();
+}
+
 /* ---------- notifications ---------- */
 // the toggle offers the opposite of the current setting, so it must follow it
 function notifPrefLabel(){
@@ -1172,6 +1318,9 @@ function renderLegal(){
     if(S.user.role==='provider'){ loadProviderForm(); go('provider'); }
     setTimeout(()=>{ const el=document.getElementById('substate'); if(el) el.textContent = sub==='success'?t('subok'):t('subcancel'); }, 600);
   }
+  const bk=new URLSearchParams(location.search).get('booking');
+  if(bk && S.token && S.user && /^\d+$/.test(bk)) finishBookingReturn(bk);
+  else if(bk && S.token && S.user) openBookings();
   if(new URLSearchParams(location.search).get('boost') && S.token && S.user && S.user.role==='provider'){
     loadProviderForm(); go('provider'); finishBoostReturn();
   }
