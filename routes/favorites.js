@@ -50,11 +50,15 @@ router.get('/', authenticate, sec.requireActiveUser, seekerOnly, async (req, res
     const { data: provs } = await supabase.from('providers')
       .select('user_id, display_name, city, availability, is_licensed, rating, review_count, claimed')
       .in('user_id', ids);
-    const { data: users } = await supabase.from('users')
+    const { data: users, error: userErr } = await supabase.from('users')
       .select('id, subscription_status, banned').in('id', ids);
-    const subOf = new Map((Array.isArray(users) ? users : []).map(u => [u.id, u.subscription_status]));
-    const banned = new Set((Array.isArray(users) ? users : [])
-      .filter(u => u.banned).map(u => u.id));
+    // ban and subscription state gate the city and contact: without it, fail closed
+    if (userErr || !Array.isArray(users)) {
+      console.error('favorite list users', userErr);
+      return res.status(500).json({ error: 'Server error' });
+    }
+    const subOf = new Map(users.map(u => [u.id, u.subscription_status]));
+    const banned = new Set(users.filter(u => u.banned).map(u => u.id));
 
     // a banned provider disappears from favorites as it does from search
     const favorites = (Array.isArray(provs) ? provs : []).filter(p => !banned.has(p.user_id)).map(p => {

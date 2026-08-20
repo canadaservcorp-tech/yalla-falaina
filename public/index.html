@@ -793,7 +793,7 @@ async function toggleFavorite(id){
     if(on){ await api('/api/favorites/'+id,{method:'DELETE'}); S.favs.delete(Number(id)); }
     else { await api('/api/favorites',{method:'POST',body:JSON.stringify({providerId:Number(id)})}); S.favs.add(Number(id)); }
     favBtn(id);
-  }catch(e){ if(b) b.textContent=e.message; }
+  }catch(e){ favBtn(id); if(b) b.title=e.message; }
   finally{ if(b) b.disabled=false; }
 }
 async function openFavorites(){
