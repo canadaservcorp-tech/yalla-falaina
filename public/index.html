@@ -120,6 +120,17 @@
   .accept a{color:var(--teal)}
   footer a{color:var(--teal);text-decoration:none;margin-left:12px}
   @media(max-width:760px){ .hero{grid-template-columns:1fr;gap:8px} .hero h1{font-size:32px} .radar{max-width:230px} .svc-list{grid-template-columns:1fr} .chatwrap{grid-template-columns:1fr} }
+  @media(max-width:560px){
+    .wrap{padding:0 14px}
+    .bar{flex-wrap:wrap;height:auto;min-height:58px;padding:8px 0;gap:6px}
+    .brand{font-size:17px;gap:6px}
+    .brand small{display:none}
+    .bar .btn{padding:8px 11px;font-size:13px}
+    .lang{font-size:12px}
+    .lang button{padding:5px 9px}
+    #navchatlbl,#navfavlbl,#navbooklbl{display:none}
+    footer a{margin:0 12px 0 0;display:inline-block}
+  }
 </style>
 </head>
 <body>
