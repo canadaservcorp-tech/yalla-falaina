@@ -28,6 +28,11 @@ test('counts in the database, one bucket per limiter', async () => {
   assert.equal(call.args.p_step, 1);
 });
 
+test('each limiter advertises its own prefix, so two limiters are not read as a double count', () => {
+  assert.equal(store('login').prefix, 'rl:login:');
+  assert.notEqual(store('login').prefix, store('search').prefix);
+});
+
 test('a successful request can be refunded', async () => {
   mock.__setRpc('rate_hit', { data: [{ hits: 2, reset_at: reset.toISOString() }], error: null });
   const s = store('write');
