@@ -126,6 +126,7 @@
   </div>
   <button class="btn btn-ghost" id="navchat" style="display:none" onclick="openChat()">💬 <span id="navchatlbl">Messages</span></button>
   <button class="btn btn-ghost" id="navfav" style="display:none" onclick="openFavorites()">★ <span id="navfavlbl">Favoris</span></button>
+  <button class="btn btn-ghost" id="navnotif" style="display:none" onclick="openNotifications()">🔔<span id="notifbadge" style="display:none;margin-left:4px;background:#c0392b;color:#fff;border-radius:10px;padding:0 6px;font-size:11px">0</span></button>
   <button class="btn btn-ghost" id="navauth" onclick="openAuth('login')">Connexion</button>
   <button class="btn btn-ghost" id="navout" style="display:none" onclick="logout()">Déconnexion</button>
 </div></header>
@@ -287,6 +288,18 @@
   <div class="grid" id="favlist"></div>
 </div></section></div>
 
+<div id="view-notifications" class="view"><section class="pad"><div class="wrap">
+  <div class="toolbar">
+    <h1 style="font-size:24px;margin:0" id="notiftitle">Notifications</h1>
+    <span class="spacer" style="flex:1"></span>
+    <button class="btn btn-ghost" id="notifread" onclick="markAllRead()">Tout marquer comme lu</button>
+    <button class="btn btn-ghost" id="notifpref" onclick="toggleNotifEmail()">Se désabonner des courriels</button>
+    <button class="btn btn-ghost" onclick="go('search')" id="notifback">← Retour</button>
+  </div>
+  <p class="muted" id="notifempty" style="display:none">Aucune notification.</p>
+  <div class="grid" id="notiflist"></div>
+</div></section></div>
+
 <div id="view-chat" class="view"><section class="pad"><div class="wrap">
   <div class="toolbar">
     <h1 style="font-size:24px;margin:0" id="chattitle">Messages</h1>
@@ -399,6 +412,8 @@ const T = {
     rvrating:'Note (1 à 5)', rvph:'Partagez votre expérience…', rvsubmit:'Publier', rvsaved:'Avis publié ✓',
     rvreply:'Réponse du prestataire', rvreplyph:'Répondre à cet avis…', rvreplysend:'Répondre',
     rvreport:'Signaler cet avis', rvreported:'Signalé — merci',
+    notifs:'Notifications', notifnone:'Aucune notification.', notifread:'Tout marquer comme lu',
+    notifoff:'Se désabonner des courriels', notifon:'Recevoir les courriels',
     favs:'Favoris', favnone:'Aucun favori pour le moment.', favadd:'Ajouter aux favoris',
     favremove:'Retirer des favoris', favoff:'Hors ligne — ville et contact masqués',
     contactlocked:'Coordonnées visibles seulement aux membres connectés, pour les prestataires abonnés.',
@@ -444,6 +459,8 @@ const T = {
     rvrating:'Rating (1–5)', rvph:'Share your experience…', rvsubmit:'Submit', rvsaved:'Review posted ✓',
     rvreply:'Provider reply', rvreplyph:'Reply to this review…', rvreplysend:'Reply',
     rvreport:'Report this review', rvreported:'Reported — thank you',
+    notifs:'Notifications', notifnone:'No notifications.', notifread:'Mark all read',
+    notifoff:'Unsubscribe from emails', notifon:'Receive emails',
     favs:'Favorites', favnone:'No favorites yet.', favadd:'Add to favorites',
     favremove:'Remove from favorites', favoff:'Offline — city and contact hidden',
     contactlocked:'Contact details are shown to logged-in members only, for subscribed providers.',
@@ -501,6 +518,10 @@ function setLang(l){
   document.getElementById('navfavlbl').textContent=t('favs');
   document.getElementById('favtitle').textContent=t('favs');
   document.getElementById('favback').textContent=t('chatback');
+  document.getElementById('notiftitle').textContent=t('notifs');
+  document.getElementById('notifback').textContent=t('chatback');
+  document.getElementById('notifread').textContent=t('notifread');
+  document.getElementById('notifpref').textContent=S.notifEmail===false?t('notifon'):t('notifoff');
   document.getElementById('chattitle').textContent=t('messages');
   document.getElementById('chatback').textContent=t('chatback');
   document.getElementById('btnsend').textContent=t('send');
@@ -539,6 +560,8 @@ function refreshNav(){
   const b=document.getElementById('navauth'), out=document.getElementById('navout');
   document.getElementById('navchat').style.display = (S.token&&S.user)?'inline-block':'none';
   document.getElementById('navfav').style.display = (S.token&&S.user&&S.user.role==='seeker')?'inline-block':'none';
+  document.getElementById('navnotif').style.display = (S.token&&S.user)?'inline-block':'none';
+  if(S.token&&S.user) loadUnread();
   // providers get their profile on the main button, so logout needs its own
   out.style.display = (S.token&&S.user&&S.user.role==='provider')?'inline-block':'none';
   out.textContent = t('logout');
@@ -817,6 +840,47 @@ async function openFavorites(){
       </article>`).join('');
   }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
 }
+/* ---------- notifications ---------- */
+function showUnread(n){
+  const b=document.getElementById('notifbadge'); if(!b) return;
+  b.textContent=n>99?'99+':String(n);
+  b.style.display=n>0?'inline-block':'none';
+}
+async function loadUnread(){
+  try{ const j=await api('/api/notifications'); S.notifEmail=j.notify_email; showUnread(Number(j.unread)||0); }
+  catch(e){ showUnread(0); }
+}
+async function openNotifications(){
+  go('notifications');
+  const list=document.getElementById('notiflist'), empty=document.getElementById('notifempty');
+  list.innerHTML='…'; empty.style.display='none';
+  try{
+    const j=await api('/api/notifications');
+    const rows=j.notifications||[];
+    showUnread(Number(j.unread)||0);
+    empty.textContent=t('notifnone');
+    empty.style.display=rows.length?'none':'block';
+    list.innerHTML=rows.map(n=>`<article class="card"${n.read?'':' style="border-color:var(--teal)"'}>
+        <h3 style="font-size:15px">${esc(n.title||'')}</h3>
+        <p class="muted">${esc(n.body||'')}</p>
+        <p class="muted" style="font-size:12px">${n.created_at?esc(new Date(n.created_at).toLocaleString(S.lang==='en'?'en-CA':'fr-CA')):''}</p>
+      </article>`).join('');
+  }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
+}
+async function markAllRead(){
+  try{ await api('/api/notifications/read',{method:'POST',body:JSON.stringify({})}); openNotifications(); }
+  catch(e){ const em=document.getElementById('notifempty'); em.textContent=e.message; em.style.display='block'; }
+}
+async function toggleNotifEmail(){
+  const btn=document.getElementById('notifpref'); const enable = S.notifEmail===false;
+  btn.disabled=true; btn.title='';
+  try{
+    const j=await api('/api/notifications/email-pref',{method:'POST',body:JSON.stringify({enabled:enable})});
+    S.notifEmail=j.notify_email;
+  }catch(e){ btn.title=e.message; }
+  finally{ btn.disabled=false; btn.textContent=S.notifEmail===false?t('notifon'):t('notifoff'); }
+}
+
 async function unfav(id){
   try{ await api('/api/favorites/'+id,{method:'DELETE'}); S.favs.delete(Number(id)); openFavorites(); }
   catch(e){ const em=document.getElementById('favempty'); em.textContent=e.message; em.style.display='block'; }
