@@ -15,15 +15,22 @@ app.use(sec.forceHttps);
 app.use(sec.headers);
 app.use(sec.corsSameOrigin);
 app.use('/api', sec.limits.api);
-app.use((req, res, next) =>
-  req.originalUrl === '/api/subscription/webhook' ? next() : express.json({ limit: '8mb' })(req, res, next));
-app.use(express.static('public', { dotfiles: 'ignore', index: false }));
+// only the two image endpoints may post megabytes; everything else stays small
+const smallJson = express.json({ limit: '64kb' });
+const uploadJson = express.json({ limit: '8mb' });
+const UPLOAD_PATHS = [/^\/api\/chat\/\d+\/photos$/, /^\/api\/providers\/me\/portfolio$/];
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/subscription/webhook') return next();   // raw body, verified downstream
+  const route = req.originalUrl.split('?')[0];
+  return (UPLOAD_PATHS.some(re => re.test(route)) ? uploadJson : smallJson)(req, res, next);
+});
+app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', index: false }));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api', require('./routes/catalog'));       // GET /api/catalog
 app.use('/api/providers', require('./routes/portfolio'));  // /api/providers/:id/portfolio
 app.use('/api/providers', require('./routes/providers'));
-app.use('/api/search', require('./routes/search'));  // GET /api/search?lat&lng&...
+app.use('/api/search', sec.limits.search, require('./routes/search'));  // GET /api/search?lat&lng&...
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/chat', require('./routes/photos'));    // /api/chat/:id/photos
 app.use('/api/subscription', require('./routes/subscription'));
@@ -36,7 +43,12 @@ app.use('/api/report', require('./routes/report'));
 app.use('/api/claim', require('./routes/claim'));    // claim an unclaimed RBQ seed listing
 app.use('/api/outreach', require('./routes/outreach')); // marketing list opt-out (CASL)
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, phase: 3 }));
+// booleans only: enough to tell a missing key from a rejected one without revealing either
+app.get('/api/health', (_req, res) => res.json({
+  ok: true, phase: 3,
+  paywall: process.env.PAYWALL_ENFORCED === 'true',
+  moderation: Boolean(process.env.GOOGLE_VISION_API_KEY),
+}));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 

@@ -389,9 +389,6 @@
   <a href="/privacy" id="footprivacy" onclick="openLegal('privacy');return false">Politique de confidentialité</a>
 </div></footer>
 
-<!-- optional client-side NSFW pre-filter; server-side moderation stays authoritative -->
-<script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/nsfwjs@4.1.0/dist/nsfwjs.min.js"></script>
 <script src="/legal.js"></script>
 <script>
 const S = { lang:'fr', token:localStorage.getItem('tp_token')||null, user:null, catalog:[], mode:'login', role:'seeker', favs:new Set() };
@@ -798,7 +795,6 @@ async function uploadPortfolio(input){
   try{
     if(file.size>10*1024*1024){ err.textContent='Max 10 MB'; return; }
     const b64=await compress(file);
-    if(!await nsfwOk(b64)){ err.textContent=S.lang==='fr'?'Photo refusée : contenu explicite.':'Photo refused: explicit content.'; return; }
     await api('/api/providers/me/portfolio',{method:'POST',body:JSON.stringify({image:b64})});
     loadPortfolio();
   }catch(e){ err.textContent=e.message; }
@@ -1149,18 +1145,6 @@ async function loadPhotos(){
   }catch(e){}
 }
 // compress client-side to ~1200px / 80% jpeg before upload
-/* Client-side pre-filter only: it saves a round trip and gives instant feedback.
-   The server re-checks every image and refuses uploads when moderation is down. */
-let _nsfwModel=null,_nsfwLoading=null;
-async function nsfwOk(dataUrl){
-  try{
-    if(typeof nsfwjs==='undefined') return true;
-    if(!_nsfwModel){ _nsfwLoading=_nsfwLoading||nsfwjs.load(); _nsfwModel=await _nsfwLoading; }
-    const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=dataUrl; });
-    const s={}; (await _nsfwModel.classify(img)).forEach(p=>{ s[p.className]=p.probability; });
-    return !((s.Porn||0)>0.6||(s.Hentai||0)>0.6||(s.Sexy||0)>0.8);
-  }catch(e){ return true; }
-}
 function compress(file){
   return new Promise((resolve,reject)=>{
     const img=new Image(); const fr=new FileReader();
@@ -1181,7 +1165,6 @@ async function uploadPhoto(input){
   if(file.size>10*1024*1024){ err.textContent='Max 10 MB'; return; }
   try{
     const dataUrl=await compress(file);
-    if(!await nsfwOk(dataUrl)){ err.textContent=S.lang==='fr'?'Photo refusée : contenu explicite.':'Photo refused: explicit content.'; return; }
     await api(`/api/chat/${S.conv}/photos`,{method:'POST',body:JSON.stringify({image:dataUrl})});
     await loadPhotos();
   }catch(e){ err.textContent=e.message; }

@@ -19,7 +19,7 @@ const sameToken = (a, b) => {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 };
 
-router.post('/register', sec.limits.credentials, async (req, res) => {
+router.post('/register', sec.limits.register, sec.limits.credentials, async (req, res) => {
   try {
     const email = sec.normalizeEmail(req.body.email);
     const { password, role } = req.body;
