@@ -109,6 +109,12 @@
   .legal h3{font-size:16px;margin:20px 0 4px}
   .legal p{margin:0;color:var(--ink);font-size:14px;line-height:1.6}
   .legal .updated{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .faqitem{border-bottom:1px solid var(--line)}
+  .faqitem summary{cursor:pointer;padding:12px 0;font-size:15px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:baseline}
+  .faqitem summary::-webkit-details-marker{display:none}
+  .faqitem summary::before{content:'+';color:var(--teal);font-weight:700;flex:0 0 auto}
+  .faqitem[open] summary::before{content:'\2212'}
+  .faqitem p{padding:0 0 14px 20px}
   .accept{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.45}
   .accept input{width:16px;height:16px;flex:0 0 auto;margin-top:2px}
   .accept a{color:var(--teal)}
@@ -1312,7 +1318,8 @@ function openFaq(){ renderFaq(); go('faq'); history.replaceState(null,'','/faq')
 function renderFaq(){
   const F=window.FAQ, box=document.getElementById('faqbody');
   if(!F){ box.textContent='—'; return; }
-  box.innerHTML = F[S.lang].map(([q,a])=>`<h3>${q}</h3><p>${a}</p>`).join('');
+  box.innerHTML = F[S.lang].map(([q,a])=>
+    `<details class="faqitem"><summary>${q}</summary><p>${a}</p></details>`).join('');
 }
 function renderLegal(){
   const L=window.LEGAL, box=document.getElementById('legalbody');
