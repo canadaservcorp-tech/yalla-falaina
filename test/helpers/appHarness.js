@@ -11,6 +11,7 @@ function getApp() {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret_at_least_32_chars_long!';
   process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost';
   process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role';
+  delete process.env.RESEND_API_KEY;                      // a developer's .env must not mail strangers
 
   // inject the mock into the module cache so every require('../db') gets it
   const dbPath = require.resolve('../../db');
