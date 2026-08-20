@@ -1421,6 +1421,24 @@ async function claimInvite(){
   }
 }
 
+// Prospects we invited without a seeded listing arrive on /?join=provider; open registration on the
+// provider side so the first screen is the one they were asked to fill.
+function joinInvite(){
+  const p=new URLSearchParams(location.search);
+  const wants=p.get('join')==='provider'||p.get('subscribe')==='1';
+  if(!wants) return;
+  history.replaceState(null,'','/');
+  if(S.token && S.user && S.user.role==='provider'){
+    if(p.get('subscribe')==='1'){
+      loadProviderForm(); go('provider');
+      setTimeout(()=>{ const b=document.getElementById('subbox'); if(b) b.scrollIntoView({block:'center'}); },600);
+    }
+    return;
+  }
+  if(S.token) return;
+  setRole('provider'); openAuth('register');
+}
+
 let legalTab='terms';
 function openLegal(which){
   legalTab = which==='privacy'?'privacy':'terms';
@@ -1475,7 +1493,7 @@ function signupSource(){ try{ return localStorage.getItem('tp_src')||''; }catch(
   if(new URLSearchParams(location.search).get('boost') && S.token && S.user && S.user.role==='provider'){
     loadProviderForm(); go('provider'); finishBoostReturn();
   }
-  claimInvite();
+  claimInvite(); joinInvite();
   if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 })();
 </script>

@@ -1,12 +1,13 @@
 // Import prospect emails into public.outreach_contacts for the future marketing agent.
 // Usage: node scripts/import-outreach.js contacts.csv [source]
-// CSV header (any order, extra columns ignored): email,business_name,rbq_licence,phone,city,lang
+// CSV header (any order, extra columns ignored): email,business_name,rbq_licence,phone,city,lang,trade
+// `trade` is the French trade label used by the invitation copy for prospects with no listing yet.
 // Already-known emails are skipped, so the file can be re-imported safely.
 require('dotenv').config();
 const fs = require('fs');
 const supabase = require('../db');
 
-const FIELDS = ['email', 'business_name', 'rbq_licence', 'phone', 'city', 'lang'];
+const FIELDS = ['email', 'business_name', 'rbq_licence', 'phone', 'city', 'lang', 'trade'];
 
 function parseCsv(text) {
   const rows = text.trim().split(/\r?\n/).map(line => {

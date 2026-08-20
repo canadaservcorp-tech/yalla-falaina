@@ -11,7 +11,8 @@ after(() => h.stop());
 beforeEach(() => h.mock.__reset());
 
 const TOKEN = 'a'.repeat(32);
-const contact = extra => ({ email: 'pro@example.com', business_name: 'Plomberie Test inc.', lang: 'fr', unsubscribe_token: TOKEN, ...extra });
+const contact = extra => ({ email: 'pro@example.com', business_name: 'Plomberie Test inc.', lang: 'fr', source: 'rbq_register', unsubscribe_token: TOKEN, ...extra });
+const prospect = extra => contact({ business_name: null, source: 'directory_invite', trade: 'coiffure', ...extra });
 const invite = token => fetch(h.base + '/api/outreach/invite?token=' + token);
 
 test('the campaign link names the business without exposing the list', async () => {
@@ -43,7 +44,7 @@ test('every message carries what CASL requires', () => {
   assert.ok(html.includes(process.env.OUTREACH_POSTAL_ADDRESS));     // and from where
   assert.match(html, /registre\s+des licences RBQ/);                 // why we hold their address
   assert.ok(html.includes(`/api/outreach/unsubscribe?token=${TOKEN}`), 'one-click opt-out, their own token');
-  assert.match(html, /contact@mytrouvepro\.net/);                    // a human reply path
+  assert.match(html, /canada\.servcorp@gmail\.com/);                 // a human reply path
 });
 
 test('the button opens the recipient claim flow, tagged to the campaign', () => {
@@ -69,6 +70,28 @@ test('a business name cannot inject markup into the email', () => {
   assert.match(html, /&lt;script&gt;/);
 });
 
+test('a prospect with no listing is invited to create one, not to claim one', () => {
+  const m = message(prospect());
+  assert.match(m.subject, /Des clients près de vous cherchent des services de coiffure/);
+  assert.ok(!/déjà une fiche|registre public des licences RBQ/.test(m.html), 'it must not claim a listing exists');
+  assert.ok(m.html.includes('https://www.mytrouvepro.net/?join=provider&utm_source=directory_invite_email'));
+  // consent rests on where the address came from, so that line has to follow the audience
+  assert.match(m.html, /publie publiquement cette adresse/);
+  assert.ok(m.html.includes(`/api/outreach/unsubscribe?token=${TOKEN}`) && m.html.includes(process.env.OUTREACH_POSTAL_ADDRESS));
+  assert.match(message(prospect({ lang: 'en', trade: 'massothérapie' })).subject, /looking for massage therapy/);
+});
+
+test('both languages link to the subscription and to Instagram', () => {
+  for (const c of [contact(), contact({ lang: 'en' }), prospect(), prospect({ lang: 'en' })]) {
+    const { html } = message(c);
+    const source = c.source === 'rbq_register' ? 'rbq_email' : 'directory_invite_email';
+    assert.ok(html.includes(`https://www.mytrouvepro.net/?subscribe=1&utm_source=${source}`), 'subscription link');
+    assert.ok(html.includes('https://www.instagram.com/mytrouvepro'), 'Instagram link');
+  }
+  assert.match(message(contact()).html, /Voir l'abonnement/);
+  assert.match(message(contact({ lang: 'en' })).html, /See the subscription/);
+});
+
 test('the site walks an invited provider into the claim box', () => {
   const fs = require('fs'), path = require('path');
   const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
@@ -79,4 +102,10 @@ test('the site walks an invited provider into the claim box', () => {
   assert.match(ui, /sessionStorage\.setItem\('tp_claim'/);
   assert.match(ui, /document\.getElementById\('claim_q'\)\.value=name; claimSearch\(\)/);
   for (const lang of ['fr', 'en']) assert.ok(new RegExp("invite:'[^']+%s").test(ui), lang + ' invite string');
+  // and a prospect with nothing to claim lands directly in provider registration
+  assert.match(ui, /join'\)==='provider'/);
+  // and the subscription link in the email opens the subscription box for a signed-in provider
+  assert.match(ui, /subscribe'\)==='1'/);
+  assert.match(ui, /getElementById\('subbox'\)/);
+  assert.match(ui, /claimInvite\(\); joinInvite\(\)/);
 });

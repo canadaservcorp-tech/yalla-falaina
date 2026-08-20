@@ -11,6 +11,9 @@ create table if not exists public.outreach_contacts (
   city              text,
   lang              text not null default 'fr',
   source            text not null default 'rbq_register',
+  -- trade label in French; prospects collected outside the RBQ register have no listing yet, so the
+  -- invitation has to name their trade instead of their fiche
+  trade             text,
   -- CASL: business contact information published by the business itself; kept auditable.
   consent_basis     text not null default 'published_business_contact',
   unsubscribe_token text not null default encode(gen_random_bytes(16), 'hex'),
@@ -21,6 +24,7 @@ create table if not exists public.outreach_contacts (
   claimed_user_id   bigint references public.users(id) on delete set null,
   created_at        timestamptz not null default now()
 );
+alter table public.outreach_contacts add column if not exists trade text;
 create unique index if not exists outreach_token_idx on public.outreach_contacts(unsubscribe_token);
 create index if not exists outreach_rbq_idx on public.outreach_contacts(rbq_licence);
 -- a send job only ever selects from this view
