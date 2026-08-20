@@ -514,6 +514,8 @@ const T = {
     claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
     claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.',
     pwhint:'Mot de passe : 10 caractères minimum.',
+    roleseek:'Je cherche', roleoffer:"J'offre un service",
+    phname:'Nom complet', phemail:'Courriel', phphone:'Téléphone', phpass:'Mot de passe',
     terms:"Conditions d'utilisation", privacy:'Politique de confidentialité', legalback:'← Retour',
     faq:'Aide', faqtitle:'Foire aux questions',
     faqcontact:'Vous ne trouvez pas votre réponse ? Écrivez-nous à <a href="mailto:contact@mytrouvepro.net">contact@mytrouvepro.net</a>.',
@@ -577,6 +579,8 @@ const T = {
     claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
     claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.',
     pwhint:'Password: 10 characters minimum.',
+    roleseek:"I'm looking", roleoffer:'I offer a service',
+    phname:'Full name', phemail:'Email', phphone:'Phone', phpass:'Password',
     terms:'Terms of Use', privacy:'Privacy Policy', legalback:'← Back',
     faq:'Help', faqtitle:'Frequently asked questions',
     faqcontact:'Can\u2019t find your answer? Write to <a href="mailto:contact@mytrouvepro.net">contact@mytrouvepro.net</a>.',
@@ -657,6 +661,7 @@ function setLang(l){
   document.getElementById('faqback').textContent=t('legalback');
   document.getElementById('faqcontact').innerHTML=t('faqcontact');
   document.getElementById('acceptlbl').innerHTML=t('accept');
+  authLabels();
   if(document.getElementById('view-legal').classList.contains('on')) renderLegal();
   if(document.getElementById('view-faq').classList.contains('on')) renderFaq();
   document.getElementById('lblkw').textContent=t('kw');
@@ -789,21 +794,33 @@ function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>
 function openAuth(mode){ S.mode=mode; renderAuth(); document.getElementById('authsheet').classList.add('on'); }
 function closeAuth(){ document.getElementById('authsheet').classList.remove('on'); }
 function setRole(r){ S.role=r; document.getElementById('roleSeeker').classList.toggle('on',r==='seeker'); document.getElementById('roleProvider').classList.toggle('on',r==='provider'); }
-function renderAuth(){
+// The sign-in sheet keeps its own labels: they must follow a language switch even while it is open.
+function authLabels(){
   const reg=S.mode==='register';
   document.getElementById('authtitle').textContent = reg?t('authR'):t('authL');
+  document.getElementById('authsubmit').textContent = reg?t('authR'):t('authL');
+  document.getElementById('authswitch').textContent = reg?t('toLog'):t('toReg');
+  document.getElementById('pwhint').textContent = t('pwhint');
+  document.getElementById('roleSeeker').textContent = t('roleseek');
+  document.getElementById('roleProvider').textContent = t('roleoffer');
+  document.getElementById('a_name').placeholder = t('phname');
+  document.getElementById('a_email').placeholder = t('phemail');
+  document.getElementById('a_phone').placeholder = t('phphone');
+  document.getElementById('a_pass').placeholder = t('phpass');
+}
+function renderAuth(){
+  const reg=S.mode==='register';
   document.getElementById('rolewrap').style.display = reg?'flex':'none';
   document.getElementById('a_name').style.display = reg?'block':'none';
   document.getElementById('a_phone').style.display = reg?'block':'none';
   document.getElementById('pwhint').style.display = reg?'block':'none';
-  document.getElementById('pwhint').textContent = t('pwhint');
+  authLabels();
   document.getElementById('acceptwrap').style.display = reg?'flex':'none';
   document.getElementById('acceptlbl').innerHTML = t('accept');
   document.getElementById('a_terms').checked = false;
   document.getElementById('a_pass').autocomplete = reg?'new-password':'current-password';
-  document.getElementById('authsubmit').textContent = reg?t('authR'):t('authL');
   document.getElementById('autherr').textContent=''; document.getElementById('authok').textContent='';
-  const sw=document.getElementById('authswitch'); sw.textContent = reg?t('toLog'):t('toReg');
+  const sw=document.getElementById('authswitch');
   sw.style.cursor='pointer'; sw.onclick=()=>{ S.mode=reg?'login':'register'; renderAuth(); };
 }
 async function submitAuth(){
