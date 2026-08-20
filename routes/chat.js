@@ -6,6 +6,7 @@ const supabase = require('../db');
 const { authenticate } = require('../lib/auth-mw');
 const sec = require('../lib/security');
 const moderation = require('../lib/moderation');
+const { notify } = require('../lib/notify');
 const router = express.Router();
 const PAYWALL = process.env.PAYWALL_ENFORCED === 'true';
 const MAX_MESSAGE = 2000;
@@ -88,6 +89,8 @@ router.post('/:id/messages', sec.limits.write, async (req, res) => {
   const { data, error } = await supabase.from('messages')
     .insert({ conversation_id: req.params.id, sender_id: req.user.id, body }).select('*').single();
   if (error) { console.error('send message', error); return res.status(500).json({ error: 'Could not send message' }); }
+  const recipientId = conv.seeker_id === req.user.id ? conv.provider_id : conv.seeker_id;
+  notify(recipientId, 'new_message');   // fire-and-forget: notifying must never fail the send
   res.json({ success: true, message: data });
 });
 module.exports = router;
