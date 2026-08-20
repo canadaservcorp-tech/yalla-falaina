@@ -59,14 +59,31 @@ test('social cards describe the page, not just the site', async () => {
   assert.match(body, /<meta name="twitter:card"/);
 });
 
+const structured = async (p = '/') => {
+  const body = await html(p);
+  return JSON.parse((body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/) || [])[1]);
+};
+
 test('structured data names the operator and the area served', async () => {
-  const body = await html('/');
-  const ld = JSON.parse((body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/) || [])[1]);
+  const ld = await structured();
   const org = ld.find(x => x['@type'] === 'Organization');
   assert.match(org.legalName, /Performance Cristal/);
-  assert.equal(org.address.addressRegion, 'QC');
-  assert.deepEqual(org.areaServed.map(a => a.name), ['Laval', 'Montréal', 'Québec']);
+  const cities = org.areaServed.filter(a => a['@type'] === 'City').map(a => a.name);
+  for (const c of ['Laval', 'Montréal']) assert.ok(cities.includes(c), c);
+  assert.ok(org.areaServed.some(a => a['@type'] === 'AdministrativeArea' && a.name === 'Québec'));
   assert.ok(ld.some(x => x['@type'] === 'WebSite'));
+});
+
+// A service-area business, per the operator: coverage instead of a location.
+test('structured data publishes a coverage radius, never an address', async () => {
+  const ld = await structured();
+  const org = ld.find(x => x['@type'] === 'Organization');
+  assert.ok(!('address' in org), 'no PostalAddress');
+  assert.ok(!JSON.stringify(ld).includes('streetAddress'));
+  const circle = org.areaServed.find(a => a['@type'] === 'GeoCircle');
+  assert.ok(circle, 'a GeoCircle must describe the service area');
+  assert.ok(Number(circle.geoRadius) >= 20000);
+  assert.equal(circle.geoMidpoint['@type'], 'GeoCoordinates');
 });
 
 test('the Search Console token is only emitted when configured', async () => {
