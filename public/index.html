@@ -77,7 +77,7 @@
   section.pad{padding:8px 0 40px}
   .sheet{position:fixed;inset:0;background:rgba(10,53,56,.35);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
   .sheet.on{display:flex}
-  .modal{background:var(--surface);border-radius:20px;max-width:420px;width:100%;padding:22px;box-shadow:var(--sh)}
+  .modal{background:var(--surface);border-radius:20px;max-width:420px;width:100%;padding:22px;box-shadow:var(--sh);overflow-wrap:anywhere}
   .modal h2{margin:0 0 4px;font-size:22px}
   .seg{display:flex;background:var(--bg);border-radius:12px;padding:4px;margin:12px 0}
   .seg button{flex:1;border:0;background:transparent;padding:9px;border-radius:9px;font-weight:600;cursor:pointer;color:var(--muted)}
@@ -120,6 +120,17 @@
   .accept a{color:var(--teal)}
   footer a{color:var(--teal);text-decoration:none;margin-left:12px}
   @media(max-width:760px){ .hero{grid-template-columns:1fr;gap:8px} .hero h1{font-size:32px} .radar{max-width:230px} .svc-list{grid-template-columns:1fr} .chatwrap{grid-template-columns:1fr} }
+  @media(max-width:560px){
+    .wrap{padding:0 14px}
+    .bar{flex-wrap:wrap;height:auto;min-height:58px;padding:8px 0;gap:6px}
+    .brand{font-size:17px;gap:6px}
+    .brand small{display:none}
+    .bar .btn{padding:8px 12px;font-size:13px;min-height:42px}
+    .lang{font-size:12px}
+    .lang button{padding:6px 11px;min-height:42px}
+    #navchatlbl,#navfavlbl,#navbooklbl{display:none}
+    footer a{margin:0 12px 0 0;display:inline-block}
+  }
 </style>
 </head>
 <body>
