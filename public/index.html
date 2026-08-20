@@ -125,6 +125,7 @@
     <button id="len" onclick="setLang('en')">EN</button>
   </div>
   <button class="btn btn-ghost" id="navchat" style="display:none" onclick="openChat()">💬 <span id="navchatlbl">Messages</span></button>
+  <button class="btn btn-ghost" id="navfav" style="display:none" onclick="openFavorites()">★ <span id="navfavlbl">Favoris</span></button>
   <button class="btn btn-ghost" id="navauth" onclick="openAuth('login')">Connexion</button>
   <button class="btn btn-ghost" id="navout" style="display:none" onclick="logout()">Déconnexion</button>
 </div></header>
@@ -276,6 +277,16 @@
   <div class="legal" id="legalbody"></div>
 </div></section></div>
 
+<div id="view-favorites" class="view"><section class="pad"><div class="wrap">
+  <div class="toolbar">
+    <h1 style="font-size:24px;margin:0" id="favtitle">Favoris</h1>
+    <span class="spacer" style="flex:1"></span>
+    <button class="btn btn-ghost" onclick="go('search')" id="favback">← Retour</button>
+  </div>
+  <p class="muted" id="favempty" style="display:none">Aucun favori pour le moment.</p>
+  <div class="grid" id="favlist"></div>
+</div></section></div>
+
 <div id="view-chat" class="view"><section class="pad"><div class="wrap">
   <div class="toolbar">
     <h1 style="font-size:24px;margin:0" id="chattitle">Messages</h1>
@@ -359,7 +370,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/nsfwjs@4.1.0/dist/nsfwjs.min.js"></script>
 <script src="/legal.js"></script>
 <script>
-const S = { lang:'fr', token:localStorage.getItem('tp_token')||null, user:null, catalog:[], mode:'login', role:'seeker' };
+const S = { lang:'fr', token:localStorage.getItem('tp_token')||null, user:null, catalog:[], mode:'login', role:'seeker', favs:new Set() };
 try{ S.user = JSON.parse(localStorage.getItem('tp_user')||'null'); }catch(e){}
 
 const T = {
@@ -388,6 +399,8 @@ const T = {
     rvrating:'Note (1 à 5)', rvph:'Partagez votre expérience…', rvsubmit:'Publier', rvsaved:'Avis publié ✓',
     rvreply:'Réponse du prestataire', rvreplyph:'Répondre à cet avis…', rvreplysend:'Répondre',
     rvreport:'Signaler cet avis', rvreported:'Signalé — merci',
+    favs:'Favoris', favnone:'Aucun favori pour le moment.', favadd:'Ajouter aux favoris',
+    favremove:'Retirer des favoris', favoff:'Hors ligne — ville et contact masqués',
     contactlocked:'Coordonnées visibles seulement aux membres connectés, pour les prestataires abonnés.',
     lbprice:'Tarifs (ex. 80 $/h — estimation gratuite)', lbcmail:'Courriel affiché', lbcphone:'Mobile affiché',
     lbportfolio:'Photos de vos réalisations (max 6)',
@@ -431,6 +444,8 @@ const T = {
     rvrating:'Rating (1–5)', rvph:'Share your experience…', rvsubmit:'Submit', rvsaved:'Review posted ✓',
     rvreply:'Provider reply', rvreplyph:'Reply to this review…', rvreplysend:'Reply',
     rvreport:'Report this review', rvreported:'Reported — thank you',
+    favs:'Favorites', favnone:'No favorites yet.', favadd:'Add to favorites',
+    favremove:'Remove from favorites', favoff:'Offline — city and contact hidden',
     contactlocked:'Contact details are shown to logged-in members only, for subscribed providers.',
     lbprice:'Rates (e.g. $80/h — free estimate)', lbcmail:'Public email', lbcphone:'Public mobile',
     lbportfolio:'Photos of your work (max 6)',
@@ -483,6 +498,9 @@ function setLang(l){
   document.getElementById('lb_portfolio').textContent=t('lbportfolio');
   document.getElementById('contacthint').textContent=t('contacthint');
   document.getElementById('navchatlbl').textContent=t('messages');
+  document.getElementById('navfavlbl').textContent=t('favs');
+  document.getElementById('favtitle').textContent=t('favs');
+  document.getElementById('favback').textContent=t('chatback');
   document.getElementById('chattitle').textContent=t('messages');
   document.getElementById('chatback').textContent=t('chatback');
   document.getElementById('btnsend').textContent=t('send');
@@ -520,6 +538,7 @@ function rradlbl(){ const v=document.getElementById('rradius').value; document.g
 function refreshNav(){
   const b=document.getElementById('navauth'), out=document.getElementById('navout');
   document.getElementById('navchat').style.display = (S.token&&S.user)?'inline-block':'none';
+  document.getElementById('navfav').style.display = (S.token&&S.user&&S.user.role==='seeker')?'inline-block':'none';
   // providers get their profile on the main button, so logout needs its own
   out.style.display = (S.token&&S.user&&S.user.role==='provider')?'inline-block':'none';
   out.textContent = t('logout');
@@ -747,8 +766,60 @@ async function openPro(id){
       + contact
       + (shots?`<div class="tags" style="margin-top:8px">${shots}</div>`:'')
       + `<div id="reviews" style="margin-top:14px"></div>`;
+    if(S.token && S.user && S.user.role==='seeker'){
+      box.insertAdjacentHTML('afterbegin',
+        `<button class="btn btn-ghost" id="btnfav" style="float:right;font-size:12px;padding:6px 12px"
+           onclick="toggleFavorite(${Number(id)})">☆ ${t('favadd')}</button>`);
+      loadFavIds().then(()=>favBtn(id));
+    }
     loadReviews(id);
   }catch(e){ box.textContent=e.message; }
+}
+
+/* ---------- favorites (seekers only; an offline favorite shows no city or contact) ---------- */
+function favBtn(id){
+  const b=document.getElementById('btnfav'); if(!b) return;
+  const on=S.favs.has(Number(id));
+  b.textContent = on ? '★ '+t('favremove') : '☆ '+t('favadd');
+}
+async function loadFavIds(){
+  try{ const j=await api('/api/favorites'); S.favs=new Set((j.favorites||[]).map(f=>Number(f.id))); }
+  catch(e){ S.favs=new Set(); }
+}
+async function toggleFavorite(id){
+  const b=document.getElementById('btnfav'); const on=S.favs.has(Number(id));
+  if(b) b.disabled=true;
+  try{
+    if(on){ await api('/api/favorites/'+id,{method:'DELETE'}); S.favs.delete(Number(id)); }
+    else { await api('/api/favorites',{method:'POST',body:JSON.stringify({providerId:Number(id)})}); S.favs.add(Number(id)); }
+    favBtn(id);
+  }catch(e){ if(b) b.textContent=e.message; }
+  finally{ if(b) b.disabled=false; }
+}
+async function openFavorites(){
+  go('favorites');
+  const list=document.getElementById('favlist'), empty=document.getElementById('favempty');
+  list.innerHTML='…'; empty.style.display='none';
+  try{
+    const j=await api('/api/favorites');
+    S.favs=new Set((j.favorites||[]).map(f=>Number(f.id)));
+    const favs=j.favorites||[];
+    empty.textContent=t('favnone');
+    empty.style.display=favs.length?'none':'block';
+    list.innerHTML=favs.map(f=>`<article class="card">
+        <h3>${esc(f.name||'—')} ${f.is_licensed?'<span class="badge">RBQ</span>':''}</h3>
+        <p class="muted">${f.contactable?esc(f.city||''):t('favoff')}
+          ${f.review_count?` · ★ ${Number(f.rating).toFixed(1)} (${f.review_count})`:''}</p>
+        <div class="row">
+          ${f.contactable?`<button class="btn btn-teal" onclick="openPro(${Number(f.id)})">${t('details')}</button>`:''}
+          <button class="btn btn-ghost" onclick="unfav(${Number(f.id)})">${t('favremove')}</button>
+        </div>
+      </article>`).join('');
+  }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
+}
+async function unfav(id){
+  try{ await api('/api/favorites/'+id,{method:'DELETE'}); S.favs.delete(Number(id)); openFavorites(); }
+  catch(e){ const em=document.getElementById('favempty'); em.textContent=e.message; em.style.display='block'; }
 }
 
 /* ---------- reviews (a seeker who contacted the provider may rate them once) ---------- */
