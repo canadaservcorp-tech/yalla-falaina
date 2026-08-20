@@ -74,12 +74,22 @@ test('structured data names the operator and the area served', async () => {
   assert.ok(ld.some(x => x['@type'] === 'WebSite'));
 });
 
-// A service-area business, per the operator: coverage instead of a location.
-test('structured data publishes a coverage radius, never an address', async () => {
+// The address must match the Google Business Profile listing exactly.
+test('structured data carries the operator office address', async () => {
+  const org = (await structured()).find(x => x['@type'] === 'Organization');
+  assert.deepEqual(org.address, {
+    '@type': 'PostalAddress',
+    streetAddress: seo.ADDRESS.street,
+    addressLocality: 'Laval',
+    addressRegion: 'QC',
+    postalCode: 'H7N 0G4',
+    addressCountry: 'CA',
+  });
+});
+
+test('structured data publishes a coverage radius, not just the office', async () => {
   const ld = await structured();
   const org = ld.find(x => x['@type'] === 'Organization');
-  assert.ok(!('address' in org), 'no PostalAddress');
-  assert.ok(!JSON.stringify(ld).includes('streetAddress'));
   const circle = org.areaServed.find(a => a['@type'] === 'GeoCircle');
   assert.ok(circle, 'a GeoCircle must describe the service area');
   assert.ok(Number(circle.geoRadius) >= 20000);
