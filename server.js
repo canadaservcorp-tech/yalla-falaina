@@ -48,12 +48,14 @@ app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/report', require('./routes/report'));
 app.use('/api/claim', require('./routes/claim'));    // claim an unclaimed RBQ seed listing
 app.use('/api/outreach', require('./routes/outreach')); // marketing list opt-out (CASL)
+app.use('/api/concierge', require('./routes/concierge')); // on-site AI assistant
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either
 app.get('/api/health', (_req, res) => res.json({
   ok: true, phase: 3,
   paywall: process.env.PAYWALL_ENFORCED === 'true',
   moderation: Boolean(process.env.GOOGLE_VISION_API_KEY),
+  concierge: Boolean(process.env.ANTHROPIC_API_KEY),
 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 // the SPA is a single file, so give crawlers per-route <head> metadata on the way out
