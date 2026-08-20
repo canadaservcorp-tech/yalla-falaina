@@ -61,7 +61,8 @@ const SHELL = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf
 app.get('*', (req, res) => {
   const route = seo.INDEXABLE.includes(req.path) ? req.path : '/';
   const lang = req.query.lang === 'en' ? 'en' : 'fr';
-  res.type('html').send(SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, seo.head(route, lang))
+  // function replacer: prices in the copy ("80 $/h") would otherwise be read as $-patterns
+  res.type('html').send(SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang))
     .replace('<html lang="fr">', `<html lang="${lang}">`));
 });
 

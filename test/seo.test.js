@@ -102,6 +102,17 @@ test('/index.html redirects to the canonical home URL', async () => {
   assert.equal(res.headers.get('location'), '/');
 });
 
+test('a dollar sign in the copy survives injection verbatim', async () => {
+  const original = seo.PAGES['/'].fr.title;
+  seo.PAGES['/'].fr.title = 'Dès 80 $/h — $& $` TrouvePro';
+  try {
+    // & is html-escaped; the point is that no $-sequence is swallowed as a replacement pattern
+    assert.match(await html('/'), /<title>Dès 80 \$\/h — \$&amp; \$` TrouvePro<\/title>/);
+  } finally {
+    seo.PAGES['/'].fr.title = original;
+  }
+});
+
 test('PUBLIC_URL is read per request, not frozen at module load', () => {
   const before = process.env.PUBLIC_URL;
   process.env.PUBLIC_URL = 'https://example.test/';
