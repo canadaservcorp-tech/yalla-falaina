@@ -819,7 +819,7 @@ async function openFavorites(){
 }
 async function unfav(id){
   try{ await api('/api/favorites/'+id,{method:'DELETE'}); S.favs.delete(Number(id)); openFavorites(); }
-  catch(e){ document.getElementById('favempty').textContent=e.message; }
+  catch(e){ const em=document.getElementById('favempty'); em.textContent=e.message; em.style.display='block'; }
 }
 
 /* ---------- reviews (a seeker who contacted the provider may rate them once) ---------- */

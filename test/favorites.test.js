@@ -90,6 +90,15 @@ test('an expired subscription hides the city while the paywall is on', async () 
   assert.equal(j.favorites[0].city, undefined);
 });
 
+test('a banned provider disappears from the list', async () => {
+  const token = actor(h, { id: 40 });
+  listing(h, 40,
+    [{ user_id: 5, display_name: 'Banned Pro', city: 'Laval', availability: 'available', is_licensed: true, rating: 5, review_count: 2, claimed: true }],
+    [{ id: 5, subscription_status: 'active', banned: true }]);
+  const j = await (await get('/api/favorites', token)).json();
+  assert.deepEqual(j.favorites, []);
+});
+
 test('no favorites -> empty list', async () => {
   const token = actor(h, { id: 39 });
   h.mock.__set('favorites', { data: [], error: null });
