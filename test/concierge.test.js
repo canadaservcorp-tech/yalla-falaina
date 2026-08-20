@@ -127,6 +127,25 @@ test('the panel can actually be closed: [hidden] beats the widget display rules'
   for (const rule of ['#ccpanel{display:flex', '#ccbtn{']) assert.ok(ui.includes(rule), rule);
 });
 
+test('the widget opens in the language of the page, and greets once', () => {
+  const fs = require('fs'), path = require('path');
+  const w = fs.readFileSync(path.join(__dirname, '..', 'public', 'concierge.js'), 'utf8');
+  // `S` is function-scoped in the SPA, so window.S was always undefined: read <html lang> instead
+  assert.match(w, /document\.documentElement\.lang === 'en'/);
+  assert.ok(!/window\.S/.test(w), 'the widget must not depend on window.S');
+  // re-opening the panel used to append a second greeting
+  assert.match(w, /if\(!greeted\)\{ say\('assistant', tt\('hi'\)\); greeted = true; \}/);
+});
+
+test('a sheet never covers the language switch', () => {
+  const fs = require('fs'), path = require('path');
+  const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const z = s => Number(/z-index:(\d+)/.exec(s)[1]);
+  const head = /header\{[^}]*\}/.exec(ui)[0], sheet = /\.sheet\{[^}]*\}/.exec(ui)[0];
+  assert.ok(z(head) > z(sheet), 'the header must sit above an open sheet');
+  assert.match(sheet, /padding:78px/, 'and the sheet must start below it');
+});
+
 test('the diagnostic is admin-only, by database role and not by token claim', async () => {
   const jwt = require('jsonwebtoken');
   const diag = token => fetch(h.base + '/api/concierge/diag', { headers: auth(token) });

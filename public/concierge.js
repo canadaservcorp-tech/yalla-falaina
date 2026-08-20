@@ -19,7 +19,7 @@
       wait:'…', search:'🔎 Start the search', signup:'✅ Create a free account' },
   };
   const MAX_CHARS = 600, MAX_TURNS = 12;
-  let lang = 'fr', msgs = [], sending = false, el = {};
+  let lang = 'fr', msgs = [], sending = false, greeted = false, el = {};
 
   function tt(k){ return T[lang][k]; }
 
@@ -65,7 +65,7 @@
     el.panel.hidden = !open;
     el.btn.hidden = open;
     if(open){
-      if(!msgs.length) say('assistant', tt('hi'));
+      if(!greeted){ say('assistant', tt('hi')); greeted = true; }
       el.input.focus();
     }
   }
@@ -143,7 +143,8 @@
       const h = await (await fetch('/api/health')).json();
       if(!h.concierge) return;
     }catch(e){ return; }
-    lang = (window.S && S.lang === 'en') ? 'en' : 'fr';
+    // the app owns the language and publishes it on <html lang>; `S` is not global
+    lang = (document.documentElement.lang === 'en') ? 'en' : 'fr';
     build();
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
