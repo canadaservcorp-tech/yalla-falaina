@@ -34,8 +34,23 @@ test('a keyword and a picked service never both apply', () => {
   assert.match(ui, /id="fservice" onchange="clearKeyword\(\)"/);
 });
 
+test('the sign-in sheet follows the language switch', () => {
+  // every one of its own labels used to be hard-coded French
+  for (const call of [/roleSeeker'\)\.textContent = t\('roleseek'\)/,
+                      /roleProvider'\)\.textContent = t\('roleoffer'\)/,
+                      /a_name'\)\.placeholder = t\('phname'\)/,
+                      /a_email'\)\.placeholder = t\('phemail'\)/,
+                      /a_phone'\)\.placeholder = t\('phphone'\)/,
+                      /a_pass'\)\.placeholder = t\('phpass'\)/]) {
+    assert.match(ui, call);
+  }
+  // and they must be refreshed by the switch itself, not only when the sheet opens
+  assert.match(ui, /function authLabels\(\)/);
+  assert.equal(ui.split('authLabels();').length - 1, 2);
+});
+
 test('the keyword labels exist in both languages', () => {
-  for (const key of ['kw:', 'kwph:', 'kwhint:']) {
+  for (const key of ['kw:', 'kwph:', 'kwhint:', 'roleseek:', 'phname:', 'phpass:']) {
     assert.equal(ui.split(key).length - 1, 2, key + ' must be defined for fr and en');
   }
 });
