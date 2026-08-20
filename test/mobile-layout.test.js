@@ -17,6 +17,15 @@ test('nav button labels collapse to icons on phones', () => {
   assert.match(phone, /#navchatlbl[^}]*\{display:none\}/);
 });
 
+test('header controls keep a finger-sized tap target on phones', () => {
+  assert.match(phone, /\.bar \.btn\{[^}]*min-height:4\dpx/);
+  assert.match(phone, /\.lang button\{[^}]*min-height:4\dpx/);
+});
+
+test('long unbroken text cannot widen a sheet', () => {
+  assert.match(ui, /\.modal\{[^}]*overflow-wrap:anywhere/);
+});
+
 test('the viewport meta keeps the layout at device width', () => {
   assert.match(ui, /<meta name="viewport" content="width=device-width, initial-scale=1/);
 });
