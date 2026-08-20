@@ -3,10 +3,11 @@
 // the key never ships to the browser; without a key the endpoint stays dark (503).
 const express = require('express');
 const supabase = require('../db');
+const { authenticate } = require('../lib/auth-mw');
 const sec = require('../lib/security');
 const router = express.Router();
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5';
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const MAX_TURNS = 12;                    // conversation length sent back to the model
 const MAX_CHARS = 600;                   // per visitor message
 const TIMEOUT_MS = 20000;                // never hold a request open on a stalled upstream
@@ -54,6 +55,35 @@ function splitAction(text) {
   }
 }
 
+async function ask(messages) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({ model: MODEL, max_tokens: 400, system: SYSTEM, messages }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  return { status: r.status, body: r.ok ? await r.json() : (await r.text()).slice(0, 300) };
+}
+
+// Why the concierge is failing is invisible from the outside: a bad key, an unavailable model
+// and a blocked egress all surface as 502. Admins can read the upstream verdict here; the
+// public route keeps saying nothing.
+router.get('/diag', authenticate, sec.requireActiveUser, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  if (!process.env.ANTHROPIC_API_KEY)
+    return res.json({ configured: false, model: MODEL });
+  try {
+    const { status, body } = await ask([{ role: 'user', content: 'ping' }]);
+    res.json({ configured: true, model: MODEL, upstream: status, detail: status === 200 ? 'ok' : body });
+  } catch (e) {
+    res.json({ configured: true, model: MODEL, upstream: null, detail: `${e.name}: ${e.message}` });
+  }
+});
+
 router.post('/', sec.limits.concierge, async (req, res) => {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return res.status(503).json({ error: 'Concierge unavailable' });
@@ -67,17 +97,12 @@ router.post('/', sec.limits.concierge, async (req, res) => {
 
   let data;
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 400, system: SYSTEM, messages: msgs }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!r.ok) {
-      console.error('concierge upstream', r.status, (await r.text()).slice(0, 300));
+    const { status, body } = await ask(msgs);
+    if (status !== 200) {
+      console.error('concierge upstream', status, body);
       return res.status(502).json({ error: 'Concierge unavailable' });
     }
-    data = await r.json();
+    data = body;
   } catch (e) {
     console.error('concierge', e.name, e.message);
     return res.status(502).json({ error: 'Concierge unavailable' });
