@@ -29,6 +29,7 @@ app.use('/api/chat', require('./routes/photos'));    // /api/chat/:id/photos
 app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/boost', require('./routes/boost'));
 app.use('/api/reviews', require('./routes/reviews'));
+app.use('/api/favorites', require('./routes/favorites'));
 app.use('/api/report', require('./routes/report'));
 app.use('/api/claim', require('./routes/claim'));    // claim an unclaimed RBQ seed listing
 app.use('/api/outreach', require('./routes/outreach')); // marketing list opt-out (CASL)
