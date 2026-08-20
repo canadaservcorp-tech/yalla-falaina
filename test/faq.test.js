@@ -70,6 +70,14 @@ test('the photo answers describe review, not an instant ban', () => {
   assert.ok(text('fr').includes('3 photos') && text('en').includes('3 photos'));
 });
 
+test('answers are collapsed behind a summary until clicked', () => {
+  const ui = read('public/index.html');
+  const render = ui.slice(ui.indexOf('function renderFaq()'));
+  assert.ok(render.includes('<details class="faqitem">'));
+  assert.ok(render.includes('<summary>'));
+  assert.ok(/\.faqitem summary\{[^}]*cursor:pointer/.test(ui));
+});
+
 test('the FAQ is served and cached as part of the app shell', () => {
   assert.ok(read('public/sw.js').includes("'/faq.js'"));
   const ui = read('public/index.html');
