@@ -12,5 +12,6 @@ test('GET /api/health -> 200 { ok:true, phase:3 }', async () => {
     ok: true, phase: 3,
     paywall: process.env.PAYWALL_ENFORCED === 'true',
     moderation: Boolean(process.env.GOOGLE_VISION_API_KEY),
+    concierge: Boolean(process.env.ANTHROPIC_API_KEY),
   });
 });
