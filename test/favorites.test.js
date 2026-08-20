@@ -99,6 +99,14 @@ test('a banned provider disappears from the list', async () => {
   assert.deepEqual(j.favorites, []);
 });
 
+test('a failed ban/subscription read fails closed -> 500', async () => {
+  const token = actor(h, { id: 41 });
+  listing(h, 41,
+    [{ user_id: 5, display_name: 'Pro', city: 'Laval', availability: 'available', is_licensed: true, rating: 4, review_count: 1, claimed: true }],
+    null);   // the ban/subscription read comes back with no rows
+  assert.equal((await get('/api/favorites', token)).status, 500);
+});
+
 test('no favorites -> empty list', async () => {
   const token = actor(h, { id: 39 });
   h.mock.__set('favorites', { data: [], error: null });
