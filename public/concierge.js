@@ -97,26 +97,13 @@
     el.log.scrollTop = el.log.scrollHeight;
   }
 
-  // fold accents/case so "Plombier" from the model matches the catalogue label
-  function fold(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
-
-  function professionId(name){
-    const want = fold(name);
-    if(!want || !window.S || !S.catalog) return '';
-    let hit = '';
-    S.catalog.forEach(c => (c.professions||[]).forEach(p => {
-      if(hit) return;
-      const fr = fold(p.name_fr), en = fold(p.name_en);
-      if(fr === want || en === want || fr.includes(want) || en.includes(want) || want.includes(fr)) hit = String(p.id);
-    }));
-    return hit;
-  }
-
-  // hand over to the app's own search, so proximity, radius and geolocation behave identically
+  // hand over to the app's own search, so proximity, radius and geolocation behave identically.
+  // The trade goes in as a keyword: the server expands it to every related trade in both
+  // languages, and an unknown one no longer inherits a previously selected profession.
   function startSearch(service){
-    const sel = document.getElementById('fservice');
-    // an unknown trade must not inherit whatever profession was selected before
-    if(sel) sel.value = professionId(service);
+    const term = String(service || '').slice(0, 80);
+    ['fq','rq'].forEach(id => { const kw = document.getElementById(id); if(kw) kw.value = term; });
+    if(window.clearService) clearService();
     if(window.go) go('search');
     if(window.doSearch) doSearch();
   }

@@ -1,7 +1,19 @@
 const express = require('express');
 const supabase = require('../db');
 const { approx } = require('../lib/distance');
+const activities = require('../lib/activities');
 const router = express.Router();
+
+// The catalogue changes only when we seed it, so keyword expansion reads it once per 10 minutes.
+const CATALOG_TTL_MS = 10 * 60 * 1000;
+let catalog = { at: 0, rows: [] };
+async function professions() {
+  if (Date.now() - catalog.at < CATALOG_TTL_MS) return catalog.rows;
+  const { data, error } = await supabase.from('professions').select('id,name_fr,name_en');
+  if (error || !(data || []).length) return catalog.rows;   // keep serving with whatever we had
+  catalog = { at: Date.now(), rows: data };
+  return catalog.rows;
+}
 
 // Toggle: when false, every provider is treated as online (thin-launch); when true, only
 // providers with an active subscription get distance, availability and a contact button.
@@ -25,10 +37,20 @@ router.get('/', async (req, res) => {
       ? req.query.languages.split(',').map(l => l.trim().slice(0, 20)).filter(Boolean).slice(0, 6)
       : [];
 
+    // A typed keyword reaches every related trade in both languages ("gardener" -> jardinage,
+    // aménagement paysager, entretien de pelouse, émondage); the raw text stays as a fallback
+    // so a provider's own business name still matches.
+    let professionIds = null;
+    if (q && !professionId) {
+      const ids = activities.resolve(q, await professions());
+      if (ids.length) professionIds = ids.slice(0, 40);
+    }
+
     // Raw SQL via RPC for the distance sort + radius filter (earthdistance).
     const { data, error } = await supabase.rpc('search_providers', {
       p_lat: lat, p_lng: lng, p_radius_m: radiusM,
       p_profession_id: professionId, p_category: category, p_q: q,
+      p_profession_ids: professionIds,
       p_paywall: PAYWALL,
       p_available_now: availableNow,
       p_languages: languages.length ? languages : null,

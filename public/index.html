@@ -177,8 +177,15 @@
       <div class="search">
         <div class="row">
           <div class="field">
+            <label id="lblkw">Que cherchez-vous ?</label>
+            <input id="fq" maxlength="80" placeholder="ex. jardinier, élagage, gardener…" oninput="clearService()" onkeydown="if(event.key==='Enter')doSearch()">
+          </div>
+        </div>
+        <p class="muted" id="kwhint" style="font-size:12px;margin:6px 0 0"></p>
+        <div class="row" style="margin-top:12px">
+          <div class="field">
             <label id="lblservice">Quel service ?</label>
-            <select id="fservice"><option value="">Tous les services</option></select>
+            <select id="fservice" onchange="clearKeyword()"><option value="">Tous les services</option></select>
           </div>
           <div class="field" style="max-width:150px">
             <label id="lblradius" class="radiuslabel">Rayon : 5 km</label>
@@ -213,9 +220,13 @@
 
 <div id="view-results" class="view"><section class="pad"><div class="wrap">
   <div class="toolbar">
+    <div class="field" style="max-width:220px">
+      <label id="rlblkw" class="radiuslabel">Que cherchez-vous ?</label>
+      <input id="rq" maxlength="80" oninput="clearService()" onchange="doSearch()" onkeydown="if(event.key==='Enter')doSearch()">
+    </div>
     <div class="field" style="max-width:230px">
       <label id="rlblservice" class="radiuslabel">Service</label>
-      <select id="rservice" onchange="doSearch()"><option value="">Tous les services</option></select>
+      <select id="rservice" onchange="clearKeyword();doSearch()"><option value="">Tous les services</option></select>
     </div>
     <div class="field" style="max-width:180px">
       <label id="rlblradius" class="radiuslabel">Rayon : 5 km</label>
@@ -450,6 +461,7 @@ const T = {
     h1:'Le bon pro, <em>tout près</em> de vous.',
     hsub:"Une infirmière dans votre immeuble, un plombier au coin de la rue. TrouvePro vous montre les prestataires de confiance les plus proches — et vous met en contact.",
     service:'Quel service ?', allsvc:'Tous les services', radius:'Rayon', search:'📍 Voir qui est près de moi',
+    kw:'Que cherchez-vous ?', kwph:'ex. jardinier, élagage, gardener…', kwhint:'Un mot suffit : nous cherchons aussi les métiers proches, en français comme en anglais.',
     back:'← Nouvelle recherche', count:(n)=>`${n} prestataire(s) près de vous`, none:'Aucun prestataire dans ce rayon. Élargissez la recherche.',
     licensed:'Licencié RBQ', now:'Disponible', contact:'Contacter', loginto:'Connectez-vous pour contacter',
     flang:'Langue', fnow:'Disponible maintenant', lbnow:'Disponible maintenant (prêt à recevoir une demande)',
@@ -512,6 +524,7 @@ const T = {
     h1:'The right pro, <em>right nearby</em>.',
     hsub:"A nurse in your building, a plumber around the corner. TrouvePro shows the trusted providers closest to you — and connects you.",
     service:'What service?', allsvc:'All services', radius:'Radius', search:'📍 See who’s near me',
+    kw:'What are you looking for?', kwph:'e.g. gardener, trimming, jardinier…', kwhint:'One word is enough — we also look for related trades, in French and in English.',
     back:'← New search', count:(n)=>`${n} provider(s) near you`, none:'No providers in this radius. Widen the search.',
     licensed:'RBQ licensed', now:'Available', contact:'Contact', loginto:'Log in to contact',
     flang:'Language', fnow:'Available now', lbnow:'Available now (ready to take a request)',
@@ -588,7 +601,8 @@ function go(v){
 
 function setLang(l){
   S.lang=l; document.documentElement.lang=l;
-  try{ localStorage.setItem('tp_lang',l); }catch(e){}
+  // The site opens in French on every visit; a switch to English lasts for this visit only.
+  try{ sessionStorage.setItem('tp_lang',l); localStorage.removeItem('tp_lang'); }catch(e){}
   document.getElementById('lfr').classList.toggle('on',l==='fr');
   document.getElementById('len').classList.toggle('on',l==='en');
   document.getElementById('tag').textContent=t('tag');
@@ -645,6 +659,11 @@ function setLang(l){
   document.getElementById('acceptlbl').innerHTML=t('accept');
   if(document.getElementById('view-legal').classList.contains('on')) renderLegal();
   if(document.getElementById('view-faq').classList.contains('on')) renderFaq();
+  document.getElementById('lblkw').textContent=t('kw');
+  document.getElementById('rlblkw').textContent=t('kw');
+  document.getElementById('kwhint').textContent=t('kwhint');
+  document.getElementById('fq').placeholder=t('kwph');
+  document.getElementById('rq').placeholder=t('kwph');
   document.getElementById('rlbllang').textContent=t('flang');
   document.getElementById('rlblnow').textContent=t('fnow');
   document.getElementById('lb_now').textContent=t('lbnow');
@@ -653,6 +672,9 @@ function setLang(l){
   // results already on screen must follow the new language (incl. server-side distance labels)
   if(document.getElementById('view-results').classList.contains('on')) doSearch();
 }
+// A keyword and a picked service would fight over the same query, so typing one drops the other.
+function clearService(){ ['fservice','rservice'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
+function clearKeyword(){ ['fq','rq'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
 function radlbl(){ const v=document.getElementById('fradius').value; document.getElementById('lblradius').textContent=`${t('radius')} : ${v} km`; }
 function rradlbl(){ const v=document.getElementById('rradius').value; document.getElementById('rlblradius').textContent=`${t('radius')} : ${v} km`; }
 
@@ -714,16 +736,19 @@ async function doSearch(){
   const onResults=document.getElementById('view-results').classList.contains('on');
   const svc = onResults?document.getElementById('rservice').value:document.getElementById('fservice').value;
   const rad = onResults?document.getElementById('rradius').value:document.getElementById('fradius').value;
+  const kw = (onResults?document.getElementById('rq').value:document.getElementById('fq').value).trim();
   document.getElementById('searcherr').textContent='';
   const [lat,lng]=await getLoc();
   try{
     const qs=new URLSearchParams({lat,lng,radius_km:rad,lang:S.lang});
     if(svc) qs.set('profession_id',svc);
+    else if(kw) qs.set('q',kw);            // a keyword reaches every related trade, FR and EN
     if(document.getElementById('ronlynow').checked) qs.set('available_now','true');
     const spoken=document.getElementById('rlangs').value;
     if(spoken) qs.set('languages',spoken);
     const j=await api('/api/search?'+qs.toString());
-    document.getElementById('rservice').value=svc; document.getElementById('rradius').value=rad; rradlbl();
+    document.getElementById('rservice').value=svc; document.getElementById('rq').value=kw;
+    document.getElementById('rradius').value=rad; rradlbl();
     renderResults(j.providers||[]);
     go('results');
   }catch(e){ document.getElementById('searcherr').textContent=e.message; }
@@ -1378,7 +1403,7 @@ function signupSource(){ try{ return localStorage.getItem('tp_src')||''; }catch(
 (function(){
   rememberSource();
   const asked=new URLSearchParams(location.search).get('lang');
-  const saved=(()=>{ try{ return localStorage.getItem('tp_lang'); }catch(e){ return null; } })();
+  const saved=(()=>{ try{ return sessionStorage.getItem('tp_lang'); }catch(e){ return null; } })();
   setLang([asked,saved].includes('en')?'en':'fr'); refreshNav(); loadCatalog();
   if(location.pathname==='/terms') openLegal('terms');
   if(location.pathname==='/privacy') openLegal('privacy');
