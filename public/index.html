@@ -24,7 +24,8 @@
   body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
   h1,h2,h3,.brand{font-family:Sora,system-ui,sans-serif}
   .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
-  header{position:sticky;top:0;z-index:20;background:rgba(238,244,243,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  /* above .sheet: the language switch must stay clickable while a sheet is open */
+  header{position:sticky;top:0;z-index:45;background:rgba(238,244,243,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
   .bar{display:flex;align-items:center;gap:14px;height:62px}
   .brand{font-weight:700;font-size:20px;letter-spacing:-.02em;display:flex;align-items:center;gap:9px;cursor:pointer}
   .dot{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 50% 50%,var(--ink) 0 24%,transparent 25%),conic-gradient(from 0deg,var(--teal),var(--amber),var(--coral),var(--red),var(--teal))}
@@ -78,7 +79,7 @@
   .badge-featured{position:absolute;top:12px;right:12px;background:var(--amber);color:#3a2c00;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
   .view{display:none} .view.on{display:block}
   section.pad{padding:8px 0 40px}
-  .sheet{position:fixed;inset:0;background:rgba(10,53,56,.35);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
+  .sheet{position:fixed;inset:0;background:rgba(10,53,56,.35);display:none;align-items:center;justify-content:center;z-index:40;padding:78px 16px 16px}
   .sheet.on{display:flex}
   .modal{background:var(--surface);border-radius:20px;max-width:420px;width:100%;padding:22px;box-shadow:var(--sh);overflow-wrap:anywhere}
   .modal h2{margin:0 0 4px;font-size:22px}
