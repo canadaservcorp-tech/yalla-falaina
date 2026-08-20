@@ -119,6 +119,14 @@ test('one visitor cannot burn the model budget', async () => {
   assert.ok(limited, 'the per-minute concierge limit must bite');
 });
 
+test('the panel can actually be closed: [hidden] beats the widget display rules', () => {
+  const fs = require('fs'), path = require('path');
+  const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  // #ccpanel/#ccbtn set display, which would override the UA rule for the hidden attribute
+  assert.ok(ui.includes('#cc [hidden]{display:none}'), 'hidden elements inside #cc must be display:none');
+  for (const rule of ['#ccpanel{display:flex', '#ccbtn{']) assert.ok(ui.includes(rule), rule);
+});
+
 test('the diagnostic is admin-only, by database role and not by token claim', async () => {
   const jwt = require('jsonwebtoken');
   const diag = token => fetch(h.base + '/api/concierge/diag', { headers: auth(token) });

@@ -74,3 +74,46 @@ test('a SQL error never leaks details to the client', async () => {
   assert.equal(res.status, 500);
   assert.deepEqual(await res.json(), { error: 'Search failed' });
 });
+
+test('a keyword is expanded to every related trade, in both languages', async () => {
+  h.mock.__set('professions', {
+    data: [
+      { id: 38, name_fr: 'Jardinage', name_en: 'Gardening' },
+      { id: 36, name_fr: 'Aménagement paysager', name_en: 'Landscaping' },
+      { id: 37, name_fr: 'Entretien de pelouse', name_en: 'Lawn care' },
+      { id: 40, name_fr: "Émondage et abattage d'arbres", name_en: 'Tree trimming & removal' },
+      { id: 18, name_fr: 'Plomberie', name_en: 'Plumbing' },
+    ],
+    error: null,
+  });
+  for (const word of ['gardener', 'jardinier', 'landscape', 'trimming']) {
+    await search(`${LL}&q=${encodeURIComponent(word)}`);
+    const args = h.mock.__lastRpc('search_providers').args;
+    assert.deepEqual(args.p_profession_ids.slice().sort(), [36, 37, 38, 40], word);
+    assert.equal(args.p_q, word, 'the raw text stays as a business-name fallback');
+  }
+
+  await search(`${LL}&q=plombier`);
+  assert.deepEqual(h.mock.__lastRpc('search_providers').args.p_profession_ids, [18]);
+});
+
+test('a keyword that matches no trade falls back to the raw text', async () => {
+  await search(`${LL}&q=zzzzz`);
+  const args = h.mock.__lastRpc('search_providers').args;
+  assert.equal(args.p_profession_ids, null);
+  assert.equal(args.p_q, 'zzzzz');
+});
+
+test('a picked profession wins over the keyword and is never widened', async () => {
+  await search(`${LL}&profession_id=18&q=gardener`);
+  const args = h.mock.__lastRpc('search_providers').args;
+  assert.equal(args.p_profession_id, 18);
+  assert.equal(args.p_profession_ids, null);
+});
+
+test('no keyword means no expansion at all', async () => {
+  await search(LL);
+  const args = h.mock.__lastRpc('search_providers').args;
+  assert.equal(args.p_profession_ids, null);
+  assert.equal(args.p_q, null);
+});
