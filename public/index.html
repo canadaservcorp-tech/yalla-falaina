@@ -422,6 +422,7 @@
 <div class="sheet" id="authsheet"><div class="modal">
   <button class="x" onclick="closeAuth()">×</button>
   <h2 id="authtitle">Connexion</h2>
+  <div class="muted" id="claimhint" style="display:none;font-size:13px"></div>
   <div class="seg" id="rolewrap" style="display:none">
     <button id="roleSeeker" class="on" onclick="setRole('seeker')">Je cherche</button>
     <button id="roleProvider" onclick="setRole('provider')">J'offre un service</button>
@@ -514,6 +515,7 @@ const T = {
     claimtitle:'Réclamer votre fiche RBQ', claimsub:"Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.",
     claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
     claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.',
+    invite:'Réclamez la fiche de %s : créez votre compte prestataire.',
     pwhint:'Mot de passe : 10 caractères minimum.',
     roleseek:'Je cherche', roleoffer:"J'offre un service",
     phname:'Nom complet', phemail:'Courriel', phphone:'Téléphone', phpass:'Mot de passe',
@@ -579,6 +581,7 @@ const T = {
     claimtitle:'Claim your RBQ listing', claimsub:'Your business may already be listed (RBQ registry). Search for it and claim it.',
     claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
     claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.',
+    invite:'Claim the listing for %s: create your provider account.',
     pwhint:'Password: 10 characters minimum.',
     roleseek:"I'm looking", roleoffer:'I offer a service',
     phname:'Full name', phemail:'Email', phphone:'Phone', phpass:'Password',
@@ -794,6 +797,12 @@ function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>
 
 function openAuth(mode){ S.mode=mode; renderAuth(); document.getElementById('authsheet').classList.add('on'); }
 function closeAuth(){ document.getElementById('authsheet').classList.remove('on'); }
+function claimHint(){
+  const hint=document.getElementById('claimhint');
+  if(hint.style.display==='none') return;
+  const name=(()=>{ try{ return sessionStorage.getItem('tp_claim')||''; }catch(e){ return ''; } })();
+  hint.textContent=name?t('invite').replace('%s',name):'';
+}
 function setRole(r){ S.role=r; document.getElementById('roleSeeker').classList.toggle('on',r==='seeker'); document.getElementById('roleProvider').classList.toggle('on',r==='provider'); }
 // The sign-in sheet keeps its own labels: they must follow a language switch even while it is open.
 function authLabels(){
@@ -808,6 +817,7 @@ function authLabels(){
   document.getElementById('a_email').placeholder = t('phemail');
   document.getElementById('a_phone').placeholder = t('phphone');
   document.getElementById('a_pass').placeholder = t('phpass');
+  claimHint();
 }
 function renderAuth(){
   const reg=S.mode==='register';
@@ -837,7 +847,7 @@ async function submitAuth(){
       const j=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password:pass})});
       S.token=j.token;S.user=j.user; localStorage.setItem('tp_token',j.token); localStorage.setItem('tp_user',JSON.stringify(j.user));
       closeAuth(); refreshNav();
-      if(j.user.role==='provider'){ loadProviderForm(); go('provider'); }
+      if(j.user.role==='provider'){ loadProviderForm(); go('provider'); claimInvite(); }
     }
   }catch(e){ er.textContent=e.message; }
 }
@@ -1383,6 +1393,34 @@ async function claimListing(seedUserId){
   }catch(e){ msg.className='err'; msg.textContent=e.message; }
 }
 
+// A campaign email links to /?claim=<token>: the recipient owns a seeded RBQ listing but has no
+// account yet, so remember which business they came for and walk them into the claim box.
+async function claimInvite(){
+  const tok=new URLSearchParams(location.search).get('claim');
+  if(/^[a-f0-9]{32}$/.test(tok||'')){
+    history.replaceState(null,'','/');
+    try{
+      const r=await fetch('/api/outreach/invite?token='+tok);
+      const j=await r.json();
+      if(r.ok && j.business_name && !j.claimed){
+        try{ sessionStorage.setItem('tp_claim',j.business_name); }catch(e){}
+        if(j.lang==='en' && !new URLSearchParams(location.search).get('lang')) setLang('en');
+      }
+    }catch(e){}
+  }
+  const name=(()=>{ try{ return sessionStorage.getItem('tp_claim')||''; }catch(e){ return ''; } })();
+  if(!name) return;
+  if(S.token && S.user && S.user.role==='provider'){
+    await loadProviderForm(); go('provider');
+    document.getElementById('claim_q').value=name; claimSearch();
+    try{ sessionStorage.removeItem('tp_claim'); }catch(e){}
+  }else if(!S.token){
+    const hint=document.getElementById('claimhint');
+    hint.textContent=t('invite').replace('%s',name); hint.style.display='block';
+    setRole('provider'); openAuth('register');
+  }
+}
+
 let legalTab='terms';
 function openLegal(which){
   legalTab = which==='privacy'?'privacy':'terms';
@@ -1437,6 +1475,7 @@ function signupSource(){ try{ return localStorage.getItem('tp_src')||''; }catch(
   if(new URLSearchParams(location.search).get('boost') && S.token && S.user && S.user.role==='provider'){
     loadProviderForm(); go('provider'); finishBoostReturn();
   }
+  claimInvite();
   if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 })();
 </script>

@@ -1,0 +1,122 @@
+// TrouvePro — send the presentation campaign to prospected RBQ licence holders.
+//
+// Usage: node scripts/send-outreach.js --dry-run          # print the first message, send nothing
+//        node scripts/send-outreach.js --limit 25         # send to the 25 oldest untouched contacts
+//        node scripts/send-outreach.js --limit 400 --resend  # include contacts already emailed once
+//
+// CASL: every message carries the sender's legal name and postal address, a working reply address
+// and a one-click unsubscribe tied to the contact's own token. Implied consent here is the
+// business contact information published in the RBQ register, which the email states explicitly.
+// Contacts that unsubscribed, bounced or already claimed their listing are excluded by the
+// outreach_sendable view, so re-running the script never re-mails them.
+require('dotenv').config();
+const supabase = require('../db');
+const { sendEmail } = require('../lib/email');
+
+const SITE = (process.env.PUBLIC_URL || 'https://www.mytrouvepro.net').replace(/\/$/, '');
+const POSTAL = process.env.OUTREACH_POSTAL_ADDRESS;      // required: CASL identification
+const REPLY_TO = process.env.OUTREACH_REPLY_TO || 'contact@mytrouvepro.net';
+const LEGAL_NAME = 'Performance Cristal Technologies Avancées S.A. (NEQ 2280629637)';
+const GAP_MS = 1200;                                     // stay well under Resend's rate limit
+
+const esc = s => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Deliberately short: four lines, one button. The hook is that the listing already exists, so the
+// legal minimum (why we have their address, who we are, how to stop) sits in the small print, and
+// the subscription price is stated once — at the paywall it would feel like bait.
+function message(contact) {
+  const en = contact.lang === 'en';
+  const name = esc(contact.business_name || (en ? 'your business' : 'votre entreprise'));
+  const claim = `${SITE}/?claim=${contact.unsubscribe_token}&utm_source=rbq_email`;
+  const stop = `${SITE}/api/outreach/unsubscribe?token=${contact.unsubscribe_token}`;
+  const subject = en
+    ? `${contact.business_name || 'Your business'} is already on TrouvePro`
+    : `${contact.business_name || 'Votre entreprise'} est déjà sur TrouvePro`;
+  const button = `<p style="margin:26px 0"><a href="${claim}" style="background:#0f7c7b;color:#fff;`
+    + `text-decoration:none;padding:13px 22px;border-radius:10px;font-weight:600;display:inline-block">`
+    + (en ? 'See my listing' : 'Voir ma fiche') + `</a></p>`;
+
+  const body = en ? `
+    <p>Hello,</p>
+    <p><strong>${name}</strong> already has a listing on TrouvePro — we built it from the public RBQ
+       licence register. It is live, clients can see it… and <strong>nobody is managing it</strong>.</p>
+    <p>TrouvePro ranks providers by <strong>real proximity</strong>: when someone a few streets away
+       searches for your trade, they see the closest pros first. Not ads — neighbours.</p>
+    <p>Claiming your listing is free and takes two minutes. Staying visible afterwards is
+       $5.49/month for the first 3 months, then $10.66/month, cancel anytime.</p>
+    ${button}`
+    : `
+    <p>Bonjour,</p>
+    <p><strong>${name}</strong> a déjà une fiche sur TrouvePro — créée à partir du registre public des
+       licences RBQ. Elle est en ligne, les clients la voient… et
+       <strong>personne ne la gère</strong>.</p>
+    <p>TrouvePro classe les prestataires par <strong>proximité réelle</strong> : quand quelqu'un à
+       quelques rues cherche votre métier, il voit d'abord les pros les plus proches. Pas des
+       publicités — des voisins.</p>
+    <p>Réclamer votre fiche est gratuit et prend deux minutes. Rester visible ensuite :
+       5,49 $/mois les 3 premiers mois, puis 10,66 $/mois, annulable en tout temps.</p>
+    ${button}`;
+
+  const footer = en ? `
+    <hr style="border:none;border-top:1px solid #ddd;margin:22px 0">
+    <p style="font-size:12px;color:#666">
+      Sent by ${LEGAL_NAME}, ${esc(POSTAL)}.<br>
+      You received this because your business contact information is published in the RBQ licence
+      register. Reply to ${esc(REPLY_TO)} or <a href="${stop}">unsubscribe</a> — one click, no account needed.
+    </p>`
+    : `
+    <hr style="border:none;border-top:1px solid #ddd;margin:22px 0">
+    <p style="font-size:12px;color:#666">
+      Envoyé par ${LEGAL_NAME}, ${esc(POSTAL)}.<br>
+      Vous recevez ce courriel parce que les coordonnées de votre entreprise sont publiées au registre
+      des licences RBQ. Répondez à ${esc(REPLY_TO)} ou
+      <a href="${stop}">désabonnez-vous</a> — un seul clic, aucun compte requis.
+    </p>`;
+
+  const html = `<!doctype html><html lang="${en ? 'en' : 'fr'}"><body style="font-family:system-ui,sans-serif;`
+    + `font-size:15px;line-height:1.5;color:#0a3538;max-width:560px">${body}${footer}</body></html>`;
+  return { subject, html };
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const dry = args.includes('--dry-run');
+  const resend = args.includes('--resend');
+  const limIdx = args.indexOf('--limit');
+  const limit = limIdx >= 0 ? Number(args[limIdx + 1]) : 50;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('--limit must be 1..1000');
+  if (!POSTAL) throw new Error('OUTREACH_POSTAL_ADDRESS is required: CASL needs a postal address in every message');
+  if (!dry && !process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is unset — emails would only print');
+
+  let q = supabase.from('outreach_sendable')
+    .select('id, email, business_name, lang, unsubscribe_token, send_count')
+    .order('id').limit(limit);
+  if (!resend) q = q.eq('send_count', 0);
+  const { data: contacts, error } = await q;
+  if (error) throw error;
+  if (!contacts || !contacts.length) return console.log('nothing to send');
+
+  if (dry) {
+    const m = message(contacts[0]);
+    console.log(`would send to ${contacts.length} contact(s); first one: ${contacts[0].email}\n`);
+    console.log(m.subject + '\n\n' + m.html);
+    return;
+  }
+
+  let sent = 0, failed = 0;
+  for (const c of contacts) {
+    const m = message(c);
+    try {
+      await sendEmail(c.email, m.subject, m.html, { replyTo: REPLY_TO });
+      const upd = await supabase.from('outreach_contacts')
+        .update({ last_sent_at: new Date().toISOString(), send_count: (c.send_count || 0) + 1 })
+        .eq('id', c.id);
+      if (upd.error) console.error('outreach mark sent', c.email, upd.error.message);
+      sent++;
+    } catch (e) { failed++; console.error('send failed', c.email, e.message); }
+    await new Promise(r => setTimeout(r, GAP_MS));
+  }
+  console.log(`outreach: ${sent} sent, ${failed} failed, ${contacts.length} selected`);
+}
+if (require.main === module) main().catch(e => { console.error(e.message); process.exit(1); });
+module.exports = { message };
