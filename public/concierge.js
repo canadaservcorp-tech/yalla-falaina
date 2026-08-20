@@ -115,8 +115,8 @@
   // hand over to the app's own search, so proximity, radius and geolocation behave identically
   function startSearch(service){
     const sel = document.getElementById('fservice');
-    const id = professionId(service);
-    if(sel && id) sel.value = id;
+    // an unknown trade must not inherit whatever profession was selected before
+    if(sel) sel.value = professionId(service);
     if(window.go) go('search');
     if(window.doSearch) doSearch();
   }
