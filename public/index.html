@@ -279,6 +279,16 @@
   <div class="legal" id="legalbody"></div>
 </div></section></div>
 
+<div id="view-faq" class="view"><section class="pad"><div class="wrap">
+  <div class="toolbar">
+    <h1 style="font-size:24px;margin:0" id="faqtitle">Foire aux questions</h1>
+    <span class="spacer" style="flex:1"></span>
+    <button class="btn btn-ghost" onclick="go('search')" id="faqback">← Retour</button>
+  </div>
+  <div class="legal" id="faqbody"></div>
+  <p class="center muted" style="font-size:13px" id="faqcontact"></p>
+</div></section></div>
+
 <div id="view-favorites" class="view"><section class="pad"><div class="wrap">
   <div class="toolbar">
     <h1 style="font-size:24px;margin:0" id="favtitle">Favoris</h1>
@@ -387,10 +397,12 @@
   <span id="footco">TrouvePro — Près de toi · Near To You · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC</span>
   <a href="/terms" id="footterms" onclick="openLegal('terms');return false">Conditions d'utilisation</a>
   <a href="/privacy" id="footprivacy" onclick="openLegal('privacy');return false">Politique de confidentialité</a>
+  <a href="/faq" id="footfaq" onclick="openFaq();return false">Aide</a>
   <a href="https://www.instagram.com/mytrouvepro" id="footig" target="_blank" rel="noopener noreferrer">Instagram</a>
 </div></footer>
 
 <script src="/legal.js"></script>
+<script src="/faq.js"></script>
 <script>
 const S = { lang:'fr', token:localStorage.getItem('tp_token')||null, user:null, catalog:[], mode:'login', role:'seeker', favs:new Set() };
 try{ S.user = JSON.parse(localStorage.getItem('tp_user')||'null'); }catch(e){}
@@ -453,6 +465,8 @@ const T = {
     claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.',
     pwhint:'Mot de passe : 10 caractères minimum.',
     terms:"Conditions d'utilisation", privacy:'Politique de confidentialité', legalback:'← Retour',
+    faq:'Aide', faqtitle:'Foire aux questions',
+    faqcontact:'Vous ne trouvez pas votre réponse ? Écrivez-nous à <a href="mailto:contact@mytrouvepro.net">contact@mytrouvepro.net</a>.',
     accept:`J'ai lu et j'accepte les <a href="/terms" target="_blank">conditions d'utilisation</a> et la <a href="/privacy" target="_blank">politique de confidentialité</a>. Je comprends que TrouvePro met en relation et ne vérifie pas les prestataires.`,
     acceptreq:"Vous devez accepter les conditions d'utilisation.",
     foot:'TrouvePro — Près de toi · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC' },
@@ -513,6 +527,8 @@ const T = {
     claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.',
     pwhint:'Password: 10 characters minimum.',
     terms:'Terms of Use', privacy:'Privacy Policy', legalback:'← Back',
+    faq:'Help', faqtitle:'Frequently asked questions',
+    faqcontact:'Can\u2019t find your answer? Write to <a href="mailto:contact@mytrouvepro.net">contact@mytrouvepro.net</a>.',
     accept:`I have read and accept the <a href="/terms" target="_blank">Terms of Use</a> and the <a href="/privacy" target="_blank">Privacy Policy</a>. I understand TrouvePro connects people and does not verify providers.`,
     acceptreq:'You must accept the Terms of Use.',
     foot:'TrouvePro — Near To You · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC' },
@@ -527,7 +543,8 @@ function api(path, opts={}){
 function go(v){
   document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
   document.getElementById('view-'+v).classList.add('on');
-  if(v!=='legal' && (location.pathname==='/terms'||location.pathname==='/privacy')) history.replaceState(null,'','/');
+  const onStaticPath = ['/terms','/privacy','/faq'].includes(location.pathname);
+  if(v!=='legal' && v!=='faq' && onStaticPath) history.replaceState(null,'','/');
   window.scrollTo(0,0);
 }
 
@@ -582,8 +599,13 @@ function setLang(l){
   document.getElementById('tabterms').textContent=t('terms');
   document.getElementById('tabprivacy').textContent=t('privacy');
   document.getElementById('legalback').textContent=t('legalback');
+  document.getElementById('footfaq').textContent=t('faq');
+  document.getElementById('faqtitle').textContent=t('faqtitle');
+  document.getElementById('faqback').textContent=t('legalback');
+  document.getElementById('faqcontact').innerHTML=t('faqcontact');
   document.getElementById('acceptlbl').innerHTML=t('accept');
   if(document.getElementById('view-legal').classList.contains('on')) renderLegal();
+  if(document.getElementById('view-faq').classList.contains('on')) renderFaq();
   document.getElementById('rlbllang').textContent=t('flang');
   document.getElementById('rlblnow').textContent=t('fnow');
   document.getElementById('lb_now').textContent=t('lbnow');
@@ -1286,6 +1308,12 @@ function openLegal(which){
   renderLegal(); go('legal');
   history.replaceState(null,'', legalTab==='privacy'?'/privacy':'/terms');
 }
+function openFaq(){ renderFaq(); go('faq'); history.replaceState(null,'','/faq'); }
+function renderFaq(){
+  const F=window.FAQ, box=document.getElementById('faqbody');
+  if(!F){ box.textContent='—'; return; }
+  box.innerHTML = F[S.lang].map(([q,a])=>`<h3>${q}</h3><p>${a}</p>`).join('');
+}
 function renderLegal(){
   const L=window.LEGAL, box=document.getElementById('legalbody');
   if(!L){ box.textContent='—'; return; }
@@ -1299,6 +1327,7 @@ function renderLegal(){
   setLang('fr'); refreshNav(); loadCatalog();
   if(location.pathname==='/terms') openLegal('terms');
   if(location.pathname==='/privacy') openLegal('privacy');
+  if(location.pathname==='/faq') openFaq();
   const sub=new URLSearchParams(location.search).get('sub');
   if(sub && S.token && S.user){
     if(S.user.role==='provider'){ loadProviderForm(); go('provider'); }
