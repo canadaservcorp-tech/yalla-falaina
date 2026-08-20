@@ -384,6 +384,10 @@ const T = {
     unclaimed:'Fiche RBQ non réclamée — est-ce vous ?', notavail:'Non disponible',
     offline:'Hors ligne', offlinehint:"Ce prestataire n'a pas d'abonnement actif : distance masquée, contact impossible.",
     hours:'Heures', prices:'Tarifs', details:'Voir la fiche',
+    rvtitle:'Avis', rvnone:'Aucun avis pour le moment.', rvwrite:'Écrire un avis',
+    rvrating:'Note (1 à 5)', rvph:'Partagez votre expérience…', rvsubmit:'Publier', rvsaved:'Avis publié ✓',
+    rvreply:'Réponse du prestataire', rvreplyph:'Répondre à cet avis…', rvreplysend:'Répondre',
+    rvreport:'Signaler cet avis', rvreported:'Signalé — merci',
     contactlocked:'Coordonnées visibles seulement aux membres connectés, pour les prestataires abonnés.',
     lbprice:'Tarifs (ex. 80 $/h — estimation gratuite)', lbcmail:'Courriel affiché', lbcphone:'Mobile affiché',
     lbportfolio:'Photos de vos réalisations (max 6)',
@@ -423,6 +427,10 @@ const T = {
     unclaimed:'Unclaimed RBQ listing — is this you?', notavail:'Not available',
     offline:'Offline', offlinehint:'This provider has no active subscription: distance hidden, contact unavailable.',
     hours:'Hours', prices:'Rates', details:'View profile',
+    rvtitle:'Reviews', rvnone:'No reviews yet.', rvwrite:'Write a review',
+    rvrating:'Rating (1–5)', rvph:'Share your experience…', rvsubmit:'Submit', rvsaved:'Review posted ✓',
+    rvreply:'Provider reply', rvreplyph:'Reply to this review…', rvreplysend:'Reply',
+    rvreport:'Report this review', rvreported:'Reported — thank you',
     contactlocked:'Contact details are shown to logged-in members only, for subscribed providers.',
     lbprice:'Rates (e.g. $80/h — free estimate)', lbcmail:'Public email', lbcphone:'Public mobile',
     lbportfolio:'Photos of your work (max 6)',
@@ -737,8 +745,59 @@ async function openPro(id){
       + (p.price_note?`<p><b>${t('prices')} :</b> ${esc(p.price_note)}</p>`:'')
       + (p.hours_note?`<p><b>${t('hours')} :</b> ${esc(p.hours_note)}</p>`:'')
       + contact
-      + (shots?`<div class="tags" style="margin-top:8px">${shots}</div>`:'');
+      + (shots?`<div class="tags" style="margin-top:8px">${shots}</div>`:'')
+      + `<div id="reviews" style="margin-top:14px"></div>`;
+    loadReviews(id);
   }catch(e){ box.textContent=e.message; }
+}
+
+/* ---------- reviews (a seeker who contacted the provider may rate them once) ---------- */
+async function loadReviews(providerId){
+  const box=document.getElementById('reviews'); if(!box) return;
+  const mine = S.user && S.user.role==='provider' && S.user.id===Number(providerId);
+  try{
+    const j=await api('/api/reviews/'+providerId);
+    const list=(j.reviews||[]).map(r=>{
+      const stars='★'.repeat(r.rating)+'☆'.repeat(5-r.rating);
+      return `<div style="border-top:1px solid #e8e3dc;padding:8px 0">`
+        + `<b>${esc(r.author)}</b> <span style="color:#C58A2E">${stars}</span>`
+        + (r.body?`<p style="margin:4px 0">${esc(r.body)}</p>`:'')
+        + (r.provider_reply
+            ? `<p class="muted" style="margin:4px 0"><b>${t('rvreply')} :</b> ${esc(r.provider_reply)}</p>`
+            : mine ? `<div class="row" style="margin-top:4px"><input id="rvrep${r.id}" placeholder="${t('rvreplyph')}" maxlength="1000">`
+                     + `<button class="btn btn-ghost" onclick="replyReview(${r.id},${providerId})">${t('rvreplysend')}</button></div>` : '')
+        + (S.token && !mine ? `<button class="btn btn-ghost" style="font-size:12px" onclick="reportReview(${r.id})">${t('rvreport')}</button>`:'')
+        + `</div>`;
+    }).join('');
+    const form = (S.token && S.user && S.user.role==='seeker')
+      ? `<div style="border-top:1px solid #e8e3dc;padding-top:8px;margin-top:8px">`
+        + `<b>${t('rvwrite')}</b>`
+        + `<div class="row"><label>${t('rvrating')}<select id="rvrating">`
+        + [5,4,3,2,1].map(n=>`<option value="${n}">${n}</option>`).join('')
+        + `</select></label></div>`
+        + `<textarea id="rvbody" rows="3" placeholder="${t('rvph')}" maxlength="1000"></textarea>`
+        + `<button class="btn btn-primary" onclick="submitReview(${providerId})">${t('rvsubmit')}</button>`
+        + `<p class="muted" id="rverr"></p></div>` : '';
+    box.innerHTML=`<h3>${t('rvtitle')}</h3>`+(list||`<p class="muted">${t('rvnone')}</p>`)+form;
+  }catch(e){ box.innerHTML=`<h3>${t('rvtitle')}</h3><p class="muted">${t('rvnone')}</p>`; }
+}
+async function submitReview(providerId){
+  const err=document.getElementById('rverr'); err.textContent='';
+  try{
+    await api('/api/reviews',{method:'POST',body:JSON.stringify({
+      providerId, rating:Number(document.getElementById('rvrating').value),
+      body:document.getElementById('rvbody').value })});
+    err.textContent=t('rvsaved'); loadReviews(providerId);
+  }catch(e){ err.textContent=e.message; }
+}
+async function replyReview(id,providerId){
+  const el=document.getElementById('rvrep'+id); if(!el||!el.value.trim()) return;
+  try{ await api('/api/reviews/'+id+'/reply',{method:'POST',body:JSON.stringify({reply:el.value})}); loadReviews(providerId); }
+  catch(e){ alert(e.message); }
+}
+async function reportReview(id){
+  try{ await api('/api/reviews/'+id+'/report',{method:'POST',body:JSON.stringify({reason:'review'})}); alert(t('rvreported')); }
+  catch(e){ alert(e.message); }
 }
 
 /* ---------- Phase 2/3: chat, photos, subscription, reports ---------- */
