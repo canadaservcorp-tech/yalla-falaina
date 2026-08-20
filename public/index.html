@@ -521,7 +521,7 @@ function setLang(l){
   document.getElementById('notiftitle').textContent=t('notifs');
   document.getElementById('notifback').textContent=t('chatback');
   document.getElementById('notifread').textContent=t('notifread');
-  document.getElementById('notifpref').textContent=S.notifEmail===false?t('notifon'):t('notifoff');
+  notifPrefLabel();
   document.getElementById('chattitle').textContent=t('messages');
   document.getElementById('chatback').textContent=t('chatback');
   document.getElementById('btnsend').textContent=t('send');
@@ -841,13 +841,18 @@ async function openFavorites(){
   }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
 }
 /* ---------- notifications ---------- */
+// the toggle offers the opposite of the current setting, so it must follow it
+function notifPrefLabel(){
+  const b=document.getElementById('notifpref'); if(!b) return;
+  b.textContent = S.notifEmail===false ? t('notifon') : t('notifoff');
+}
 function showUnread(n){
   const b=document.getElementById('notifbadge'); if(!b) return;
   b.textContent=n>99?'99+':String(n);
   b.style.display=n>0?'inline-block':'none';
 }
 async function loadUnread(){
-  try{ const j=await api('/api/notifications'); S.notifEmail=j.notify_email; showUnread(Number(j.unread)||0); }
+  try{ const j=await api('/api/notifications'); S.notifEmail=j.notify_email; notifPrefLabel(); showUnread(Number(j.unread)||0); }
   catch(e){ showUnread(0); }
 }
 async function openNotifications(){
@@ -857,6 +862,7 @@ async function openNotifications(){
   try{
     const j=await api('/api/notifications');
     const rows=j.notifications||[];
+    S.notifEmail=j.notify_email; notifPrefLabel();
     showUnread(Number(j.unread)||0);
     empty.textContent=t('notifnone');
     empty.style.display=rows.length?'none':'block';
@@ -878,7 +884,7 @@ async function toggleNotifEmail(){
     const j=await api('/api/notifications/email-pref',{method:'POST',body:JSON.stringify({enabled:enable})});
     S.notifEmail=j.notify_email;
   }catch(e){ btn.title=e.message; }
-  finally{ btn.disabled=false; btn.textContent=S.notifEmail===false?t('notifon'):t('notifoff'); }
+  finally{ btn.disabled=false; notifPrefLabel(); }
 }
 
 async function unfav(id){
