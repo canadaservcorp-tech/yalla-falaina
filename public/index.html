@@ -788,7 +788,7 @@ async function loadFavIds(){
 }
 async function toggleFavorite(id){
   const b=document.getElementById('btnfav'); const on=S.favs.has(Number(id));
-  if(b) b.disabled=true;
+  if(b){ b.disabled=true; b.title=''; }
   try{
     if(on){ await api('/api/favorites/'+id,{method:'DELETE'}); S.favs.delete(Number(id)); }
     else { await api('/api/favorites',{method:'POST',body:JSON.stringify({providerId:Number(id)})}); S.favs.add(Number(id)); }
