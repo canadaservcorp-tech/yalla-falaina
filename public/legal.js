@@ -4,6 +4,8 @@ window.LEGAL = {
   company: {
     name: 'Performance Cristal Technologies Avancées S.A.',
     neq: '2280629637',
+    gst: '783132566 RT0001',
+    qst: '4054025241 TQ0001',
     city: 'Laval, Québec, Canada',
     email: 'contact@mytrouvepro.net',
   },
@@ -13,7 +15,7 @@ window.LEGAL = {
     updated: 'Dernière mise à jour : 18 août 2026 (version 2026-08-18)',
     terms: [
       ['1. Qui nous sommes',
-        `TrouvePro est exploité par Performance Cristal Technologies Avancées S.A. (NEQ 2280629637), Laval, Québec. En utilisant TrouvePro, vous acceptez les présentes conditions.`],
+        `TrouvePro est exploité par Performance Cristal Technologies Avancées S.A. (NEQ 2280629637), Laval, Québec. Numéros de taxes : TPS 783132566 RT0001 · TVQ 4054025241 TQ0001. En utilisant TrouvePro, vous acceptez les présentes conditions.`],
       ['2. Ce que TrouvePro est — et n\'est pas',
         `TrouvePro est un service de mise en relation par proximité : nous affichons les prestataires les plus proches de vous et permettons de les contacter. <strong>Nous ne sommes pas un vérificateur, un employeur, un mandataire ni un garant des prestataires.</strong> Nous ne certifions pas leurs compétences, leurs assurances, leurs permis ni la qualité de leurs travaux, et nous ne sommes pas partie au contrat conclu entre un chercheur et un prestataire. Il vous appartient de vérifier vous-même qu'un prestataire convient à votre besoin (licence, assurance, références, prix).`],
       ['3. Comptes',
@@ -83,7 +85,7 @@ window.LEGAL = {
     updated: 'Last updated: 18 August 2026 (version 2026-08-18)',
     terms: [
       ['1. Who we are',
-        `TrouvePro is operated by Performance Cristal Technologies Avancées S.A. (NEQ 2280629637), Laval, Québec, Canada. By using TrouvePro you agree to these Terms.`],
+        `TrouvePro is operated by Performance Cristal Technologies Avancées S.A. (NEQ 2280629637), Laval, Québec, Canada. Tax registration numbers: GST 783132566 RT0001 · QST 4054025241 TQ0001. By using TrouvePro you agree to these Terms.`],
       ['2. What TrouvePro is — and is not',
         `TrouvePro is a proximity-based connection service: we show the providers nearest to you and let you contact them. <strong>We are not a verifier, employer, agent or guarantor of any provider.</strong> We do not certify skills, insurance, permits or the quality of any work, and we are not a party to the agreement between a seeker and a provider. You are responsible for satisfying yourself that a provider is suitable (licence, insurance, references, price).`],
       ['3. Accounts',
