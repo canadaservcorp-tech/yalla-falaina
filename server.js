@@ -2,7 +2,9 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const sec = require('./lib/security');
+const seo = require('./lib/seo');
 
 const need = ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const k of need) if (!process.env[k]) { console.error(`FATAL: missing env ${k}`); process.exit(1); }
@@ -24,7 +26,11 @@ app.use((req, res, next) => {
   const route = req.originalUrl.split('?')[0];
   return (UPLOAD_PATHS.some(re => re.test(route)) ? uploadJson : smallJson)(req, res, next);
 });
+app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonical home URL
 app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', index: false }));
+
+app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
+app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api', require('./routes/catalog'));       // GET /api/catalog
@@ -50,7 +56,15 @@ app.get('/api/health', (_req, res) => res.json({
   moderation: Boolean(process.env.GOOGLE_VISION_API_KEY),
 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
-app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// the SPA is a single file, so give crawlers per-route <head> metadata on the way out
+const SHELL = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+app.get('*', (req, res) => {
+  const route = seo.INDEXABLE.includes(req.path) ? req.path : '/';
+  const lang = req.query.lang === 'en' ? 'en' : 'fr';
+  // function replacer: prices in the copy ("80 $/h") would otherwise be read as $-patterns
+  res.type('html').send(SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang))
+    .replace('<html lang="fr">', `<html lang="${lang}">`));
+});
 
 // last resort: log the detail, never leak internals (stack traces, SQL) to clients
 app.use((err, _req, res, _next) => {
