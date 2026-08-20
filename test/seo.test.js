@@ -59,6 +59,35 @@ test('social cards describe the page, not just the site', async () => {
   assert.match(body, /<meta name="twitter:card"/);
 });
 
+test('link previews use the wide card of the language being served', async () => {
+  const fr = await html('/');
+  assert.match(fr, /<meta property="og:image" content="[^"]+\/og\/share-fr\.png">/);
+  assert.match(fr, /<meta name="twitter:card" content="summary_large_image">/);
+  assert.match(fr, /<meta property="og:image:width" content="1200">/);
+  assert.match(fr, /<meta property="og:image:height" content="630">/);
+  assert.match(fr, /<meta property="og:image:alt" content="[^"]*près de chez vous[^"]*">/);
+  assert.match(await html('/?lang=en'), /og:image" content="[^"]+\/og\/share-en\.png"/);
+});
+
+test('both share cards are actually served, at the declared size', async () => {
+  for (const l of ['fr', 'en']) {
+    const r = await fetch(h.base + seo.SHARE_IMAGE[l].path);
+    assert.equal(r.status, 200, l);
+    assert.equal(r.headers.get('content-type'), 'image/png');
+    const png = Buffer.from(await r.arrayBuffer());
+    assert.equal(png.readUInt32BE(16), 1200, `${l} width`);      // IHDR
+    assert.equal(png.readUInt32BE(20), 630, `${l} height`);
+  }
+});
+
+// utm_* tags on shared links must not fork the page into a second indexable URL.
+test('campaign parameters leave the canonical alone', async () => {
+  const body = await html('/?utm_source=instagram&utm_medium=social');
+  assert.match(body, /<link rel="canonical" href="[^"?]+\/">/);
+  const head = body.slice(0, body.indexOf('</head>'));
+  assert.ok(!/(canonical|hreflang|og:url)[^>]*utm_/.test(head), 'no campaign parameter in an indexable URL');
+});
+
 const structured = async (p = '/') => {
   const body = await html(p);
   return JSON.parse((body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/) || [])[1]);

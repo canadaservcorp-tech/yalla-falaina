@@ -769,7 +769,7 @@ async function submitAuth(){
     if(S.mode==='register'){
       const name=document.getElementById('a_name').value.trim(), phone=document.getElementById('a_phone').value.trim();
       if(!document.getElementById('a_terms').checked){ er.textContent=t('acceptreq'); return; }
-      await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password:pass,name,phone,role:S.role,acceptTerms:true})});
+      await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password:pass,name,phone,role:S.role,acceptTerms:true,source:signupSource()})});
       okEl.textContent=t('checkmail');
     }else{
       const j=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password:pass})});
@@ -1345,7 +1345,19 @@ function renderLegal(){
     + sections.map(([h,body])=>`<h3>${h}</h3><p>${body}</p>`).join('');
 }
 
+// First touch wins: the campaign that brought someone here, even if they sign up days later.
+function rememberSource(){
+  try{
+    if(localStorage.getItem('tp_src')) return;
+    const q=new URLSearchParams(location.search);
+    const src=(q.get('utm_source')||'').toLowerCase().replace(/[^a-z0-9_.-]/g,'').slice(0,40);
+    if(src) localStorage.setItem('tp_src',src);
+  }catch(e){}
+}
+function signupSource(){ try{ return localStorage.getItem('tp_src')||''; }catch(e){ return ''; } }
+
 (function(){
+  rememberSource();
   const asked=new URLSearchParams(location.search).get('lang');
   const saved=(()=>{ try{ return localStorage.getItem('tp_lang'); }catch(e){ return null; } })();
   setLang([asked,saved].includes('en')?'en':'fr'); refreshNav(); loadCatalog();

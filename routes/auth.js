@@ -25,6 +25,8 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     const { password, role } = req.body;
     const name = sec.clean(req.body.name, 80);
     const phone = sec.clean(req.body.phone, 30) || '';
+    // campaign attribution: a short slug from the visitor's first utm_source, nothing else
+    const signup_source = (sec.clean(req.body.source, 40) || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '') || null;
     if (!sec.isEmail(email) || !name) return res.status(400).json({ error: 'Missing or invalid fields' });
     const pwProblem = sec.passwordProblem(password);
     if (pwProblem) return res.status(400).json({ error: pwProblem });
@@ -45,7 +47,7 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     const verify_token = crypto.randomBytes(32).toString('hex');
     const { data: user, error } = await supabase.from('users')
       .insert({
-        email, password_hash, name, phone, role, verify_token,
+        email, password_hash, name, phone, role, verify_token, signup_source,
         terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION,
       })
       .select('id, email, name, role').single();
