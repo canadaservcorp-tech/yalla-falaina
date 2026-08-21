@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const sec = require('./lib/security');
 const seo = require('./lib/seo');
+const analytics = require('./lib/analytics');
 
 const need = ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const k of need) if (!process.env[k]) { console.error(`FATAL: missing env ${k}`); process.exit(1); }
@@ -56,6 +57,7 @@ app.get('/api/health', (_req, res) => res.json({
   paywall: process.env.PAYWALL_ENFORCED === 'true',
   moderation: Boolean(process.env.GOOGLE_VISION_API_KEY),
   concierge: Boolean(process.env.ANTHROPIC_API_KEY),
+  analytics: Boolean(analytics.measurementId()),
 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 // the SPA is a single file, so give crawlers per-route <head> metadata on the way out
@@ -65,6 +67,7 @@ app.get('*', (req, res) => {
   const lang = req.query.lang === 'en' ? 'en' : 'fr';
   // function replacer: prices in the copy ("80 $/h") would otherwise be read as $-patterns
   res.type('html').send(SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang))
+    .replace('<!--analytics-->', () => analytics.head())
     .replace('<html lang="fr">', `<html lang="${lang}">`));
 });
 

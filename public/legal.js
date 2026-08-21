@@ -74,7 +74,10 @@ window.LEGAL = {
       ['9. Sécurité',
         `Mots de passe hachés (bcrypt), chiffrement en transit (HTTPS/HSTS), authentification par jeton signé, limitation du nombre de tentatives, en-têtes de sécurité stricts et accès restreint aux données de production. Aucun système n'est infaillible; en cas d'incident de confidentialité présentant un risque de préjudice sérieux, nous informerons les personnes concernées et la Commission d'accès à l'information.`],
       ['10. Témoins (cookies)',
-        `TrouvePro n'utilise pas de témoins publicitaires ni de traceurs tiers. Votre session est conservée localement dans votre navigateur (stockage local) uniquement pour vous garder connecté.`],
+        `TrouvePro n'utilise pas de témoins publicitaires. Votre session est conservée localement dans votre navigateur (stockage local) uniquement pour vous garder connecté. `
+        + `Nous utilisons Google Analytics (Google Ireland/LLC) pour mesurer la fréquentation du site, `
+        + `uniquement si vous l'acceptez dans la bannière affichée à votre première visite : aucun script de mesure n'est chargé avant votre consentement, `
+        + `et votre refus est conservé dans votre navigateur. Ces statistiques sont agrégées, l'adresse IP est anonymisée, et vous pouvez changer d'avis en effaçant les données du site dans votre navigateur.`],
       ['11. Mineurs',
         `Le service n'est pas destiné aux personnes de moins de 18 ans.`],
       ['12. Modifications',
@@ -146,7 +149,10 @@ window.LEGAL = {
       ['9. Security',
         `Passwords are hashed (bcrypt), traffic is encrypted (HTTPS/HSTS), sessions use signed tokens, attempts are rate-limited, strict security headers are enforced, and access to production data is restricted. No system is perfect; in the event of a confidentiality incident presenting a risk of serious injury we will notify the people concerned and the Commission d'accès à l'information.`],
       ['10. Cookies',
-        `TrouvePro uses no advertising cookies and no third-party trackers. Your session is stored locally in your browser (local storage) solely to keep you logged in.`],
+        `TrouvePro uses no advertising cookies. Your session is stored locally in your browser (local storage) solely to keep you logged in. `
+        + `We use Google Analytics (Google Ireland/LLC) to measure site traffic, but only if you accept it in the banner shown on your first visit: `
+        + `no measurement script is loaded before you consent, and a refusal is remembered in your browser. `
+        + `The statistics are aggregated, IP addresses are anonymised, and you can change your mind by clearing this site's data in your browser.`],
       ['11. Minors',
         `The service is not intended for people under 18.`],
       ['12. Changes',
