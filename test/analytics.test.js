@@ -67,6 +67,13 @@ test('accepting loads the tag, refusing does not, and the answer is remembered',
   assert.match(SHELL, /gtag\('config', id, \{ anonymize_ip:true \}\)/);
 });
 
+test('the visible bar makes room instead of covering the footer and the concierge', () => {
+  assert.match(SHELL, /body\.cookiebar-open\{padding-bottom:var\(--cookiebar-h,0px\)\}/);
+  assert.match(SHELL, /body\.cookiebar-open #cc\{bottom:calc\(16px \+ var\(--cookiebar-h,0px\)\)\}/);
+  assert.match(SHELL, /classList\.add\('cookiebar-open'\)/);
+  assert.match(SHELL, /classList\.remove\('cookiebar-open'\)/);
+});
+
 test('the consent copy exists in French and in English', () => {
   for (const s of ['Google Analytics', 'Accepter', 'Refuser', 'Accept', 'Decline']) {
     assert.ok(SHELL.includes(s), s);

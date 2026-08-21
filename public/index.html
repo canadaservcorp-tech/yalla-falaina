@@ -100,6 +100,10 @@
     background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh2);padding:14px 16px;font-size:13px;color:var(--ink);max-width:760px;margin:auto}
   .cookiebar p{margin:0;flex:1 1 260px}
   .cookiebar .btn{padding:9px 14px;font-size:13px}
+  /* the bar is fixed over the bottom of the viewport, so while it is up the page ends higher and
+     the concierge bubble sits above it — otherwise both are unreachable on a phone */
+  body.cookiebar-open{padding-bottom:var(--cookiebar-h,0px)}
+  body.cookiebar-open #cc{bottom:calc(16px + var(--cookiebar-h,0px))}
   .chatwrap{display:grid;grid-template-columns:250px 1fr;gap:14px;align-items:start}
   .convlist{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px;box-shadow:var(--sh2);max-height:520px;overflow:auto}
   .conv{border:0;background:transparent;text-align:left;width:100%;padding:10px;border-radius:11px;cursor:pointer;font-family:Inter;font-size:14px;font-weight:600;color:var(--ink)}
@@ -674,6 +678,7 @@ function setLang(l){
   document.getElementById('cookietxt').textContent=t('cookietxt');
   document.getElementById('cookieok').textContent=t('cookieok');
   document.getElementById('cookieno').textContent=t('cookieno');
+  cookiebarRoom();   // the translated text can be one line longer or shorter
   document.getElementById('footco').textContent=t('foot');
   document.getElementById('footterms').textContent=t('terms');
   document.getElementById('footprivacy').textContent=t('privacy');
@@ -720,7 +725,14 @@ function loadAnalytics(){
 function setAnalyticsConsent(answer){
   try{ localStorage.setItem('tp_analytics',answer); }catch(e){}
   document.getElementById('cookiebar').style.display='none';
+  document.body.classList.remove('cookiebar-open');
   if(answer==='yes') loadAnalytics();
+}
+// the bar wraps to two or three lines on a phone, so its height is measured rather than assumed
+function cookiebarRoom(){
+  const bar=document.getElementById('cookiebar');
+  if(!document.body.classList.contains('cookiebar-open')) return;
+  document.body.style.setProperty('--cookiebar-h',(bar.offsetHeight+24)+'px');
 }
 function startAnalytics(){
   if(!window.TP_GA_ID) return;               // no measurement id configured: nothing to consent to
@@ -728,6 +740,9 @@ function startAnalytics(){
   if(c==='yes') return loadAnalytics();
   if(c==='no') return;
   document.getElementById('cookiebar').style.display='flex';
+  document.body.classList.add('cookiebar-open');
+  cookiebarRoom();
+  addEventListener('resize',cookiebarRoom);
 }
 
 // A keyword and a picked service would fight over the same query, so typing one drops the other.
