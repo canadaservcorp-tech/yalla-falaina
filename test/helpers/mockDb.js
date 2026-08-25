@@ -16,7 +16,7 @@ function createMockDb() {
   function makeBuilder(table) {
     const b = {};
     let op = 'select';
-    ['select', 'eq', 'neq', 'or', 'ilike', 'in', 'gte', 'lte', 'gt', 'lt',
+    ['select', 'eq', 'neq', 'not', 'is', 'or', 'ilike', 'in', 'gte', 'lte', 'gt', 'lt',
       'contains', 'match', 'order', 'limit', 'range'].forEach(m => { b[m] = () => b; });
     ['insert', 'update', 'upsert', 'delete'].forEach(m => {
       b[m] = payload => { op = m; writes.push({ table, op: m, payload }); return b; };

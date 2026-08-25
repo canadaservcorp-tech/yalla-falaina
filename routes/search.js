@@ -65,6 +65,7 @@ router.get('/', async (req, res) => {
       claimed: r.claimed !== false,                 // unclaimed RBQ seeds show but can't be contacted
       subscribed: r.subscribed === true,
       boosted: r.boosted === true,                  // paid top placement — ordering only
+      founding: r.founding === true,                // one of the first 50 paying providers
       contactable: r.contactable !== undefined ? r.contactable : true,
       // offline providers get no distance at all — the SQL returns null for them
       distance_label: r.distance_m == null ? null : approx(r.distance_m, lang),

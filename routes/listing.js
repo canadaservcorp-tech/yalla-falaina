@@ -8,6 +8,7 @@ const supabase = require('../db');
 const sec = require('../lib/security');
 const page = require('../lib/claim-page');
 const funnel = require('../lib/funnel');
+const foundingOffer = require('../lib/founding');
 const router = express.Router();
 
 const TOKEN = /^[a-f0-9]{32}$/;
@@ -36,7 +37,8 @@ router.get('/:licence', sec.limits.api, async (req, res) => {
       // fire and forget: a slow insert must not delay the page
       funnel.track('landing', { licence, source: token ? 'rbq_email' : (req.query.utm_source || null) });
     }
-    res.type('html').send(page.render(found, { lang, token }));
+    const founding = found.claimed ? null : await foundingOffer.status().catch(() => null);
+    res.type('html').send(page.render(found, { lang, token, founding }));
   } catch (e) {
     console.error('claim landing', e);
     res.status(500).type('html').send(notFound());
