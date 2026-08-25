@@ -92,20 +92,17 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
       try { resource = await pp('GET', `/v1/billing/subscriptions/${encodeURIComponent(subId)}`); }
       catch (e) { console.error('paypal renewal lookup', e.message); }
     }
-    const patch = ev.accountPatch(type, resource);
-    if (patch) {
-      const custom = String(resource.custom_id || r.custom_id || r.custom || '');
-      if (subId && !isRenewal) patch.paypal_subscription_id = subId;
-      if (sec.isId(custom)) {
-        sec.dropUserFromCache(custom);
-        await supabase.from('users').update(patch).eq('id', Number(custom));
-      } else if (subId) {
-        const { data: u } = await supabase.from('users')
-          .select('id').eq('paypal_subscription_id', subId).maybeSingle();
-        if (u) {
-          sec.dropUserFromCache(String(u.id));
-          await supabase.from('users').update(patch).eq('id', u.id);
-        }
+    const custom = String(resource.custom_id || r.custom_id || r.custom || '');
+    const q = supabase.from('users').select('id, subscription_period_end');
+    const { data: user } = sec.isId(custom)
+      ? await q.eq('id', Number(custom)).maybeSingle()
+      : subId ? await q.eq('paypal_subscription_id', subId).maybeSingle() : { data: null };
+    if (user) {
+      const patch = ev.accountPatch(type, resource, new Date(), user.subscription_period_end);
+      if (patch) {
+        if (subId && !isRenewal) patch.paypal_subscription_id = subId;
+        sec.dropUserFromCache(String(user.id));
+        await supabase.from('users').update(patch).eq('id', user.id);
       }
     }
     res.json({ received: true });
