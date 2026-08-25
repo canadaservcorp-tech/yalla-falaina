@@ -7,6 +7,7 @@ const sec = require('../lib/security');
 const boost = require('./boost');
 const ev = require('../lib/subscription-events');
 const funnel = require('../lib/funnel');
+const founding = require('../lib/founding');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
@@ -105,7 +106,10 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
         if (subId && !isRenewal) patch.paypal_subscription_id = subId;
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
-        if (patch.subscription_status === 'active') funnel.track('subscribed', { userId: user.id });
+        if (patch.subscription_status === 'active') {
+          funnel.track('subscribed', { userId: user.id });
+          await founding.assign(user.id);   // a place is taken by a payment, not by a signup
+        }
       }
     }
     res.json({ received: true });

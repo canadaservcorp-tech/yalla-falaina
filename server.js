@@ -31,6 +31,14 @@ app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonica
 app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', index: false }));
 
 app.use('/fiche', require('./routes/listing')); // per-listing claim landing page (campaign target)
+app.use('/verification', require('./routes/verify')); // free RBQ licence verifier (public, no account)
+
+const directory = require('./routes/directory');
+app.use('/services', directory);                  // one crawlable page per trade x city
+app.get('/sitemap-services.xml', async (_req, res) => {
+  try { res.type('application/xml').send(await directory.sitemap()); }
+  catch (e) { console.error('sitemap-services', e); res.status(500).type('text/plain').send('unavailable'); }
+});
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
@@ -51,6 +59,7 @@ app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/report', require('./routes/report'));
 app.use('/api/claim', require('./routes/claim'));    // claim an unclaimed RBQ seed listing
 app.use('/api/outreach', require('./routes/outreach')); // marketing list opt-out (CASL)
+app.use('/api/founding', require('./routes/founding')); // how many founding places are really taken
 app.use('/api/concierge', require('./routes/concierge')); // on-site AI assistant
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either
