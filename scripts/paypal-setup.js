@@ -2,7 +2,9 @@
 // PAYPAL_PLAN_ID / PAYPAL_WEBHOOK_ID for the environment.
 // Prices are grossed up so that ~$10/month is left after PayPal's fee (2.9% + $0.30 on the
 // tax-inclusive amount), and GST+QST (14.975%) is added on top of the price by PayPal.
-// Usage: PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... PUBLIC_URL=https://... node scripts/paypal-setup.js
+// Re-runnable: an existing product is reused, and --plan-only leaves the webhook alone
+// (handy when the live plan has to be replaced because its price drifted from the site).
+// Usage: PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... PUBLIC_URL=https://... node scripts/paypal-setup.js [--plan-only]
 const { configured, pp, BASE } = require('../lib/paypal');
 
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
@@ -17,13 +19,19 @@ const EVENTS = [
   'BILLING.SUBSCRIPTION.SUSPENDED',
   'BILLING.SUBSCRIPTION.EXPIRED',
   'BILLING.SUBSCRIPTION.PAYMENT.FAILED',
+  'PAYMENT.SALE.COMPLETED',            // monthly renewals (also renews an auto boost)
 ];
+
+async function findProduct(name) {
+  const { products = [] } = await pp('GET', '/v1/catalogs/products?page_size=20');
+  return products.find(p => p.name === name) || null;
+}
 
 async function main() {
   if (!configured()) throw new Error('PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET required');
   console.log('PayPal API:', BASE);
 
-  const product = await pp('POST', '/v1/catalogs/products', {
+  const product = await findProduct('TrouvePro Provider Subscription') || await pp('POST', '/v1/catalogs/products', {
     name: 'TrouvePro Provider Subscription',
     description: 'Listing visibility for service providers on TrouvePro',
     type: 'SERVICE',
@@ -55,6 +63,7 @@ async function main() {
     taxes: { percentage: TAX_PERCENT, inclusive: false },
   });
   console.log('PAYPAL_PLAN_ID=' + plan.id);
+  if (process.argv.includes('--plan-only')) return;
 
   const url = `${PUBLIC_URL}/api/subscription/webhook`;
   const existing = await pp('GET', '/v1/notifications/webhooks');

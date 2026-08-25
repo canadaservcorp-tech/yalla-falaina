@@ -11,7 +11,8 @@ async function main() {
   if (!configured()) throw new Error('PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET required');
   console.log('PayPal API:', BASE);
 
-  const product = await pp('POST', '/v1/catalogs/products', {
+  const { products = [] } = await pp('GET', '/v1/catalogs/products?page_size=20');
+  const product = products.find(p => p.name === 'TrouvePro Top Placement') || await pp('POST', '/v1/catalogs/products', {
     name: 'TrouvePro Top Placement',
     description: 'Paid top placement in nearby search results for TrouvePro providers',
     type: 'SERVICE',
