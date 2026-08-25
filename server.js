@@ -33,6 +33,13 @@ app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', ind
 app.use('/fiche', require('./routes/listing')); // per-listing claim landing page (campaign target)
 app.use('/verification', require('./routes/verify')); // free RBQ licence verifier (public, no account)
 
+const directory = require('./routes/directory');
+app.use('/services', directory);                  // one crawlable page per trade x city
+app.get('/sitemap-services.xml', async (_req, res) => {
+  try { res.type('application/xml').send(await directory.sitemap()); }
+  catch (e) { console.error('sitemap-services', e); res.status(500).type('text/plain').send('unavailable'); }
+});
+
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
 
