@@ -5,11 +5,27 @@ const express = require('express');
 const supabase = require('../db');
 const { authenticate } = require('../lib/auth-mw');
 const sec = require('../lib/security');
+const page = require('../lib/claim-page');
+const funnel = require('../lib/funnel');
 const router = express.Router();
 
-router.use(authenticate, sec.requireActiveUser);
-
 const escapeLike = s => s.replace(/[%_\\]/g, c => '\\' + c);
+
+// The only unauthenticated route here: the landing page sends a contractor to
+// /?claim_licence=<licence>, and the app has to name the listing being claimed
+// before they have an account. Answers with what the RBQ register publishes.
+router.get('/listing', sec.limits.claim, async (req, res) => {
+  const licence = String(req.query.licence || '');
+  if (!page.isLicence(licence)) return res.status(404).json({ error: 'Unknown listing' });
+  const { data, error } = await supabase.from('providers')
+    .select('user_id, display_name, city, rbq_licence, claimed')
+    .eq('rbq_licence', licence).eq('claimed', false).eq('source', 'rbq_seed').maybeSingle();
+  if (error) { console.error('claim listing', error); return res.status(500).json({ error: 'Lookup failed' }); }
+  if (!data) return res.status(404).json({ error: 'Unknown listing' });
+  res.json({ success: true, seedUserId: data.user_id, business_name: data.display_name || '', city: data.city || '', rbq_licence: data.rbq_licence });
+});
+
+router.use(authenticate, sec.requireActiveUser);
 
 // GET /api/claim/search?q=CompanyName  -> find unclaimed RBQ listings to claim
 router.get('/search', sec.limits.claim, async (req, res) => {
@@ -73,6 +89,7 @@ router.post('/', sec.limits.claim, async (req, res) => {
       if (stop.error) console.error('outreach claim link', stop.error);
     }
 
+    funnel.track('claimed', { licence: seed.rbq_licence, userId: req.user.id });
     res.json({ success: true, message: 'Listing claimed — set your location & subscribe to go live.' });
   } catch (e) { console.error('claim', e); res.status(500).json({ error: 'Could not claim this listing' }); }
 });

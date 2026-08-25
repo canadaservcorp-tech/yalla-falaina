@@ -47,8 +47,12 @@ function message(contact) {
   const trade = contact.trade || '';
   const tradeLabel = esc(en ? (TRADES[trade] || 'your trade') : (trade || 'votre métier'));
   const source = seeded ? 'rbq_email' : `${contact.source || 'prospect'}_email`;
+  // A seeded contact goes to their own listing page (name, city, licence, one claim button);
+  // without a licence there is no listing URL to send them to, so the token link still applies.
   const target = seeded
-    ? `${SITE}/?claim=${contact.unsubscribe_token}&utm_source=${source}`
+    ? (contact.rbq_licence
+      ? `${SITE}/fiche/${encodeURIComponent(contact.rbq_licence)}?t=${contact.unsubscribe_token}&utm_source=${source}`
+      : `${SITE}/?claim=${contact.unsubscribe_token}&utm_source=${source}`)
     : `${SITE}/?join=provider&utm_source=${source}`;
   const stop = `${SITE}/api/outreach/unsubscribe?token=${contact.unsubscribe_token}`;
   const subject = seeded

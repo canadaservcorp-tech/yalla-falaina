@@ -30,6 +30,8 @@ app.use((req, res, next) => {
 app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonical home URL
 app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', index: false }));
 
+app.use('/fiche', require('./routes/listing')); // per-listing claim landing page (campaign target)
+
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
 

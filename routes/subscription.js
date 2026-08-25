@@ -6,6 +6,7 @@ const { configured, pp } = require('../lib/paypal');
 const sec = require('../lib/security');
 const boost = require('./boost');
 const ev = require('../lib/subscription-events');
+const funnel = require('../lib/funnel');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
@@ -30,6 +31,7 @@ router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, 
       },
     });
     await supabase.from('users').update({ paypal_subscription_id: sub.id }).eq('id', u.id);
+    funnel.track('checkout', { userId: u.id });
     const approve = (sub.links || []).find(l => l.rel === 'approve');
     if (!approve) return res.status(500).json({ error: 'PayPal returned no approval link' });
     res.json({ success: true, url: approve.href });
@@ -103,6 +105,7 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
         if (subId && !isRenewal) patch.paypal_subscription_id = subId;
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
+        if (patch.subscription_status === 'active') funnel.track('subscribed', { userId: user.id });
       }
     }
     res.json({ received: true });
