@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../db');
 const { approx } = require('../lib/distance');
 const activities = require('../lib/activities');
+const demand = require('../lib/demand');
 const router = express.Router();
 
 // The catalogue changes only when we seed it, so keyword expansion reads it once per 10 minutes.
@@ -71,6 +72,7 @@ router.get('/', async (req, res) => {
       distance_label: r.distance_m == null ? null : approx(r.distance_m, lang),
     }));
     res.json({ success: true, count: providers.length, paywall: PAYWALL, providers });
+    demand.record({ professionId, professionIds, term: q, lat, lng, results: providers.length });
   } catch (e) { console.error('search', e); res.status(500).json({ error: 'Search failed' }); }
 });
 module.exports = router;
