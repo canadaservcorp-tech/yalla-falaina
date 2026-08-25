@@ -5,6 +5,7 @@ const { authenticate } = require('../lib/auth-mw');
 const { configured, pp } = require('../lib/paypal');
 const sec = require('../lib/security');
 const boost = require('./boost');
+const ev = require('../lib/subscription-events');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
@@ -40,8 +41,6 @@ router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
   res.json({ success: true, status: data?.subscription_status || 'inactive', periodEnd: data?.subscription_period_end || null });
 });
 
-const ACTIVE = new Set(['BILLING.SUBSCRIPTION.ACTIVATED', 'BILLING.SUBSCRIPTION.RE-ACTIVATED']);
-const DEAD = new Set(['BILLING.SUBSCRIPTION.CANCELLED', 'BILLING.SUBSCRIPTION.EXPIRED', 'BILLING.SUBSCRIPTION.SUSPENDED', 'BILLING.SUBSCRIPTION.PAYMENT.FAILED']);
 
 // PayPal webhook — raw body is kept (see server.js) so the signature is checked against the exact payload.
 router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
@@ -63,30 +62,51 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
   } catch (e) { console.error('paypal webhook verify', e); return res.status(400).send('Verification failed'); }
 
   try {
+    const type = event.event_type;
     const r = event.resource || {};
-    const subId = r.id || r.billing_agreement_id;
-    const custom = r.custom_id || r.custom || '';
+    const subId = ev.subscriptionId(type, r);
+    const isRenewal = type === ev.RENEWAL;
+    if (isRenewal && !subId) return res.json({ received: true });   // a one-time order, not a subscription
 
-    // Auto-renewing top placement uses its own PayPal plan, tagged "boost:<userId>"
-    const boostMatch = /^boost:(\d+)$/.exec(String(custom));
-    if (boostMatch) {
-      const providerId = Number(boostMatch[1]);
-      if (ACTIVE.has(event.event_type) || event.event_type === 'PAYMENT.SALE.COMPLETED') {
-        await boost.extendBoost(providerId, boost.BOOST_PLANS.auto30.days, 'auto30', subId);
-      } else if (DEAD.has(event.event_type)) {
-        await supabase.from('providers').update({ boost_subscription_id: null }).eq('user_id', providerId);
+    // Auto-renewing top placement uses its own PayPal plan, tagged "boost:<userId>";
+    // a renewal payment carries no tag, so it is matched on the agreement instead.
+    let boostUser = ev.boostUserId(type, r);
+    if (!boostUser && subId) {
+      const { data: p } = await supabase.from('providers')
+        .select('user_id').eq('boost_subscription_id', subId).maybeSingle();
+      if (p) boostUser = p.user_id;
+    }
+    if (boostUser) {
+      if (ev.ACTIVE.has(type) || isRenewal) {
+        await boost.extendBoost(boostUser, boost.BOOST_PLANS.auto30.days, 'auto30', subId);
+      } else if (ev.GRACE.has(type) || ev.ENDED.has(type)) {
+        await supabase.from('providers').update({ boost_subscription_id: null }).eq('user_id', boostUser);
       }
       return res.json({ received: true });
     }
 
-    const userId = custom;
-    const status = ACTIVE.has(event.event_type) ? 'active' : DEAD.has(event.event_type) ? 'canceled' : null;
-    if (status) {
-      const end = r.billing_info?.next_billing_time || null;
-      const patch = { subscription_status: status, subscription_period_end: end, paypal_subscription_id: subId };
-      if (userId) sec.dropUserFromCache(userId);
-      if (sec.isId(userId)) await supabase.from('users').update(patch).eq('id', Number(userId));
-      else if (subId) await supabase.from('users').update(patch).eq('paypal_subscription_id', subId);
+    // A renewal payment says nothing about the next billing date, so it is read back
+    // from the agreement (a failure here must not lose the payment itself).
+    let resource = r;
+    if (isRenewal) {
+      try { resource = await pp('GET', `/v1/billing/subscriptions/${encodeURIComponent(subId)}`); }
+      catch (e) { console.error('paypal renewal lookup', e.message); }
+    }
+    const patch = ev.accountPatch(type, resource);
+    if (patch) {
+      const custom = String(resource.custom_id || r.custom_id || r.custom || '');
+      if (subId && !isRenewal) patch.paypal_subscription_id = subId;
+      if (sec.isId(custom)) {
+        sec.dropUserFromCache(custom);
+        await supabase.from('users').update(patch).eq('id', Number(custom));
+      } else if (subId) {
+        const { data: u } = await supabase.from('users')
+          .select('id').eq('paypal_subscription_id', subId).maybeSingle();
+        if (u) {
+          sec.dropUserFromCache(String(u.id));
+          await supabase.from('users').update(patch).eq('id', u.id);
+        }
+      }
     }
     res.json({ received: true });
   } catch (e) { console.error('paypal webhook', e); res.status(500).json({ error: 'Internal error' }); }
