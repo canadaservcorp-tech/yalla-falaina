@@ -1457,27 +1457,40 @@ async function claimListing(seedUserId){
   }catch(e){ msg.className='err'; msg.textContent=e.message; }
 }
 
-// A campaign email links to /?claim=<token>: the recipient owns a seeded RBQ listing but has no
-// account yet, so remember which business they came for and walk them into the claim box.
+// Two ways in from the campaign: /?claim=<token> (the recipient's own email link) and
+// /?claim_licence=<rbq> (the "this is my business" button on /fiche/<rbq>). Either way the
+// listing is remembered across registration, then claimed for them — the contractor never
+// has to find their own name in a search box.
 async function claimInvite(){
-  const tok=new URLSearchParams(location.search).get('claim');
+  const p=new URLSearchParams(location.search);
+  const tok=p.get('claim'), lic=p.get('claim_licence');
+  const remember=(name,id)=>{ try{ sessionStorage.setItem('tp_claim',name); if(id) sessionStorage.setItem('tp_claim_id',String(id)); }catch(e){} };
   if(/^[a-f0-9]{32}$/.test(tok||'')){
     history.replaceState(null,'','/');
     try{
       const r=await fetch('/api/outreach/invite?token='+tok);
       const j=await r.json();
       if(r.ok && j.business_name && !j.claimed){
-        try{ sessionStorage.setItem('tp_claim',j.business_name); }catch(e){}
-        if(j.lang==='en' && !new URLSearchParams(location.search).get('lang')) setLang('en');
+        remember(j.business_name);
+        if(j.lang==='en' && !p.get('lang')) setLang('en');
       }
+    }catch(e){}
+  }else if(/^[0-9][0-9-]{3,19}$/.test(lic||'')){
+    history.replaceState(null,'','/');
+    try{
+      const r=await fetch('/api/claim/listing?licence='+encodeURIComponent(lic));
+      const j=await r.json();
+      if(r.ok && j.seedUserId) remember(j.business_name||'',j.seedUserId);
     }catch(e){}
   }
   const name=(()=>{ try{ return sessionStorage.getItem('tp_claim')||''; }catch(e){ return ''; } })();
-  if(!name) return;
+  const seedId=(()=>{ try{ return Number(sessionStorage.getItem('tp_claim_id')||0); }catch(e){ return 0; } })();
+  if(!name && !seedId) return;
   if(S.token && S.user && S.user.role==='provider'){
     await loadProviderForm(); go('provider');
+    try{ sessionStorage.removeItem('tp_claim'); sessionStorage.removeItem('tp_claim_id'); }catch(e){}
+    if(seedId){ await claimListing(seedId); const b=document.getElementById('subbox'); if(b) b.scrollIntoView({block:'center'}); return; }
     document.getElementById('claim_q').value=name; claimSearch();
-    try{ sessionStorage.removeItem('tp_claim'); }catch(e){}
   }else if(!S.token){
     const hint=document.getElementById('claimhint');
     hint.textContent=t('invite').replace('%s',name); hint.style.display='block';
