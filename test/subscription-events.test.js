@@ -22,6 +22,18 @@ test('a cancellation with nothing left paid for lapses now', () => {
   assert.deepEqual(p, { subscription_cancel_at: NOW.toISOString() });
 });
 
+test('a cancelled agreement carries no next billing date, so the stored one is kept', () => {
+  const p = ev.accountPatch('BILLING.SUBSCRIPTION.CANCELLED', { status: 'CANCELLED' }, NOW, FUTURE);
+  assert.deepEqual(p, { subscription_cancel_at: FUTURE });
+  const spent = ev.accountPatch('BILLING.SUBSCRIPTION.CANCELLED', { status: 'CANCELLED' }, NOW, PAST);
+  assert.deepEqual(spent, { subscription_cancel_at: NOW.toISOString() });
+});
+
+test('expiry keeps the period end it already had', () => {
+  const p = ev.accountPatch('BILLING.SUBSCRIPTION.EXPIRED', {}, NOW, FUTURE);
+  assert.ok(!('subscription_period_end' in p));
+});
+
 test('expiry ends access immediately', () => {
   const p = ev.accountPatch('BILLING.SUBSCRIPTION.EXPIRED', {}, NOW);
   assert.equal(p.subscription_status, 'canceled');
