@@ -275,6 +275,11 @@
     <button class="btn btn-ghost" id="boostcancel" style="display:none" onclick="cancelAutoBoost()"></button>
     <div class="err" id="boosterr"></div>
   </div>
+  <div class="card" id="leadsbox" style="display:none;box-shadow:none;margin-bottom:14px;border-left:4px solid #0f7c7b">
+    <h3 id="leadstitle" style="margin:0">Demandes de clients</h3>
+    <div class="muted" id="leadsviews" style="font-size:13px"></div>
+    <div id="leadslist" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
+  </div>
   <div class="card" id="claimbox" style="box-shadow:none;margin-bottom:14px">
     <h3 id="claimtitle" style="margin:0">Réclamer votre fiche RBQ</h3>
     <div class="muted" id="claimsub" style="font-size:13px">Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.</div>
@@ -430,6 +435,20 @@
   </div>
 </div></div>
 
+<div class="sheet" id="leadsheet"><div class="modal">
+  <button class="x" onclick="closeLead()">×</button>
+  <h2 id="leadtitle">Demander ce prestataire</h2>
+  <div class="muted" id="leadnotice" style="font-size:13px"></div>
+  <div class="stack">
+    <input id="l_name" maxlength="60" placeholder="Votre nom">
+    <input id="l_contact" maxlength="120" placeholder="Téléphone ou courriel">
+    <textarea id="l_msg" rows="3" maxlength="600" placeholder="Ce dont vous avez besoin (optionnel)"></textarea>
+    <label class="accept"><input type="checkbox" id="l_consent"><span id="leadconsentlbl"></span></label>
+    <div class="err" id="leaderr"></div><div class="ok" id="leadok"></div>
+    <button class="btn btn-primary btn-block" id="leadsubmit" onclick="submitLead()">Envoyer ma demande</button>
+  </div>
+</div></div>
+
 <div class="sheet" id="authsheet"><div class="modal">
   <button class="x" onclick="closeAuth()">×</button>
   <h2 id="authtitle">Connexion</h2>
@@ -500,6 +519,16 @@ const T = {
     subactive:'Abonnement actif ✓', subinactive:'Aucun abonnement actif.', submanage:'Abonnement actif',
     subok:'Abonnement activé ✓', subcancel:'Paiement annulé.',
     unclaimed:'Fiche RBQ non réclamée — est-ce vous ?', notavail:'Non disponible',
+    openfree:'Gratuit ce mois-ci', leadcta:'Demander ce prestataire',
+    leadtitle:'Demander ce prestataire',
+    leadnotice:(name,until)=>`${name} est joignable gratuitement grâce à myTROUVEpro jusqu’au ${until}. En continuant, ${name} sera avisé qu’un client l’a trouvé ici et pourra vous rappeler.`,
+    leadconsent:'J’accepte que mon nom et mes coordonnées soient transmis à ce prestataire.',
+    leadsend:'Envoyer ma demande',
+    leadsent:'Demande envoyée. Le prestataire est avisé et vous rappellera.',
+    leadneed:'Un nom et un téléphone ou courriel sont requis.',
+    leadsttl:'Demandes de clients', leadsviews:n=>`${n} visite(s) de votre fiche dans les 30 derniers jours.`,
+    leadsnone:'Aucune demande pour le moment.',
+    openbanner:(until,days)=>`Mois de lancement : jusqu’au ${until} (${days} j), vous pouvez joindre gratuitement les fiches RBQ non réclamées.`,
     offline:'Hors ligne', offlinehint:"Ce prestataire n'a pas d'abonnement actif : distance masquée, contact impossible.",
     hours:'Heures', prices:'Tarifs', details:'Voir la fiche',
     rvtitle:'Avis', rvnone:'Aucun avis pour le moment.', rvwrite:'Écrire un avis',
@@ -570,6 +599,16 @@ const T = {
     subactive:'Subscription active ✓', subinactive:'No active subscription.', submanage:'Subscription active',
     subok:'Subscription activated ✓', subcancel:'Payment cancelled.',
     unclaimed:'Unclaimed RBQ listing — is this you?', notavail:'Not available',
+    openfree:'Free this month', leadcta:'Request this provider',
+    leadtitle:'Request this provider',
+    leadnotice:(name,until)=>`${name} can be reached for free through myTROUVEpro until ${until}. If you continue, ${name} will be told a client found them here and can call you back.`,
+    leadconsent:'I agree that my name and contact details are passed to this provider.',
+    leadsend:'Send my request',
+    leadsent:'Request sent. The provider has been notified and will call you back.',
+    leadneed:'A name and a phone number or email are required.',
+    leadsttl:'Client requests', leadsviews:n=>`${n} view(s) of your listing in the last 30 days.`,
+    leadsnone:'No requests yet.',
+    openbanner:(until,days)=>`Launch month: until ${until} (${days}d) you can reach unclaimed RBQ listings for free.`,
     offline:'Offline', offlinehint:'This provider has no active subscription: distance hidden, contact unavailable.',
     hours:'Hours', prices:'Rates', details:'View profile',
     rvtitle:'Reviews', rvnone:'No reviews yet.', rvwrite:'Write a review',
@@ -859,6 +898,9 @@ function renderResults(list){
       ${p.claimed!==false?`<button class="btn btn-ghost" style="margin-top:6px" onclick="openPro(${p.id})">${t('details')}</button>`:''}
       ${ p.claimed===false
           ? `<div class="locked" style="margin-top:6px">🏷️ ${t('unclaimed')}</div>`
+            + (S.open&&S.open.active
+                ? `<button class="btn btn-teal" style="margin-top:6px" onclick="openLead(${Number(p.id)})">${t('leadcta')} — ${t('openfree')}</button>`
+                : '')
           : (!S.token
               ? `<button class="btn btn-ghost" style="margin-top:6px" onclick="openAuth('register')">🔒 ${t('loginto')}</button>`
               : (p.contactable===false
@@ -869,6 +911,63 @@ function renderResults(list){
 }
 function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
+// Founding Month: a seeker can reach an unclaimed listing, and the owner is told about it.
+// Nothing here shows the provider's phone number — he claims his listing to answer.
+async function openLead(providerId){
+  const sheet=document.getElementById('leadsheet');
+  document.getElementById('leaderr').textContent='';
+  document.getElementById('leadok').textContent='';
+  document.getElementById('leadtitle').textContent=t('leadtitle');
+  document.getElementById('leadconsentlbl').textContent=t('leadconsent');
+  document.getElementById('leadsubmit').textContent=t('leadsend');
+  document.getElementById('l_consent').checked=false;
+  S.lead=null;
+  sheet.classList.add('on');
+  try{
+    const j=await api('/api/leads/listing/'+providerId);
+    S.lead={licence:j.licence,name:j.name,city:j.city};
+    document.getElementById('leadnotice').textContent=t('leadnotice')(j.name||'',j.until||'');
+  }catch(e){ document.getElementById('leaderr').textContent=e.message; }
+}
+function closeLead(){ document.getElementById('leadsheet').classList.remove('on'); }
+async function submitLead(){
+  const err=document.getElementById('leaderr'), ok=document.getElementById('leadok');
+  err.textContent=''; ok.textContent='';
+  if(!S.lead) return;
+  const name=document.getElementById('l_name').value.trim();
+  const contact=document.getElementById('l_contact').value.trim();
+  if(name.length<2||contact.length<5){ err.textContent=t('leadneed'); return; }
+  if(!document.getElementById('l_consent').checked){ err.textContent=t('leadconsent'); return; }
+  try{
+    await api('/api/leads',{method:'POST',body:JSON.stringify({licence:S.lead.licence,name,contact,
+      city:S.lead.city,message:document.getElementById('l_msg').value.trim(),consent:true})});
+    ok.textContent=t('leadsent');
+    document.getElementById('l_msg').value='';
+    setTimeout(closeLead,2200);
+  }catch(e){ err.textContent=e.message; }
+}
+// The window is a server-side date; the client only asks what it is.
+async function loadOpenAccess(){
+  try{ const j=await api('/api/open-access'); S.open=j.active?j:null; }catch(e){ S.open=null; }
+}
+// What a contractor gets for claiming: the requests waiting on his listing, and his view count.
+async function loadLeads(){
+  const box=document.getElementById('leadsbox'); if(!box) return;
+  try{
+    const j=await api('/api/leads/mine');
+    const list=j.leads||[];
+    if(!list.length && !j.views){ box.style.display='none'; return; }
+    document.getElementById('leadstitle').textContent=t('leadsttl');
+    document.getElementById('leadsviews').textContent=Number.isFinite(j.views)?t('leadsviews')(j.views):'';
+    const html=list.map(l=>`<div class="card" style="box-shadow:none;padding:10px">
+      <strong>${esc(l.seeker_name)}</strong>${l.seeker_city?` — ${esc(l.seeker_city)}`:''}<br>
+      <a href="${/@/.test(l.seeker_contact)?'mailto:':'tel:'}${esc(l.seeker_contact)}">${esc(l.seeker_contact)}</a>
+      ${l.message?`<div class="muted" style="font-size:13px">${esc(l.message)}</div>`:''}
+      <div class="muted" style="font-size:12px">${new Date(l.created_at).toLocaleString()}</div></div>`).join('');
+    document.getElementById('leadslist').innerHTML=html||`<div class="muted" style="font-size:13px">${t('leadsnone')}</div>`;
+    box.style.display='block';
+  }catch(e){ box.style.display='none'; }
+}
 function openAuth(mode){ S.mode=mode; renderAuth(); document.getElementById('authsheet').classList.add('on'); }
 function closeAuth(){ document.getElementById('authsheet').classList.remove('on'); }
 function claimHint(){
@@ -931,6 +1030,7 @@ async function loadProviderForm(){
   fillServiceChecklist();
   loadSubscription();
   loadBoost();
+  loadLeads();
   try{
     const j=await api('/api/providers/'+S.user.id); const p=j.provider||{};
     document.getElementById('pp_name').value=p.display_name||S.user.name||'';
@@ -1574,7 +1674,7 @@ function signupSource(){ try{ return localStorage.getItem('tp_src')||''; }catch(
   rememberSource();
   const asked=new URLSearchParams(location.search).get('lang');
   const saved=(()=>{ try{ return sessionStorage.getItem('tp_lang'); }catch(e){ return null; } })();
-  setLang([asked,saved].includes('en')?'en':'fr'); refreshNav(); loadCatalog();
+  setLang([asked,saved].includes('en')?'en':'fr'); refreshNav(); loadCatalog(); loadOpenAccess();
   if(location.pathname==='/terms') openLegal('terms');
   if(location.pathname==='/privacy') openLegal('privacy');
   if(location.pathname==='/faq') openFaq();

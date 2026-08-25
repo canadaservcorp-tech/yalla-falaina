@@ -9,6 +9,8 @@ const sec = require('../lib/security');
 const page = require('../lib/claim-page');
 const funnel = require('../lib/funnel');
 const foundingOffer = require('../lib/founding');
+const leads = require('../lib/leads');
+const openAccess = require('../lib/open-access');
 const router = express.Router();
 
 const TOKEN = /^[a-f0-9]{32}$/;
@@ -36,9 +38,13 @@ router.get('/:licence', sec.limits.api, async (req, res) => {
     if (!found.claimed) {
       // fire and forget: a slow insert must not delay the page
       funnel.track('landing', { licence, source: token ? 'rbq_email' : (req.query.utm_source || null) });
+      leads.view(found.user_id, licence);
     }
     const founding = found.claimed ? null : await foundingOffer.status().catch(() => null);
-    res.type('html').send(page.render(found, { lang, token, founding }));
+    // What the owner is really being offered right now: the requests waiting on his listing.
+    const window_ = found.claimed || !openAccess.covers(found.city) ? null : openAccess.status();
+    const waiting = window_ ? await leads.leadsSince(found.user_id, 30).catch(() => null) : null;
+    res.type('html').send(page.render(found, { lang, token, founding, window: window_, waiting }));
   } catch (e) {
     console.error('claim landing', e);
     res.status(500).type('html').send(notFound());

@@ -60,6 +60,9 @@ app.use('/api/report', require('./routes/report'));
 app.use('/api/claim', require('./routes/claim'));    // claim an unclaimed RBQ seed listing
 app.use('/api/outreach', require('./routes/outreach')); // marketing list opt-out (CASL)
 app.use('/api/founding', require('./routes/founding')); // how many founding places are really taken
+app.use('/api/leads', require('./routes/leads')); // Founding Month requests left on an unclaimed listing
+// The countdown the front page shows: a date, so the window closes on its own.
+app.get('/api/open-access', (_req, res) => res.json({ success: true, ...require('./lib/open-access').status() }));
 app.use('/api/concierge', require('./routes/concierge')); // on-site AI assistant
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either
