@@ -31,6 +31,7 @@ app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonica
 app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', index: false }));
 
 app.use('/fiche', require('./routes/listing')); // per-listing claim landing page (campaign target)
+app.use('/verification', require('./routes/verify')); // free RBQ licence verifier (public, no account)
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));

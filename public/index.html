@@ -467,6 +467,7 @@
   <a href="/terms" id="footterms" onclick="openLegal('terms');return false">Conditions d'utilisation</a>
   <a href="/privacy" id="footprivacy" onclick="openLegal('privacy');return false">Politique de confidentialité</a>
   <a href="/faq" id="footfaq" onclick="openFaq();return false">Aide</a>
+  <a href="/verification" id="footverif">Vérifier une licence RBQ</a>
   <a href="https://www.instagram.com/mytrouvepro" id="footig" target="_blank" rel="noopener noreferrer">Instagram</a>
 </div></footer>
 
@@ -541,7 +542,7 @@ const T = {
     roleseek:'Je cherche', roleoffer:"J'offre un service",
     phname:'Nom complet', phemail:'Courriel', phphone:'Téléphone', phpass:'Mot de passe',
     terms:"Conditions d'utilisation", privacy:'Politique de confidentialité', legalback:'← Retour',
-    faq:'Aide', faqtitle:'Foire aux questions',
+    faq:'Aide', faqtitle:'Foire aux questions', verif:'Vérifier une licence RBQ',
     faqcontact:'Vous ne trouvez pas votre réponse ? Écrivez-nous à <a href="mailto:contact@mytrouvepro.net">contact@mytrouvepro.net</a>.',
     accept:`J'ai lu et j'accepte les <a href="/terms" target="_blank">conditions d'utilisation</a> et la <a href="/privacy" target="_blank">politique de confidentialité</a>. Je comprends que TrouvePro met en relation et ne vérifie pas les prestataires.`,
     acceptreq:"Vous devez accepter les conditions d'utilisation.",
@@ -611,7 +612,7 @@ const T = {
     roleseek:"I'm looking", roleoffer:'I offer a service',
     phname:'Full name', phemail:'Email', phphone:'Phone', phpass:'Password',
     terms:'Terms of Use', privacy:'Privacy Policy', legalback:'← Back',
-    faq:'Help', faqtitle:'Frequently asked questions',
+    faq:'Help', faqtitle:'Frequently asked questions', verif:'Check an RBQ licence',
     faqcontact:'Can\u2019t find your answer? Write to <a href="mailto:contact@mytrouvepro.net">contact@mytrouvepro.net</a>.',
     accept:`I have read and accept the <a href="/terms" target="_blank">Terms of Use</a> and the <a href="/privacy" target="_blank">Privacy Policy</a>. I understand TrouvePro connects people and does not verify providers.`,
     acceptreq:'You must accept the Terms of Use.',
@@ -692,6 +693,8 @@ function setLang(l){
   document.getElementById('tabprivacy').textContent=t('privacy');
   document.getElementById('legalback').textContent=t('legalback');
   document.getElementById('footfaq').textContent=t('faq');
+  const fv=document.getElementById('footverif');
+  fv.textContent=t('verif'); fv.href=S.lang==='en'?'/verification?lang=en':'/verification';
   document.getElementById('faqtitle').textContent=t('faqtitle');
   document.getElementById('faqback').textContent=t('legalback');
   document.getElementById('faqcontact').innerHTML=t('faqcontact');
