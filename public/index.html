@@ -58,6 +58,13 @@
   #authCard input, #authCard select { width: 100%; }
   #authCard .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; font-size: 13px; }
   #authCard .row input { width: auto; }
+  #postListingAside { position: fixed; bottom: 12px; inset-inline-start: 12px; width: min(340px, calc(100vw - 24px)); z-index: 30; }
+  #postListingForm { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+                     padding: 14px; margin-bottom: 8px; max-height: 72vh; overflow-y: auto; }
+  #postListingForm .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 10px; }
+  #postListingForm label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
+  #postListingForm input { width: 100%; }
+  #postListingForm .row { display: flex; gap: 8px; margin: 12px 0 4px; }
   #authMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-top: 8px; }
   .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
   .tabs button { flex: 1; background: var(--bg); color: var(--text-dim); }
@@ -128,19 +135,6 @@
     <div class="row"><button id="authGo" data-i18n="tabSignIn">Sign in</button></div>
     <div id="authMsg"></div>
     <button id="resendVerify" style="display:none;background:none;border:none;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13px">Resend verification email</button>
-    <button id="showPostListing" style="display:block;background:none;border:none;padding:0;margin-top:14px;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13px" data-i18n="postListingLink">Post an urgent listing — no account needed</button>
-    <div id="postListingForm" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-      <div class="hint" data-i18n="postListingHint">For quick, informal help — "shawarma cook needed today." A human reviews every post before it's shown; it's separate from the matched-opportunities feed above.</div>
-      <label data-i18n="postListingContact">How can people reach you?</label>
-      <input type="text" id="plContact" data-i18n-ph="postListingContactPh" placeholder="WhatsApp, phone, or email">
-      <label data-i18n="postListingTitle">What do you need?</label>
-      <input type="text" id="plTitle" data-i18n-ph="postListingTitlePh" placeholder="e.g. Shawarma cook needed today">
-      <label data-i18n="postListingCountry">Country (optional)</label><input type="text" id="plCountry">
-      <label data-i18n="postListingCategory">Category (optional)</label><input type="text" id="plCategory">
-      <label data-i18n="postListingDescription">Details (optional)</label><input type="text" id="plDescription">
-      <div class="row"><button id="postListingSubmit" data-i18n="postListingSubmit">Submit for review</button></div>
-      <div id="postListingMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
-    </div>
   </div>
 </div>
 
@@ -163,6 +157,22 @@
     <div id="jobsList"><p style="color:var(--text-dim);font-size:13px;" data-i18n="jobsPlaceholder">Send a message to see what the matching engine finds — jobs shown here are the only ones the assistant is allowed to reference.</p></div>
   </div>
 </main>
+
+<div id="postListingAside">
+  <div id="postListingForm" style="display:none">
+    <div class="hint" data-i18n="postListingHint">For quick, informal help — "shawarma cook needed today." A human reviews every post before it's shown; it's separate from the matched-opportunities feed above.</div>
+    <label data-i18n="postListingContact">How can people reach you?</label>
+    <input type="text" id="plContact" maxlength="120" data-i18n-ph="postListingContactPh" placeholder="WhatsApp, phone, or email">
+    <label data-i18n="postListingTitle">What do you need?</label>
+    <input type="text" id="plTitle" maxlength="120" data-i18n-ph="postListingTitlePh" placeholder="e.g. Shawarma cook needed today">
+    <label data-i18n="postListingCountry">Country (optional)</label><input type="text" id="plCountry" maxlength="60">
+    <label data-i18n="postListingCategory">Category (optional)</label><input type="text" id="plCategory" maxlength="60">
+    <label data-i18n="postListingDescription">Details (optional)</label><input type="text" id="plDescription" maxlength="1000">
+    <div class="row"><button id="postListingSubmit" data-i18n="postListingSubmit">Submit for review</button></div>
+    <div id="postListingMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
+  </div>
+  <button id="showPostListing" data-i18n="postListingLink">Post an urgent listing — no account needed</button>
+</div>
 
 <script>
   const $ = id => document.getElementById(id);
@@ -277,8 +287,8 @@
   // Roadmap Step 5's other half: routes/informal-listings.js and the admin
   // moderation console (public/admin.html) already existed, but nothing let
   // a visitor actually post the "shawarma cook needed today" pattern the
-  // whole feature was built for. Lives on the pre-auth screen since the
-  // route itself takes no token.
+  // whole feature was built for. Lives in a floating panel outside both the
+  // signed-out and signed-in containers since the route itself takes no token.
   $('showPostListing').onclick = () => {
     const open = $('postListingForm').style.display === 'block';
     $('postListingForm').style.display = open ? 'none' : 'block';

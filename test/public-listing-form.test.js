@@ -26,3 +26,21 @@ test('the form posts to the real, unauthenticated informal-listings endpoint', a
   // contact/title are required by the route; country/category/description are optional
   assert.match(body, /contact,\s*\n?\s*title,/);
 });
+
+test('the form lives outside authWrap so signed-in visitors can still reach it', async () => {
+  const body = await fetch(h.base + '/').then(r => r.text());
+  // The aside sits after </main> — inside neither the signed-out authWrap
+  // nor the signed-in appMain, which enter()/logout() toggle between.
+  assert.ok(body.indexOf('id="postListingAside"') > body.indexOf('</main>'),
+    'postListingAside must render outside the mutually exclusive auth/app containers');
+  assert.equal(body.indexOf('id="authWrap"') < body.indexOf('</main>'), true);
+});
+
+test('inputs carry maxlengths matching the route\'s clean() caps', async () => {
+  const body = await fetch(h.base + '/').then(r => r.text());
+  // mirrors sec.clean() limits in routes/informal-listings.js so oversized
+  // entries hit a visible browser cap instead of being silently truncated
+  for (const [id, max] of [['plContact', 120], ['plTitle', 120], ['plCountry', 60], ['plCategory', 60], ['plDescription', 1000]]) {
+    assert.match(body, new RegExp(`id="${id}"[^>]*maxlength="${max}"`), `${id} missing maxlength=${max}`);
+  }
+});
