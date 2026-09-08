@@ -48,6 +48,33 @@ router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
   });
 });
 
+// Cancel a subscription from within the app (Terms of Use promises "cancel
+// anytime"; before this route the only way was PayPal's own site). This is
+// deliberately a thin wrapper: it only calls PayPal's cancel API and leaves
+// the actual state transition (subscription_cancel_at, retention deadline,
+// etc.) to the existing BILLING.SUBSCRIPTION.CANCELLED webhook handler below
+// — duplicating that logic here would risk the two racing or disagreeing.
+router.post('/cancel', authenticate, sec.requireActiveUser, sec.limits.write, async (req, res) => {
+  if (!configured()) return res.status(500).json({ error: 'PayPal not configured', code: 'ERR_PAYMENT_UNAVAILABLE' });
+  try {
+    const { data: u } = await supabase.from('users')
+      .select('id, subscription_status, subscription_cancel_at, paypal_subscription_id')
+      .eq('id', req.user.id).maybeSingle();
+    if (!u || u.subscription_status !== 'active' || !u.paypal_subscription_id) {
+      return res.status(400).json({ error: 'No active subscription to cancel', code: 'ERR_NO_ACTIVE_SUBSCRIPTION' });
+    }
+    if (u.subscription_cancel_at) {
+      // Already scheduled (e.g. a retried click) — idempotent success instead
+      // of calling PayPal's cancel API again.
+      return res.json({ success: true, message: 'Your subscription is already scheduled to cancel at the end of the paid period.' });
+    }
+    await pp('POST', `/v1/billing/subscriptions/${encodeURIComponent(u.paypal_subscription_id)}/cancel`, {
+      reason: 'Canceled by subscriber from the Yalla Falaina app',
+    });
+    res.json({ success: true, message: 'Cancellation requested — you keep access until the end of the paid period.' });
+  } catch (e) { console.error('paypal cancel', e); res.status(500).json({ error: 'Could not cancel the subscription', code: 'ERR_PAYMENT_UNAVAILABLE' }); }
+});
+
 // PayPal webhook — raw body is kept (see server.js) so the signature is checked
 // against the exact payload.
 router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {

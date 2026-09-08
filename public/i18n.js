@@ -66,6 +66,11 @@
       previewRemainingNotice: 'Free preview — {n} free replies left before subscribing.',
       readTermsLink: '(read)',
       readPrivacyLink: '(privacy)',
+      cancelSubBtn: 'Cancel subscription',
+      cancelSubConfirmText: "Cancel? You'll keep access until the paid period ends.",
+      cancelSubYes: 'Yes, cancel',
+      cancelSubNo: 'Never mind',
+      cancelSubFailed: 'Could not cancel — please try again.',
     },
     fr: {
       signOut: 'Se déconnecter',
@@ -113,6 +118,11 @@
       previewRemainingNotice: 'Aperçu gratuit — {n} réponses gratuites restantes avant l\'abonnement.',
       readTermsLink: '(lire)',
       readPrivacyLink: '(confidentialité)',
+      cancelSubBtn: "Annuler l'abonnement",
+      cancelSubConfirmText: "Annuler? Vous gardez l'accès jusqu'à la fin de la période payée.",
+      cancelSubYes: 'Oui, annuler',
+      cancelSubNo: 'Laisser tomber',
+      cancelSubFailed: "Impossible d'annuler — veuillez réessayer.",
     },
     ar: {
       signOut: 'تسجيل الخروج',
@@ -160,6 +170,11 @@
       previewRemainingNotice: 'معاينة مجانية — تبقّى لك {n} ردود مجانية قبل الاشتراك.',
       readTermsLink: '(اقرأ)',
       readPrivacyLink: '(الخصوصية)',
+      cancelSubBtn: 'إلغاء الاشتراك',
+      cancelSubConfirmText: 'إلغاء؟ ستحتفظ بالوصول حتى نهاية الفترة المدفوعة.',
+      cancelSubYes: 'نعم، إلغاء',
+      cancelSubNo: 'تراجع',
+      cancelSubFailed: 'تعذّر الإلغاء — يرجى المحاولة مرة أخرى.',
     },
   };
 
