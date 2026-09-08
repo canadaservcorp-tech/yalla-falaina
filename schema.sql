@@ -2,6 +2,15 @@
 -- NEW project (never the live trouvepro one — separate deployment, separate DB).
 -- Auth is the fork's own Express JWT flow (bcrypt + `users`), so every personal
 -- table references public.users, not auth.users.
+--
+-- Migrating an ALREADY-DEPLOYED project onto the Stripe-support columns below
+-- (added after Phase 1's initial PayPal-only launch): `create table if not
+-- exists` is a no-op on an existing `users` table, so run this once by hand
+-- instead of the whole file:
+--   alter table public.users
+--     add column if not exists stripe_customer_id text,
+--     add column if not exists stripe_subscription_id text,
+--     add column if not exists payment_provider text;
 
 create extension if not exists "uuid-ossp";
 
@@ -16,6 +25,9 @@ create table if not exists public.users (
   email_verified boolean not null default false,
   verify_token text,
   paypal_subscription_id text,
+  stripe_customer_id text,
+  stripe_subscription_id text,
+  payment_provider text,                         -- 'paypal' | 'stripe' | null (null = legacy/PayPal row predating Stripe)
   subscription_status text default 'inactive',   -- active|canceled|past_due|inactive
   subscription_tier text not null default 'none',-- 'none' | 'basic' (Phase 1; more per Section 4.3 later)
   subscription_period_end timestamptz,

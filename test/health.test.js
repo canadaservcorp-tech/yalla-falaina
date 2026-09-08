@@ -15,6 +15,7 @@ test('GET /api/health -> 200 with feature booleans only', async () => {
     jobsFeed: process.env.JOB_API_PROVIDER || 'seed',
     analytics: Boolean(process.env.GA_MEASUREMENT_ID),
     paypal: Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET),
+    stripe: Boolean(process.env.STRIPE_SECRET_KEY),
     email: Boolean(process.env.RESEND_API_KEY),
   });
 });

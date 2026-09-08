@@ -14,7 +14,7 @@ You are developing **Yalla Falaina** ("Your Assistant to Travel") — a trilingu
 
 1. Work on ONE roadmap step per session. Open a `claude/<slug>` branch off `origin/main`, implement, add tests, open a PR, stop.
 2. NEVER redesign `lib/yf/systemPrompt.js` or the matching semantics — legal-safety surfaces. Flag any change there explicitly.
-3. Never commit secrets, never touch trouvepro's Supabase, PayPal only (never Stripe), `confirmAge`/`acceptTerms` strict-boolean gates are untouchable, every concierge turn must stay logged.
+3. Never commit secrets, never touch trouvepro's Supabase, `confirmAge`/`acceptTerms` strict-boolean gates are untouchable, every concierge turn must stay logged. Payments: PayPal **and** Stripe, both live side by side (see CLAUDE_PROMPT.md's Payments line for why "PayPal only" no longer holds — this superseded the earlier rule, it isn't a drift from it).
 4. If a step needs a credential/decision you don't have (marked ⛔), do NOT fake or stub around it — stop, write what's needed in the PR description, move to the next unblocked step only if told.
 5. Tests must pass: `npm test`. Match existing style; minimal diffs.
 6. After each step, report: PR link, what changed, what env vars or SQL it needs, and which step you recommend next.

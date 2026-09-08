@@ -1,11 +1,13 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert');
 const { installMockPaypal } = require('./helpers/mockPaypal');
+const { installMockStripe } = require('./helpers/mockStripe');
 
-// installMockPaypal() replaces lib/paypal in require.cache — it must run
+// Both mocks replace their real lib/* module in require.cache — must run
 // before server.js (and therefore getApp()) is first required, or the real
 // (unconfigured) module would already be cached.
 const paypal = installMockPaypal();
+const stripe = installMockStripe();
 const { getApp, actor, auth } = require('./helpers/appHarness');
 
 const h = getApp();
@@ -105,4 +107,69 @@ test('cancel: PayPal API failure -> 500 ERR_PAYMENT_UNAVAILABLE', async () => {
   const res = await cancel(token);
   assert.equal(res.status, 500);
   assert.equal((await res.json()).code, 'ERR_PAYMENT_UNAVAILABLE');
+});
+
+// ---------- cancel: the Stripe branch ----------
+// Same route, same idempotency/error shapes — only the provider dispatch
+// (payment_provider column) and which API gets called should differ.
+
+test('cancel: payment_provider stripe calls Stripe with cancel_at_period_end, not PayPal, and does not touch the DB directly', async () => {
+  paypal.__reset(); stripe.__reset();
+  const writesBefore = h.mock.__writes('users', 'update').length;
+  const token = actor(h, { id: 50, role: 'seeker', extra: {
+    subscription_status: 'active', payment_provider: 'stripe', stripe_subscription_id: 'sub_50', subscription_cancel_at: null,
+  } });
+  const res = await cancel(token);
+  assert.equal(res.status, 200);
+  assert.ok(/keep access/i.test((await res.json()).message));
+
+  const calls = stripe.__calls('/subscriptions/sub_50');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].method, 'POST');
+  assert.equal(calls[0].params.cancel_at_period_end, 'true');
+  assert.equal(paypal.__calls().length, 0, 'a Stripe subscriber must never hit the PayPal API');
+  assert.equal(h.mock.__writes('users', 'update').length, writesBefore, 'the route must leave the state transition to the Stripe webhook');
+});
+
+test('cancel: payment_provider stripe but no stripe_subscription_id on file -> 400 ERR_NO_ACTIVE_SUBSCRIPTION, Stripe never called', async () => {
+  paypal.__reset(); stripe.__reset();
+  const token = actor(h, { id: 51, role: 'seeker', extra: { subscription_status: 'active', payment_provider: 'stripe', stripe_subscription_id: null } });
+  const res = await cancel(token);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, 'ERR_NO_ACTIVE_SUBSCRIPTION');
+  assert.equal(stripe.__calls().length, 0);
+});
+
+test('cancel: Stripe API failure -> 500 ERR_PAYMENT_UNAVAILABLE', async () => {
+  paypal.__reset(); stripe.__reset();
+  stripe.__reply('/subscriptions/sub_52', new Error('Stripe 500'));
+  const token = actor(h, { id: 52, role: 'seeker', extra: {
+    subscription_status: 'active', payment_provider: 'stripe', stripe_subscription_id: 'sub_52', subscription_cancel_at: null,
+  } });
+  const res = await cancel(token);
+  assert.equal(res.status, 500);
+  assert.equal((await res.json()).code, 'ERR_PAYMENT_UNAVAILABLE');
+});
+
+test('cancel: already scheduled (Stripe subscriber) -> idempotent 200 without calling Stripe again', async () => {
+  paypal.__reset(); stripe.__reset();
+  const token = actor(h, { id: 53, role: 'seeker', extra: {
+    subscription_status: 'active', payment_provider: 'stripe', stripe_subscription_id: 'sub_53', subscription_cancel_at: '2026-10-01T00:00:00.000Z',
+  } });
+  const res = await cancel(token);
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).success, true);
+  assert.equal(stripe.__calls().length, 0);
+});
+
+test('cancel: a row with no payment_provider set at all defaults to the PayPal branch (pre-Stripe rows)', async () => {
+  paypal.__reset(); stripe.__reset();
+  const token = actor(h, { id: 54, role: 'seeker', extra: {
+    subscription_status: 'active', paypal_subscription_id: 'SUB-54', subscription_cancel_at: null,
+    // no payment_provider field at all
+  } });
+  const res = await cancel(token);
+  assert.equal(res.status, 200);
+  assert.equal(paypal.__calls('/v1/billing/subscriptions/SUB-54/cancel').length, 1);
+  assert.equal(stripe.__calls().length, 0);
 });
