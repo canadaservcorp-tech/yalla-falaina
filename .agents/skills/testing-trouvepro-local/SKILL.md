@@ -5,6 +5,62 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
 
 # Local E2E testing of TrouvePro
 
+## Yalla Falaina fork: use the correct target
+- The Yalla Falaina Phase 1 fork is a concierge, not the TrouvePro marketplace.
+  Do not reuse the production URL, database, accounts, or marketplace assertions below
+  when testing the fork. Read its blueprint, `server.js`, and `public/index.html` first.
+- Local boot requires `JWT_SECRET` (at least 32 characters), `SUPABASE_URL`, and
+  `SUPABASE_SERVICE_ROLE_KEY`; use Node 22 and `npm install`. Choose a free `PORT`,
+  set `PUBLIC_URL` to that local origin, and use `JOBS=off` to avoid scheduler writes.
+- If real Supabase credentials are absent, clearly labeled loopback/placeholder values
+  allow public SPA, health, SEO endpoints, consent validation, and unauthenticated
+  401 checks only. They do not provide a database. Shared rate-limit storage may
+  fall back to memory; do not count that as database connectivity.
+- Keyless concierge demo still requires a real authenticated account and database.
+  `JOB_API_PROVIDER=seed npm run jobs:refresh` persists bundled jobs through Supabase.
+  Do not claim demo replies/job cards or authenticated 402/paywall passed from health
+  flags or static markup alone.
+- Test UI language separately from chat dialect: header EN/FR/عربي links translate
+  chrome and set document direction, while the dialect dropdown sets input and
+  non-system bubble direction. Verify opposite-direction pairs and existing bubbles
+  after a mid-conversation dialect change; system messages should inherit UI direction.
+- Language persistence requires same-tab navigation without `?lang` (including a
+  payment-return-shaped URL), not merely reloading a URL that still has `?lang`.
+  Exercise this while signed in too, and send another message afterward. A translated
+  shell alone does not prove chat initialized. If fresh login works but reload makes
+  controls inert, inspect startup errors; sign-out/fresh-login can unblock independent
+  checks but must be reported as a workaround, not a passing reload test.
+- Register UI requires both checkboxes independently; backend requires boolean `true`,
+  not string `"true"`, for both `confirmAge` and `acceptTerms`.
+- Yalla stores its JWT in sessionStorage, unlike the old TrouvePro localStorage flow.
+  Preserve the same JWT_SECRET across local server restarts to keep browser login
+  while switching PAYWALL_ENFORCED or removing ANTHROPIC_API_KEY.
+- Resend test credentials can reject example.com recipients. Registration should
+  still persist the user/profile and return success with emailSent:false, with a
+  visible delivery warning. If authorized to bypass delivery, PATCH only the exact
+  test user's email_verified via service-role REST; do not count this as email-link
+  verification coverage.
+- An inactive account may see the Basic banner even with PAYWALL_ENFORCED=false.
+  Prove enforcement by observing the UI-originated concierge HTTP 402 and unchanged
+  daily_usage, not merely by seeing the banner.
+- Seed Canada matches have no honesty flags. A Ghana shawarma/cook query exercises
+  informal_unverified and honesty badges. Seed postings are fixtures, not verified
+  live vacancies; do not describe successful model calls as proof of job validity.
+- For exact-user cleanup, resolve conversation IDs by concierge_conversations.profile_id,
+  then delete daily_usage → concierge_messages (by conversation_id) →
+  concierge_conversations → profiles → users. Re-query each scoped table; keep jobs.
+- If Chrome reports a missing X display, check `$DISPLAY` and Xvfb before restarting
+  Chrome. Match the virtual screen dimensions to the full browser window (for example
+  `Xvfb :0 -screen 0 1600x1122x24`), maximize with `wmctrl`, and inspect a recording
+  frame for clipping before sharing evidence.
+
+### Devin Secrets Needed — Yalla Falaina
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for the Yalla Falaina project,
+  with its schema applied, are required for real signup/login, seed jobs and concierge.
+- `ANTHROPIC_API_KEY` is required only for live model replies, not keyless demo testing.
+- Generate a local-only JWT secret for testing; never borrow another app's database
+  credentials or production accounts.
+
 ## Start the app
 ```bash
 source ~/.nvm/nvm.sh && nvm use 22   # Node 20 crashes on @supabase/supabase-js
