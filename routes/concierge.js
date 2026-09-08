@@ -175,7 +175,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
             ? jobs.map(j => `• ${j.title} — ${j.city}, ${j.country} (${j.sourceType === 'informal_unverified' ? 'unverified listing' : 'licensed feed'})`).join('\n')
             : 'No jobs matched.')
         : `[Demo mode — no ANTHROPIC_API_KEY] Profile intake — still missing: ${missing.join(', ')}`;
-      if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), usage.COST.text);
+      if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), isComplete ? usage.COST.text : 0);
       if (isComplete) await usage.charge(user.id, usage.COST.text);
       return res.json({ success: true, reply, jobs, conversationId, llmConfigured: false, intake: !isComplete, isComplete, missing });
     }
@@ -210,7 +210,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       }
     }
 
-    if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), usage.COST.text);
+    if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), isComplete ? usage.COST.text : 0);
     if (isComplete) await usage.charge(user.id, usage.COST.text);
     res.json({ success: true, reply, jobs, conversationId, llmConfigured: true, intake: !nowComplete, isComplete: nowComplete, missing: nowMissing });
   } catch (e) {

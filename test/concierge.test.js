@@ -135,8 +135,10 @@ test('an incomplete profile enters intake mode instead of being refused, with no
   assert.ok(j.missing.includes('has_passport'));
   assert.match(upstream.body.system, /INTAKE MODE/);
   assert.match(upstream.body.system, /Do NOT mention, list, or recommend any jobs/);
-  // intake turns are free — the daily quota is neither checked nor charged
+  // intake turns are free — the daily quota is neither checked nor charged,
+  // and the logged turn records 0 units rather than the matching cost
   assert.equal(h.mock.__writes('daily_usage', 'upsert').length, 0);
+  assert.equal(h.mock.__writes('concierge_messages', 'insert')[0].payload.units_charged, 0);
 });
 
 test('no seeker_profiles row at all is intake mode, not a crash', async () => {
