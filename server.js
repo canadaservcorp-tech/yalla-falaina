@@ -10,6 +10,7 @@ const sec = require('./lib/security');
 const seo = require('./lib/seo');
 const analytics = require('./lib/analytics');
 const paypal = require('./lib/paypal');
+const stripeLib = require('./lib/stripe');
 
 const need = ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const k of need) if (!process.env[k]) { console.error(`FATAL: missing env ${k}`); process.exit(1); }
@@ -23,7 +24,9 @@ app.use(sec.headers);
 app.use(sec.corsSameOrigin);
 app.use('/api', sec.limits.api);
 app.use((req, res, next) => {
-  if (req.originalUrl === '/api/subscription/webhook') return next();   // raw body, verified downstream
+  // raw body for both webhooks, verified downstream (PayPal's own signature
+  // check; Stripe's local HMAC check) against the exact bytes received
+  if (req.originalUrl === '/api/subscription/webhook' || req.originalUrl === '/api/subscription/stripe/webhook') return next();
   express.json({ limit: '128kb' })(req, res, next);
 });
 app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonical home URL
@@ -49,6 +52,7 @@ app.get('/api/health', (_req, res) => res.json({
   jobsFeed: process.env.JOB_API_PROVIDER || 'seed',
   analytics: Boolean(analytics.measurementId()),
   paypal: paypal.configured(),
+  stripe: stripeLib.configured(),
   email: Boolean(process.env.RESEND_API_KEY),
 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));

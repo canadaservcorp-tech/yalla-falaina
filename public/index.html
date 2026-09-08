@@ -144,6 +144,7 @@
       <b data-i18n="paywallText">Basic — $25/month. The concierge is a subscriber feature: real matched opportunities, logged answers, daily fair-use quota.</b>
       <p class="hint" data-i18n="retentionNote">If you cancel, you keep access until the end of the paid period, then have 30 days to come back with everything as you left it. After that, your profile and intake details are permanently deleted — your account itself stays.</p>
       <button id="subscribeBtn" data-i18n="subscribeBtn">Subscribe with PayPal</button>
+      <button id="subscribeStripeBtn" data-i18n="subscribeStripeBtn">Pay by card (Stripe)</button>
       <span id="subMsg"></span>
     </div>
     <div id="messages"></div>
@@ -355,14 +356,18 @@
       if (!active) $('cancelSubConfirm').style.display = 'none';
     } catch { /* status is advisory only */ }
   }
-  $('subscribeBtn').onclick = async () => {
+  // Same handler for both providers — PayPal and Stripe differ only in which
+  // endpoint starts the checkout, not in how the client waits for or reports it.
+  async function startCheckout(path) {
     $('subMsg').textContent = t('checkoutPending');
     try {
-      const r = await fetch('/api/subscription/checkout', { method: 'POST', headers: headers() });
+      const r = await fetch(path, { method: 'POST', headers: headers() });
       const d = await r.json();
       if (d.url) location.href = d.url; else $('subMsg').textContent = apiError(d, t('checkoutUnavailable'));
     } catch { $('subMsg').textContent = t('checkoutUnavailable'); }
-  };
+  }
+  $('subscribeBtn').onclick = () => startCheckout('/api/subscription/checkout');
+  $('subscribeStripeBtn').onclick = () => startCheckout('/api/subscription/stripe/checkout');
   if (new URLSearchParams(location.search).get('sub') === 'success')
     setTimeout(refreshSub, 1500);
   $('cancelSubBtn').onclick = () => { $('cancelSubBtn').style.display = 'none'; $('cancelSubConfirm').style.display = 'inline'; };

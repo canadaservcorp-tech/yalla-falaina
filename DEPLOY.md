@@ -2,9 +2,9 @@
 
 This is a single Express process (`server.js`) with the recurring jobs run
 in-process by `lib/scheduler.js` — one service is enough on Railway, Render,
-or Fly. It needs outbound HTTPS (Anthropic, PayPal, Resend, Adzuna/Jooble)
-and a Postgres database via Supabase; it does not need a separate worker,
-a queue, or sticky sessions.
+or Fly. It needs outbound HTTPS (Anthropic, PayPal, Stripe if enabled,
+Resend, Adzuna/Jooble) and a Postgres database via Supabase; it does not
+need a separate worker, a queue, or sticky sessions.
 
 Deploying the service itself — creating it on the host, wiring the domain,
 setting the env vars below, and confirming the first boot — is a human step;
@@ -43,6 +43,9 @@ invented — copy the file and fill it in on the host's env-var UI.
 | `PAYPAL_PLAN_ID` | **yes** | Printed by `npm run paypal:setup`. |
 | `PAYPAL_WEBHOOK_ID` | **yes** | The webhook Id PayPal assigns once the endpoint (`/api/subscription/webhook`) is registered against the live `PUBLIC_URL`. |
 | `PAYPAL_ENV` | **yes** | `live` for production, `sandbox` for testing. |
+| `STRIPE_SECRET_KEY` | recommended | The second payment rail — specifically covers Iraq and Lebanon subscribers, whom PayPal's own supported-country list excludes. Leave unset to launch PayPal-only; the Stripe button simply won't appear healthy in `/api/health` and its checkout route returns `ERR_PAYMENT_UNAVAILABLE`. Use an `sk_test_...` key against Stripe's test mode before switching to `sk_live_...`. |
+| `STRIPE_WEBHOOK_SECRET` | if Stripe set | The signing secret Stripe issues when you register the webhook endpoint (step 6a below) — not the same kind of value as `PAYPAL_WEBHOOK_ID`, but the same role. |
+| `STRIPE_PRICE_ID` | if Stripe set | The recurring $25/month Price id. Created directly in the Stripe Dashboard (Product catalog → add a product with a recurring monthly price) — unlike PayPal, there's no setup script for this; Stripe's own dashboard is the simpler path. |
 | `JOBS` | no | Leave unset (`on`) on the single service. Set `JOBS=off` on any *additional* instance so the recurring jobs (job-feed refresh, subscription lapse, retention sweeps) run exactly once. |
 
 ## 3. Boot check on a clean port
@@ -55,9 +58,11 @@ curl -s http://localhost:3100/api/health | jq .
 ```
 
 Expect `{"ok":true,...}` and every integration boolean (`concierge`, `paypal`,
-`email`) `true` — a `false` there means that variable is missing or empty,
-not that the integration failed a live call (`/api/health` never makes one:
-it's a configuration check, same as before Step 7 added these two fields).
+`stripe`, `email`) `true` (`stripe` only if you've set `STRIPE_SECRET_KEY` —
+Stripe is optional, PayPal-only is a valid launch configuration) — a `false`
+there means that variable is missing or empty, not that the integration
+failed a live call (`/api/health` never makes one: it's a configuration
+check, same as before Step 7 added these fields).
 `jobsFeed` should read `adzuna` or `jooble`, never `seed`, before launch.
 
 ## 4. First data load
@@ -78,16 +83,25 @@ already states the concierge does not do live lookups. Nothing here should
 make that stale; the job feed is a periodic batch refresh, never a live
 per-message API call, so the prompt's claim stays accurate as-is.
 
-## 6. Register the PayPal webhook
+## 6. Register the payment webhooks
 
-Point PayPal's webhook config at `https://<PUBLIC_URL>/api/subscription/webhook`
-and copy the resulting webhook ID into `PAYPAL_WEBHOOK_ID`. This has to happen
-after `PUBLIC_URL` is live and stable — a preview/staging URL that later
-changes needs the webhook re-pointed.
+**6a. PayPal.** Point PayPal's webhook config at
+`https://<PUBLIC_URL>/api/subscription/webhook` and copy the resulting
+webhook ID into `PAYPAL_WEBHOOK_ID`. This has to happen after `PUBLIC_URL` is
+live and stable — a preview/staging URL that later changes needs the webhook
+re-pointed.
+
+**6b. Stripe** (only if `STRIPE_SECRET_KEY` is set). In the Stripe Dashboard,
+add a webhook endpoint at `https://<PUBLIC_URL>/api/subscription/stripe/webhook`
+listening for at least: `checkout.session.completed`,
+`customer.subscription.updated`, `customer.subscription.deleted`. Copy the
+endpoint's signing secret into `STRIPE_WEBHOOK_SECRET`. Same re-pointing
+caveat as PayPal if `PUBLIC_URL` changes later.
 
 ## What's still a human decision
 
 - Which host (Railway/Render/Fly) and its domain/TLS setup.
 - The actual Supabase project creation and its billing tier.
 - PayPal going live (business account verification, real bank payout details).
+- Stripe account activation (business verification) if the second rail is enabled — this is the piece the founder does directly with Stripe, separate from anything in this repo.
 - A Resend-verified sending domain.

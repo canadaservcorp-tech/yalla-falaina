@@ -1,6 +1,9 @@
 // Ends access for cancelled subscriptions once the period they already paid for is over.
-// Cancelling in PayPal only records subscription_cancel_at, so a seeker keeps the days
-// they bought (as the Terms promise) instead of losing the concierge the same minute.
+// Cancelling with either payment provider (PayPal or Stripe) only ever records
+// subscription_cancel_at, so a seeker keeps the days they bought (as the Terms
+// promise) instead of losing the concierge the same minute. This script itself
+// is provider-agnostic — it only reads/writes the shared subscription_* columns,
+// never a provider-specific subscription id.
 //   node scripts/subscription-lapse.js
 require('dotenv').config();
 const supabase = require('../db');
