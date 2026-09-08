@@ -94,6 +94,48 @@ router.get('/verify', sec.limits.verify, async (req, res) => {
   res.redirect(`${PUBLIC_URL}/?verified=1`);
 });
 
+// Covers the two real gaps register's resilience fix left open: the domain
+// verification issue that makes Resend reject a send in the first place needs
+// a dashboard/DNS fix, not code, but a seeker whose email genuinely never
+// arrived (that failure, a stale link, or the message landing in spam) had no
+// way back in except re-registering into an email-already-exists dead end.
+// Same anti-enumeration shape as /register's exists-check: one generic
+// response whatever the account's real state, so this endpoint can't be used
+// to test which addresses are registered — only the email content sent
+// behind the scenes differs, and every failure path (bad input, no such user,
+// a DB error, a send failure) still resolves to that same 200.
+router.post('/resend-verification', sec.limits.credentials, async (req, res) => {
+  const GENERIC = { success: true, message: 'If that account needs verifying, we just sent a new link.' };
+  try {
+    const email = sec.normalizeEmail(req.body.email);
+    if (!sec.isEmail(email)) return res.json(GENERIC);
+
+    const { data: user } = await supabase.from('users')
+      .select('id, email_verified').eq('email', email).maybeSingle();
+    if (!user) return res.json(GENERIC);
+
+    if (user.email_verified) {
+      try {
+        await sendEmail(email, "You're already verified — Yalla Falaina",
+          '<p>This account is already verified. Sign in below.</p>');
+      } catch (e) { console.error('resend:verified email', e.message); }
+      return res.json(GENERIC);
+    }
+
+    // fresh token: an old leaked/expired link should stop working once a new one is issued
+    const verify_token = crypto.randomBytes(32).toString('hex');
+    const { error } = await supabase.from('users').update({ verify_token }).eq('id', user.id);
+    if (error) throw error;
+
+    const link = `${PUBLIC_URL}/api/auth/verify?token=${verify_token}&id=${user.id}`;
+    try {
+      await sendEmail(email, 'Confirm your email — Yalla Falaina',
+        `<p>Here's your new confirmation link:</p><p><a href="${link}">${link}</a></p>`);
+    } catch (e) { console.error('resend:verify email', e.message); }
+    res.json(GENERIC);
+  } catch (e) { console.error('resend-verification', e); res.json(GENERIC); }
+});
+
 router.post('/login', sec.limits.credentials, async (req, res) => {
   try {
     const email = sec.normalizeEmail(req.body.email);
