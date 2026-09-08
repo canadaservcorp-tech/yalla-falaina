@@ -32,7 +32,7 @@ let uid = 0;
 // live from the row fields on every call, so fixtures need the whole set.
 const COMPLETE_PROFILE = { id: 0, preferred_language: 'en', preferred_country: 'canada', sector: 'hospitality', role_type: null };
 const COMPLETE_SEEKER = { is_complete: true, confirmed_by_user: true,
-  work_history: [{ employer: 'X', title: 'cook' }], languages: [{ language: 'ar', level: 'native' }],
+  work_history: [{ employer: 'X', title: 'cook' }], education: [], certifications: [], languages: [{ language: 'ar', level: 'native' }],
   has_passport: true, has_visa: false, has_legal_residency_current_country: true, has_family_or_host_abroad: false };
 // A caller: every queued users row is complete — the route reads `users` twice
 // (requireActiveUser, then the subscription gate) and a partial row would 403.
@@ -130,9 +130,13 @@ test('an incomplete profile enters intake mode instead of being refused, with no
   assert.deepEqual(j.jobs, []);
   assert.ok(j.missing.includes('preferred_language'));
   assert.ok(j.missing.includes('work_history'));
+  assert.ok(j.missing.includes('education'));
+  assert.ok(j.missing.includes('certifications'));
   assert.ok(j.missing.includes('has_passport'));
   assert.match(upstream.body.system, /INTAKE MODE/);
   assert.match(upstream.body.system, /Do NOT mention, list, or recommend any jobs/);
+  // intake turns are free — the daily quota is neither checked nor charged
+  assert.equal(h.mock.__writes('daily_usage', 'upsert').length, 0);
 });
 
 test('no seeker_profiles row at all is intake mode, not a crash', async () => {

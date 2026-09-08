@@ -123,10 +123,16 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     if (isComplete && paywallOn() && !active)
       return res.status(402).json({ error: 'A subscription is required to use the concierge', upgrade: true, code: 'ERR_PAYWALL' });
 
+    // Intake turns never touch the daily quota (Section 4.3: the onboarding
+    // conversation can run 10-15 exchanges before a subscriber gets value — it
+    // must not count against the cap). The 429 check and usage.charge only run
+    // on the matching path below.
     const tier = active ? (user.subscription_tier || 'basic') : 'none';
-    const quota = await usage.checkQuota(user.id, tier, usage.COST.text);
-    if (!quota.allowed)
-      return res.status(429).json({ error: 'Daily limit reached — come back tomorrow or upgrade', quota, code: 'ERR_QUOTA' });
+    if (isComplete) {
+      const quota = await usage.checkQuota(user.id, tier, usage.COST.text);
+      if (!quota.allowed)
+        return res.status(429).json({ error: 'Daily limit reached — come back tomorrow or upgrade', quota, code: 'ERR_QUOTA' });
+    }
 
     // Intake mode retrieves nothing — no jobs are fetched, shown to the model,
     // or returned to the client until the profile gate passes.
@@ -170,7 +176,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
             : 'No jobs matched.')
         : `[Demo mode — no ANTHROPIC_API_KEY] Profile intake — still missing: ${missing.join(', ')}`;
       if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), usage.COST.text);
-      await usage.charge(user.id, usage.COST.text);
+      if (isComplete) await usage.charge(user.id, usage.COST.text);
       return res.json({ success: true, reply, jobs, conversationId, llmConfigured: false, intake: !isComplete, isComplete, missing });
     }
 
@@ -205,7 +211,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     }
 
     if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), usage.COST.text);
-    await usage.charge(user.id, usage.COST.text);
+    if (isComplete) await usage.charge(user.id, usage.COST.text);
     res.json({ success: true, reply, jobs, conversationId, llmConfigured: true, intake: !nowComplete, isComplete: nowComplete, missing: nowMissing });
   } catch (e) {
     console.error('concierge', e.name, e.message);

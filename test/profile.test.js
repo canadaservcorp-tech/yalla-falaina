@@ -69,9 +69,10 @@ test('PUT with no existing seeker_profiles row inserts one as conversational int
   assert.equal(h.mock.__writes('seeker_profiles', 'update').length, 0);
 });
 
-// The full Section-10 intake fixture minus confirmation — everything else answered.
+// The full Section-10 intake fixture minus confirmation — everything else answered
+// (empty arrays count as answered: an explicit "none" is a valid intake answer).
 const NEARLY_DONE_SEEKER = { id: 'sp-existing', confirmed_by_user: false, is_complete: false,
-  work_history: [{ employer: 'X', title: 'cook' }], languages: [{ language: 'ar', level: 'native' }],
+  work_history: [{ employer: 'X', title: 'cook' }], education: [], certifications: [], languages: [{ language: 'ar', level: 'native' }],
   has_passport: true, has_visa: false, has_legal_residency_current_country: true, has_family_or_host_abroad: false };
 const FULL_PROFILE = { id: 200, preferred_language: 'en', preferred_country: 'Canada', sector: 'construction', role_type: null };
 
@@ -130,14 +131,14 @@ test('GET lists exactly what is missing for an incomplete profile', async () => 
   assert.equal(r.status, 200);
   const j = await r.json();
   assert.equal(j.isComplete, false);
-  assert.deepEqual(j.missing.sort(), ['confirmed_by_user', 'has_family_or_host_abroad', 'has_legal_residency_current_country',
+  assert.deepEqual(j.missing.sort(), ['certifications', 'confirmed_by_user', 'education', 'has_family_or_host_abroad', 'has_legal_residency_current_country',
     'has_passport', 'has_visa', 'languages', 'preferred_country', 'preferred_language', 'work_history']);
 });
 
 test('a false travel-status answer counts as answered — only unanswered booleans are missing', async () => {
   h.mock.__set('profiles', { data: { id: 200, preferred_language: 'en', preferred_country: 'Canada', sector: 'hospitality', role_type: null }, error: null });
   h.mock.__set('seeker_profiles', { data: { confirmed_by_user: false, is_complete: false,
-    work_history: [{ employer: 'X', title: 'cook' }], languages: [{ language: 'en', level: 'basic' }],
+    work_history: [{ employer: 'X', title: 'cook' }], education: [], certifications: [], languages: [{ language: 'en', level: 'basic' }],
     has_passport: false, has_visa: false, has_legal_residency_current_country: false, has_family_or_host_abroad: false }, error: null });
   const r = await get(user());
   const j = await r.json();
@@ -145,10 +146,22 @@ test('a false travel-status answer counts as answered — only unanswered boolea
   assert.deepEqual(j.missing, ['confirmed_by_user']);
 });
 
+test('empty arrays count as answered, but unset fields still list as missing', async () => {
+  h.mock.__set('profiles', { data: { id: 200, preferred_language: 'en', preferred_country: 'Canada', sector: null, role_type: 'driver' }, error: null });
+  h.mock.__set('seeker_profiles', { data: { confirmed_by_user: false, is_complete: false,
+    work_history: [], education: [], certifications: [], languages: [],
+    has_passport: false, has_visa: false, has_legal_residency_current_country: null, has_family_or_host_abroad: false }, error: null });
+  const r = await get(user());
+  const j = await r.json();
+  assert.equal(j.isComplete, false);
+  // the never-written boolean is missing; explicit [] and false are not
+  assert.deepEqual(j.missing.sort(), ['confirmed_by_user', 'has_legal_residency_current_country']);
+});
+
 test('GET reports a complete profile with nothing missing', async () => {
   h.mock.__set('profiles', { data: { id: 200, preferred_language: 'ar', preferred_country: 'UAE', sector: null, role_type: 'electrician' }, error: null });
   h.mock.__set('seeker_profiles', { data: { confirmed_by_user: true, is_complete: true,
-    work_history: [{ employer: 'X', title: 'tech' }], languages: [{ language: 'ar', level: 'native' }],
+    work_history: [{ employer: 'X', title: 'tech' }], education: [], certifications: [], languages: [{ language: 'ar', level: 'native' }],
     has_passport: true, has_visa: true, has_legal_residency_current_country: true, has_family_or_host_abroad: true }, error: null });
   const r = await get(user());
   const j = await r.json();
@@ -164,6 +177,6 @@ test('GET on an account with no profile row at all reports everything missing, n
   const j = await r.json();
   assert.equal(j.isComplete, false);
   assert.equal(j.profile, null);
-  assert.deepEqual(j.missing.sort(), ['confirmed_by_user', 'has_family_or_host_abroad', 'has_legal_residency_current_country',
+  assert.deepEqual(j.missing.sort(), ['certifications', 'confirmed_by_user', 'education', 'has_family_or_host_abroad', 'has_legal_residency_current_country',
     'has_passport', 'has_visa', 'languages', 'preferred_country', 'preferred_language', 'sector_or_role_type', 'work_history']);
 });

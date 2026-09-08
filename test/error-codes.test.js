@@ -101,7 +101,7 @@ const caller = (sub = {}) => {
     subscription_status: 'inactive', subscription_tier: 'none', ...sub };
   h.mock.__queue('users', { data: row, error: null }, { data: row, error: null }, { data: row, error: null });
   h.mock.__set('seeker_profiles', { data: { is_complete: true, confirmed_by_user: true,
-    work_history: [{ employer: 'X', title: 'cook' }], languages: [{ language: 'ar', level: 'native' }],
+    work_history: [{ employer: 'X', title: 'cook' }], education: [], certifications: [], languages: [{ language: 'ar', level: 'native' }],
     has_passport: true, has_visa: false, has_legal_residency_current_country: true, has_family_or_host_abroad: false }, error: null });
   h.mock.__set('profiles', { data: { id, preferred_language: 'en', preferred_country: 'canada', sector: 'hospitality', role_type: null }, error: null });
   return auth(actor(h, { id, role: 'seeker' }));
