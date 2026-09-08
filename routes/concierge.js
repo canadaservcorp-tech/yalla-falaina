@@ -11,6 +11,7 @@ const sec = require('../lib/security');
 const usage = require('../lib/usage');
 const { retrieveJobs } = require('../lib/yf/matching');
 const { buildSystemPrompt } = require('../lib/yf/systemPrompt');
+const { computeCompleteness } = require('../lib/profileCompleteness');
 const router = express.Router();
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929';
@@ -67,6 +68,29 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       .slice(-MAX_TURNS)
       .map(m => ({ role: m.role, content: m.content.slice(0, MAX_CHARS) }));
     if (!message) return res.status(400).json({ error: 'message is required', code: 'ERR_BAD_INPUT' });
+
+    // Profile completeness gate (Section 10) — checked before the paywall/quota
+    // logic below: matching only makes sense once we know enough to match against,
+    // and there's no reason to spend someone's daily quota finding that out.
+    // No unique constraint on seeker_profiles.profile_id (schema.sql) yet, so this
+    // reads the most recent row by hand rather than assuming exactly one exists.
+    const { data: seekerProfile } = await supabase.from('seeker_profiles')
+      .select('is_complete, confirmed_by_user')
+      .eq('profile_id', req.user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!seekerProfile || !seekerProfile.is_complete) {
+      const { data: profileRow } = await supabase.from('profiles')
+        .select('preferred_language, preferred_country, sector, role_type')
+        .eq('id', req.user.id).maybeSingle();
+      const { missing } = computeCompleteness({ profile: profileRow, seekerProfile });
+      return res.status(403).json({
+        error: 'Complete your profile before the concierge can match you to opportunities',
+        code: 'ERR_PROFILE_INCOMPLETE',
+        missing,
+      });
+    }
 
     // Subscription gate (Section 4.3): the $25 Basic tier is the paid lane;
     // the quota still applies to everyone so a trial can't burn the model.

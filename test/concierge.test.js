@@ -30,11 +30,15 @@ beforeEach(() => {
 let uid = 0;
 // A caller: every queued users row is complete — the route reads `users` twice
 // (requireActiveUser, then the subscription gate) and a partial row would 403.
-const caller = (sub = {}) => {
+// Defaults to a complete seeker_profiles row too, so every existing test below
+// clears the Step 6 profile-completeness gate the same way it always implicitly
+// did before that gate existed; pass seekerProfile explicitly to test the gate itself.
+const caller = (sub = {}, seekerProfile = { is_complete: true, confirmed_by_user: true }) => {
   const id = ++uid + 100;
   const row = { id, role: 'seeker', banned: false, email_verified: true,
     subscription_status: 'inactive', subscription_tier: 'none', ...sub };
   h.mock.__queue('users', { data: row, error: null }, { data: row, error: null }, { data: row, error: null });
+  h.mock.__set('seeker_profiles', { data: seekerProfile, error: null });
   return auth(actor(h, { id, role: 'seeker' }));
 };
 // The route is rate limited per address, so each call comes from its own visitor
@@ -105,4 +109,29 @@ test('a subscription is required when the paywall is enforced', async () => {
   const r = await ask({ message: 'hi' }, caller());   // caller's gate row is 'inactive'
   assert.equal(r.status, 402);
   assert.equal(upstream, null);
+});
+
+test('an incomplete profile is refused before the paywall/quota check, listing what is missing', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';   // proves the profile gate runs first: this would otherwise 402
+  h.mock.__set('profiles', { data: { preferred_language: null, preferred_country: null, sector: null, role_type: null }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }));
+  assert.equal(r.status, 403);
+  const j = await r.json();
+  assert.equal(j.code, 'ERR_PROFILE_INCOMPLETE');
+  assert.deepEqual(j.missing.sort(), ['confirmed_by_user', 'preferred_country', 'preferred_language', 'sector_or_role_type']);
+  assert.equal(upstream, null);
+});
+
+test('no seeker_profiles row at all is treated as incomplete, not a crash', async () => {
+  h.mock.__set('profiles', { data: null, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, null));
+  assert.equal(r.status, 403);
+  assert.equal((await r.json()).code, 'ERR_PROFILE_INCOMPLETE');
+});
+
+test('a complete profile passes straight through to matching', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c2' }, error: null });
+  const r = await ask({ message: 'electrician canada' }, caller({}, { is_complete: true, confirmed_by_user: true }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /JOB_CONTEXT/);
 });
