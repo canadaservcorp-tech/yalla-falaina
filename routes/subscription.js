@@ -15,7 +15,7 @@ const TIER = 'basic';                    // the only live tier in Phase 1
 
 // Start a subscription — returns the PayPal approval URL.
 router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, async (req, res) => {
-  if (!configured() || !PLAN) return res.status(500).json({ error: 'PayPal not configured' });
+  if (!configured() || !PLAN) return res.status(500).json({ error: 'PayPal not configured', code: 'ERR_PAYMENT_UNAVAILABLE' });
   try {
     const { data: u } = await supabase.from('users').select('id, email').eq('id', req.user.id).maybeSingle();
     const sub = await pp('POST', '/v1/billing/subscriptions', {
@@ -31,9 +31,9 @@ router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, 
     });
     await supabase.from('users').update({ paypal_subscription_id: sub.id }).eq('id', u.id);
     const approve = (sub.links || []).find(l => l.rel === 'approve');
-    if (!approve) return res.status(500).json({ error: 'PayPal returned no approval link' });
+    if (!approve) return res.status(500).json({ error: 'PayPal returned no approval link', code: 'ERR_PAYMENT_UNAVAILABLE' });
     res.json({ success: true, url: approve.href });
-  } catch (e) { console.error('paypal checkout', e); res.status(500).json({ error: 'Could not start checkout' }); }
+  } catch (e) { console.error('paypal checkout', e); res.status(500).json({ error: 'Could not start checkout', code: 'ERR_PAYMENT_UNAVAILABLE' }); }
 });
 
 router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
@@ -98,6 +98,6 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
       }
     }
     res.json({ received: true });
-  } catch (e) { console.error('paypal webhook', e); res.status(500).json({ error: 'Internal error' }); }
+  } catch (e) { console.error('paypal webhook', e); res.status(500).json({ error: 'Internal error', code: 'ERR_SERVER' }); }
 });
 module.exports = router;
