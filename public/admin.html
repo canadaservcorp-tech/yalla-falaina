@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Yalla Falaina — Admin</title>
+<style>
+  :root {
+    --bg: #0f1720; --panel: #16212c; --accent: #2fae6b; --accent-dim: #1f7a4a;
+    --text: #eef3f7; --text-dim: #9fb1bf; --border: #24343f; --warn: #d9a441; --danger: #d9614a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 20px 80px; }
+  input, select, textarea { background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: inherit; }
+  button { background: var(--accent); color: #08150e; border: none; border-radius: 6px;
+    padding: 7px 14px; font-weight: 600; cursor: pointer; font-size: 13px; }
+  button:hover { background: var(--accent-dim); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.danger { background: var(--danger); color: #200; }
+  button.ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  #loginCard { max-width: 340px; margin: 80px auto; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; }
+  #loginCard h2 { margin: 0 0 4px; font-size: 17px; }
+  #loginCard .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 16px; }
+  #loginCard label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
+  #loginCard input { width: 100%; }
+  #loginMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-top: 8px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tabs button { background: var(--panel); color: var(--text-dim); border: 1px solid var(--border); }
+  .tabs button.on { background: var(--accent); color: #08150e; border-color: var(--accent); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 12px; }
+  .card .title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .card .meta { color: var(--text-dim); font-size: 12.5px; margin-bottom: 8px; }
+  .card .desc { font-size: 13.5px; white-space: pre-wrap; margin-bottom: 10px; }
+  .card .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .card .reject-row { display: none; gap: 8px; margin-top: 8px; align-items: center; }
+  .card .reject-row.show { display: flex; }
+  .card .reject-row input { flex: 1; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
+  .badge.approved { background: rgba(47,174,107,.18); color: var(--accent); }
+  .badge.rejected { background: rgba(217,97,74,.18); color: var(--danger); }
+  #empty { color: var(--text-dim); font-size: 13.5px; padding: 20px 0; }
+  #topMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Yalla Falaina — Admin</h1>
+  <button class="ghost" id="logoutBtn" style="display:none">Sign out</button>
+</header>
+
+<div id="loginWrap">
+  <div id="loginCard">
+    <h2>Admin sign in</h2>
+    <div class="hint">Same login as any account — this page just refuses anyone whose role isn't admin.</div>
+    <label>Email</label><input type="email" id="email">
+    <label>Password</label><input type="password" id="password">
+    <div style="margin-top:14px"><button id="loginBtn" style="width:100%">Sign in</button></div>
+    <div id="loginMsg"></div>
+  </div>
+</div>
+
+<div id="app" class="wrap" style="display:none">
+  <div class="tabs">
+    <button data-status="pending" class="on">Pending</button>
+    <button data-status="approved">Approved</button>
+    <button data-status="rejected">Rejected</button>
+  </div>
+  <div id="topMsg"></div>
+  <div id="list"></div>
+  <div id="empty" style="display:none">Nothing here.</div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const tokenKey = 'yf_admin_token';
+  const token = () => sessionStorage.getItem(tokenKey) || '';
+  const headers = () => ({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() });
+  let status = 'pending';
+
+  function showApp() {
+    $('loginWrap').style.display = 'none';
+    $('app').style.display = 'block';
+    $('logoutBtn').style.display = 'inline-block';
+    load();
+  }
+  $('logoutBtn').onclick = () => { sessionStorage.removeItem(tokenKey); location.reload(); };
+
+  $('loginBtn').onclick = async () => {
+    $('loginMsg').textContent = '';
+    const email = $('email').value.trim(), password = $('password').value;
+    if (!email || !password) { $('loginMsg').textContent = 'Enter both fields.'; return; }
+    $('loginBtn').disabled = true;
+    try {
+      const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }) });
+      const d = await r.json();
+      if (!r.ok) { $('loginMsg').textContent = d.error || 'Sign-in failed'; return; }
+      sessionStorage.setItem(tokenKey, d.token);
+      // Confirm admin role before showing the console — a non-admin token
+      // still signs in fine, it just can't read anything past this point.
+      const check = await fetch('/api/admin/informal-listings', { headers: headers() });
+      if (check.status === 403) {
+        sessionStorage.removeItem(tokenKey);
+        $('loginMsg').textContent = 'This account is not an admin.';
+        return;
+      }
+      showApp();
+    } catch (e) {
+      $('loginMsg').textContent = 'Network error — try again.';
+    } finally { $('loginBtn').disabled = false; }
+  };
+
+  document.querySelectorAll('.tabs button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      status = btn.dataset.status;
+      load();
+    };
+  });
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  async function load() {
+    $('topMsg').textContent = '';
+    const r = await fetch('/api/admin/informal-listings?status=' + encodeURIComponent(status), { headers: headers() });
+    if (r.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
+    const d = await r.json();
+    if (!r.ok) { $('topMsg').textContent = d.error || 'Could not load submissions.'; return; }
+    render(d.submissions || []);
+  }
+
+  function render(rows) {
+    const list = $('list');
+    list.innerHTML = '';
+    $('empty').style.display = rows.length ? 'none' : 'block';
+    rows.forEach(sub => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const badge = sub.review_status === 'approved' ? '<span class="badge approved">approved</span>'
+        : sub.review_status === 'rejected' ? '<span class="badge rejected">rejected</span>' : '';
+      card.innerHTML = `
+        <div class="title">${esc(sub.title)}${badge}</div>
+        <div class="meta">${[sub.country, sub.category].filter(Boolean).map(esc).join(' · ')}
+          · submitted by ${esc(sub.submitted_by_contact)} · ${new Date(sub.created_at).toLocaleString()}
+          ${sub.reviewed_at ? ' · reviewed ' + new Date(sub.reviewed_at).toLocaleString() : ''}</div>
+        <div class="desc">${esc(sub.description || '(no description)')}</div>
+        ${sub.rejection_reason ? `<div class="meta">Reason: ${esc(sub.rejection_reason)}</div>` : ''}
+        ${sub.review_status === 'pending' ? `
+          <div class="actions">
+            <button class="approve">Approve</button>
+            <button class="danger reject">Reject…</button>
+          </div>
+          <div class="reject-row">
+            <input type="text" class="reasonInput" placeholder="Reason (required)">
+            <button class="danger confirmReject">Confirm reject</button>
+            <button class="ghost cancelReject">Cancel</button>
+          </div>` : ''}
+      `;
+      if (sub.review_status === 'pending') {
+        const reviewRow = card.querySelector('.reject-row');
+        card.querySelector('.approve').onclick = () => review(sub.id, 'approved', null, card);
+        card.querySelector('.reject').onclick = () => reviewRow.classList.add('show');
+        card.querySelector('.cancelReject').onclick = () => reviewRow.classList.remove('show');
+        card.querySelector('.confirmReject').onclick = () => {
+          const reason = card.querySelector('.reasonInput').value.trim();
+          if (!reason) { card.querySelector('.reasonInput').focus(); return; }
+          review(sub.id, 'rejected', reason, card);
+        };
+      }
+      list.appendChild(card);
+    });
+  }
+
+  async function review(id, decision, reason, card) {
+    card.querySelectorAll('button').forEach(b => b.disabled = true);
+    try {
+      const r = await fetch(`/api/admin/informal-listings/${id}/review`, {
+        method: 'POST', headers: headers(), body: JSON.stringify({ decision, reason: reason || undefined }),
+      });
+      const d = await r.json();
+      if (!r.ok) { $('topMsg').textContent = d.error || 'Could not save the review.'; card.querySelectorAll('button').forEach(b => b.disabled = false); return; }
+      load(); // the reviewed row drops out of the current (pending) tab
+    } catch (e) {
+      $('topMsg').textContent = 'Network error — try again.';
+      card.querySelectorAll('button').forEach(b => b.disabled = false);
+    }
+  }
+
+  // A token from a previous session is worth trying before making the admin
+  // sign in again — same convenience the main app gives seekers.
+  if (token()) {
+    fetch('/api/admin/informal-listings', { headers: headers() })
+      .then(r => { if (r.ok) showApp(); else sessionStorage.removeItem(tokenKey); })
+      .catch(() => {});
+  }
+</script>
+</body>
+</html>
