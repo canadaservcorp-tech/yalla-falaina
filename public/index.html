@@ -305,7 +305,7 @@
       const r = await fetch('/api/subscription/cancel', { method: 'POST', headers: headers() });
       const d = await r.json();
       $('cancelSubConfirm').style.display = 'none';
-      addMessage('system', r.ok ? d.message : (d.error || t('cancelSubFailed')));
+      addMessage('system', r.ok ? t('cancelSubSuccess') : t('cancelSubFailed'));
       if (r.ok) refreshSub();
       else $('cancelSubBtn').style.display = 'inline-block';
     } catch {

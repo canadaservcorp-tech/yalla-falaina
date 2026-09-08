@@ -71,6 +71,7 @@
       cancelSubYes: 'Yes, cancel',
       cancelSubNo: 'Never mind',
       cancelSubFailed: 'Could not cancel — please try again.',
+      cancelSubSuccess: 'Cancellation requested — you keep access until the end of the paid period.',
     },
     fr: {
       signOut: 'Se déconnecter',
@@ -123,6 +124,7 @@
       cancelSubYes: 'Oui, annuler',
       cancelSubNo: 'Laisser tomber',
       cancelSubFailed: "Impossible d'annuler — veuillez réessayer.",
+      cancelSubSuccess: "Annulation demandée — vous gardez l'accès jusqu'à la fin de la période payée.",
     },
     ar: {
       signOut: 'تسجيل الخروج',
@@ -175,6 +177,7 @@
       cancelSubYes: 'نعم، إلغاء',
       cancelSubNo: 'تراجع',
       cancelSubFailed: 'تعذّر الإلغاء — يرجى المحاولة مرة أخرى.',
+      cancelSubSuccess: 'تم طلب الإلغاء — تحتفظ بالوصول حتى نهاية الفترة المدفوعة.',
     },
   };
 
