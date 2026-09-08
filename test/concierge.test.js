@@ -111,11 +111,58 @@ test('an upstream failure is reported, never swallowed as a fake answer', async 
   assert.equal(r.status, 502);
 });
 
-test('a subscription is required when the paywall is enforced', async () => {
+test('a subscription is required when the paywall is enforced and the free preview is used up', async () => {
   process.env.PAYWALL_ENFORCED = 'true';
-  const r = await ask({ message: 'hi' }, caller());   // caller's gate row is 'inactive'
+  const r = await ask({ message: 'hi' }, caller({ free_preview_used: 3 }));   // caller's gate row is 'inactive'
   assert.equal(r.status, 402);
   assert.equal(upstream, null);
+});
+
+// ---------- free preview (first 3 messages) ----------
+
+test('the first free-preview turn reaches the model with redacted jobs, not a 402', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-preview1' }, error: null });
+  h.mock.__set('jobs', { data: [
+    { id: 9, title: 'Electrician', employer: 'Acme', country: 'Canada', city: 'Laval', category: 'trades', track: 'western', source_type: 'licensed_api', external_source: 'seed', source_url: 'https://example.test/9', raw: {} },
+  ], error: null });
+  const r = await ask({ message: 'electrician canada' }, caller({ free_preview_used: 0 }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.preview, true);
+  assert.equal(j.previewRemaining, 2);
+  // the redacted shape reaches the client: no application link, no real requirements text
+  assert.ok(j.jobs.every(job => job.teaser === true && job.url === ''));
+  assert.match(upstream.body.system, /FREE PREVIEW MODE/);
+  assert.match(upstream.body.system, /subscribe to see the full requirements/);
+  assert.doesNotMatch(upstream.body.system, /url: https/);
+  // preview turns still go through matching/logging/quota exactly like a paid turn
+  assert.equal(h.mock.__writes('daily_usage', 'upsert').length, 1);
+});
+
+test('the free-preview counter increments so the 4th matching turn hits the paywall', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-preview2' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({ free_preview_used: 2 }));   // last free reply
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.preview, true);
+  assert.equal(j.previewRemaining, 0);
+  const writes = h.mock.__writes('users', 'update');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].payload.free_preview_used, 3);
+});
+
+test('intake mode never touches the preview counter, even with PAYWALL_ENFORCED on', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-preview3' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({ free_preview_used: 0 }, { is_complete: false, confirmed_by_user: false },
+    { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.intake, true);
+  assert.ok(!j.preview);
+  assert.equal(h.mock.__writes('users', 'update').length, 0);
 });
 
 test('an incomplete profile enters intake mode instead of being refused, with no job retrieval', async () => {

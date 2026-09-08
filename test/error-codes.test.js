@@ -121,7 +121,9 @@ test('concierge: an empty message -> ERR_BAD_INPUT', async () => {
 test('concierge: paywall enforced on an inactive subscription -> ERR_PAYWALL (402)', async () => {
   process.env.PAYWALL_ENFORCED = 'true';
   try {
-    const r = await ask({ message: 'hi' }, caller());
+    // free_preview_used: 3 — the free-preview turns (Section 4.3) are exhausted;
+    // this test is specifically about the hard paywall behind them.
+    const r = await ask({ message: 'hi' }, caller({ free_preview_used: 3 }));
     assert.equal(r.status, 402);
     assert.equal((await r.json()).code, 'ERR_PAYWALL');
   } finally { delete process.env.PAYWALL_ENFORCED; }
