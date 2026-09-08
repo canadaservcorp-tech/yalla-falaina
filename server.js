@@ -34,6 +34,7 @@ app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.site
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/concierge', require('./routes/concierge')); // the AI concierge — the product
+app.use('/api/profile', require('./routes/profile'));
 app.use('/api/informal-listings', require('./routes/informal-listings'));
 app.use('/api/admin/informal-listings', require('./routes/admin-informal-listings'));
 

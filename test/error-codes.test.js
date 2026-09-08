@@ -93,11 +93,14 @@ test('login: an unverified account -> ERR_UNVERIFIED', async () => {
 // ---------- routes/concierge.js ----------
 
 let uid = 0, visitor = 0;
+// A complete seeker_profiles row clears Step 6's profile-completeness gate, which
+// runs before the paywall/quota checks these tests exist to cover.
 const caller = (sub = {}) => {
   const id = ++uid + 200;
   const row = { id, role: 'seeker', banned: false, email_verified: true,
     subscription_status: 'inactive', subscription_tier: 'none', ...sub };
   h.mock.__queue('users', { data: row, error: null }, { data: row, error: null }, { data: row, error: null });
+  h.mock.__set('seeker_profiles', { data: { is_complete: true, confirmed_by_user: true }, error: null });
   return auth(actor(h, { id, role: 'seeker' }));
 };
 const ask = (body, hdrs) => fetch(h.base + '/api/concierge', {
