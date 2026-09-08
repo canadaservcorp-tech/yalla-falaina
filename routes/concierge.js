@@ -27,6 +27,37 @@ const paywallOn = () => process.env.PAYWALL_ENFORCED === 'true';
 // The server strips it before the seeker sees it and persists it through
 // lib/profileWrite.js's shared validation — model output never writes directly.
 const PROFILE_BLOCK_RE = /---PROFILE---\s*(\{[\s\S]*?\})\s*---END---/;
+
+// Feeds what the platform already knows about this seeker into every turn —
+// complete or still in intake — so the concierge doesn't ask a returning
+// seeker to repeat themselves and can tailor matching/advice to their actual
+// situation (Section 4.3). Appended in routes/concierge.js rather than
+// touching lib/yf/systemPrompt.js itself, same pattern as intakeInstructions
+// below. Only fields with an actual answer are listed — computeCompleteness's
+// "answered, not truthy" rule means an explicit false/[] is real information
+// (e.g. "no passport" changes what's worth discussing), so it's included too.
+function profileContext({ profile, seekerProfile }) {
+  const lines = [];
+  const add = (label, v) => { if (v !== undefined && v !== null) lines.push(`${label}: ${Array.isArray(v) || typeof v === 'object' ? JSON.stringify(v) : v}`); };
+  add('Preferred language', profile?.preferred_language);
+  add('Preferred destination country', profile?.preferred_country);
+  add('Sector', profile?.sector);
+  add('Role type', profile?.role_type);
+  if (seekerProfile) {
+    if (seekerProfile.work_history?.length) add('Work history', seekerProfile.work_history);
+    if (seekerProfile.education?.length) add('Education', seekerProfile.education);
+    if (seekerProfile.certifications?.length) add('Certifications', seekerProfile.certifications);
+    if (seekerProfile.languages?.length) add('Languages spoken', seekerProfile.languages);
+    add('Has passport', seekerProfile.has_passport);
+    add('Has visa', seekerProfile.has_visa);
+    add('Has legal residency in current country', seekerProfile.has_legal_residency_current_country);
+    add('Has family or host abroad', seekerProfile.has_family_or_host_abroad);
+  }
+  if (!lines.length) return '';
+  return ['SEEKER PROFILE (already collected — do not ask the seeker to repeat any of this; ' +
+    'a "no"/false answer is a real, already-given answer, not a gap):', ...lines].join('\n');
+}
+
 const intakeInstructions = (missing) => [
   'INTAKE MODE — the seeker\'s profile is incomplete (Section 10 required fields).',
   'Do NOT mention, list, or recommend any jobs or opportunities in this conversation.',
@@ -135,10 +166,13 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     }
 
     // Intake mode retrieves nothing — no jobs are fetched, shown to the model,
-    // or returned to the client until the profile gate passes.
+    // or returned to the client until the profile gate passes. A client that
+    // doesn't send preferredCountry (most won't, every turn) falls back to
+    // what the seeker already told the platform during intake, rather than
+    // matching as if that answer didn't exist.
     const jobs = isComplete ? await retrieveJobs({
       query: message,
-      preferredCountry: sec.clean(req.body.preferredCountry, 60),
+      preferredCountry: sec.clean(req.body.preferredCountry, 60) || profileRow?.preferred_country || '',
       limit: 5,
     }) : [];
 
@@ -180,7 +214,9 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       return res.json({ success: true, reply, jobs, conversationId, llmConfigured: false, intake: !isComplete, isComplete, missing });
     }
 
+    const context = profileContext({ profile: profileRow, seekerProfile });
     const system = buildSystemPrompt({ jobs, dialectHint: sec.clean(req.body.dialectHint, 40) })
+      + (context ? '\n\n' + context : '')
       + (isComplete ? '' : '\n\n' + intakeInstructions(missing));
     const { status, body } = await ask(system, [...history, { role: 'user', content: message }]);
     if (status !== 200) {
