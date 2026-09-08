@@ -201,3 +201,48 @@ test('a complete profile passes straight through to matching', async () => {
   assert.equal(j.intake, false);
   assert.match(upstream.body.system, /JOB_CONTEXT/);
 });
+
+// ---------- feeding the stored profile into every turn ----------
+
+test('a complete profile is injected into the system prompt so the seeker is never asked to repeat themselves', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-ctx' }, error: null });
+  const r = await ask({ message: 'electrician canada' }, caller());
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /SEEKER PROFILE/);
+  assert.match(upstream.body.system, /Preferred destination country: canada/);
+  assert.match(upstream.body.system, /Sector: hospitality/);
+  assert.match(upstream.body.system, /Work history.*cook/);
+  // a "no"/false answer is real, already-given information, not a gap to hide
+  assert.match(upstream.body.system, /Has visa: false/);
+});
+
+test('an incomplete profile still gets what has already been answered fed into intake mode', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-ctx2' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false, has_passport: true },
+    { preferred_language: null, preferred_country: null, sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /INTAKE MODE/);
+  assert.match(upstream.body.system, /SEEKER PROFILE/);
+  assert.match(upstream.body.system, /Sector: hospitality/);
+  assert.match(upstream.body.system, /Has passport: true/);
+});
+
+test('a profile with nothing answered yet adds no SEEKER PROFILE block', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-ctx3' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, null, null));
+  assert.equal(r.status, 200);
+  assert.doesNotMatch(upstream.body.system, /SEEKER PROFILE/);
+});
+
+test('an omitted preferredCountry falls back to the profile\'s stored destination for ranking', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-ctx4' }, error: null });
+  h.mock.__set('jobs', { data: [
+    { id: 1, title: 'Cook', employer: 'A', country: 'France', city: 'Paris', category: 'hospitality', track: 'western', source_type: 'licensed_api', external_source: 'seed', raw: {} },
+    { id: 2, title: 'Cook', employer: 'B', country: 'Canada', city: 'Laval', category: 'hospitality', track: 'western', source_type: 'licensed_api', external_source: 'seed', raw: {} },
+  ], error: null });
+  // no preferredCountry in the request body — only the stored profile (canada, from `caller()`'s default) says where
+  const r = await ask({ message: 'cook job' }, caller());
+  const j = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(j.jobs[0].country, 'Canada');   // the profile's preferred_country wins the tie, not request order
+});
