@@ -168,7 +168,9 @@
           preferredCountry: $('prefCountry').value.trim(), sector: $('sector').value.trim(),
           confirmAge: true, acceptTerms: true }) });
       const d = await r.json();
-      $('authMsg').textContent = r.ok ? (d.message || 'Check your email to verify.') : (d.error || 'Registration failed');
+      $('authMsg').textContent = r.ok
+        ? (d.emailSent === false ? 'Account created — we could not send the verification email yet; try signing in again shortly.' : (d.message || 'Check your email to verify.'))
+        : (d.error || 'Registration failed');
       return;
     }
     const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },

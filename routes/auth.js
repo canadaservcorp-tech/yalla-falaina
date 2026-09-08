@@ -39,8 +39,10 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     const { data: exists } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
     // don't confirm which addresses are registered — same reply either way
     if (exists) {
-      await sendEmail(email, 'Sign in to Yalla Falaina',
-        '<p>An account already exists with this email. Sign in, or reset your password.</p>');
+      try {
+        await sendEmail(email, 'Sign in to Yalla Falaina',
+          '<p>An account already exists with this email. Sign in, or reset your password.</p>');
+      } catch (e) { console.error('register:exists email', e.message); }
       return res.json({ success: true, message: 'Registered — check your email to verify.' });
     }
 
@@ -69,9 +71,16 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     if (pErr) console.error('profile create', pErr.message);   // account stands; profile can be completed later
 
     const link = `${PUBLIC_URL}/api/auth/verify?token=${verify_token}&id=${user.id}`;
-    await sendEmail(email, 'Confirm your email — Yalla Falaina',
-      `<p>Welcome to Yalla Falaina. Confirm your email:</p><p><a href="${link}">${link}</a></p>`);
-    res.json({ success: true, message: 'Registered — check your email to verify.', userId: user.id });
+    // The account stands even when the email can't be sent (Resend rejects
+    // some recipients, or the key isn't configured yet) — a mail failure must
+    // not 500 a persisted registration; the client gets emailSent:false so it
+    // can say "we couldn't send the email yet" instead of a fake success.
+    let emailSent = true;
+    try {
+      await sendEmail(email, 'Confirm your email — Yalla Falaina',
+        `<p>Welcome to Yalla Falaina. Confirm your email:</p><p><a href="${link}">${link}</a></p>`);
+    } catch (e) { emailSent = false; console.error('register:verify email', e.message); }
+    res.json({ success: true, message: 'Registered — check your email to verify.', userId: user.id, emailSent });
   } catch (e) { console.error('register', e); res.status(500).json({ error: 'Registration failed' }); }
 });
 
