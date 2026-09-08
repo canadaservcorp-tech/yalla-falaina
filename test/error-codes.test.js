@@ -93,14 +93,17 @@ test('login: an unverified account -> ERR_UNVERIFIED', async () => {
 // ---------- routes/concierge.js ----------
 
 let uid = 0, visitor = 0;
-// A complete seeker_profiles row clears Step 6's profile-completeness gate, which
-// runs before the paywall/quota checks these tests exist to cover.
+// A full Section-10-complete profile pair clears the completeness gate — it
+// recomputes live from row fields on every call, so fixtures need the whole set.
 const caller = (sub = {}) => {
   const id = ++uid + 200;
   const row = { id, role: 'seeker', banned: false, email_verified: true,
     subscription_status: 'inactive', subscription_tier: 'none', ...sub };
   h.mock.__queue('users', { data: row, error: null }, { data: row, error: null }, { data: row, error: null });
-  h.mock.__set('seeker_profiles', { data: { is_complete: true, confirmed_by_user: true }, error: null });
+  h.mock.__set('seeker_profiles', { data: { is_complete: true, confirmed_by_user: true,
+    work_history: [{ employer: 'X', title: 'cook' }], education: [], certifications: [], languages: [{ language: 'ar', level: 'native' }],
+    has_passport: true, has_visa: false, has_legal_residency_current_country: true, has_family_or_host_abroad: false }, error: null });
+  h.mock.__set('profiles', { data: { id, preferred_language: 'en', preferred_country: 'canada', sector: 'hospitality', role_type: null }, error: null });
   return auth(actor(h, { id, role: 'seeker' }));
 };
 const ask = (body, hdrs) => fetch(h.base + '/api/concierge', {
