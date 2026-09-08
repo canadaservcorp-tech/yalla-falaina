@@ -201,11 +201,16 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
         reply = reply.replace(PROFILE_BLOCK_RE, '').trim() || reply;
         try {
           const extracted = JSON.parse(m[1]);
-          const r = await applyIntake(user.id, extracted);
+          // Lenient validation: a malformed field in the block is dropped and
+          // logged, not allowed to sink the good answers beside it — and the
+          // rejection is never silent.
+          const r = await applyIntake(user.id, extracted, { lenient: true });
+          for (const { field, reason } of r.rejected)
+            console.error('concierge intake extraction rejected', field, reason);
           nowComplete = r.isComplete;
           nowMissing = r.missing;
         } catch (e) {
-          if (!e.isValidation) console.error('concierge intake persist', e.message);
+          console.error('concierge intake persist', e.message);
         }
       }
     }

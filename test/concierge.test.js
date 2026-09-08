@@ -166,6 +166,33 @@ test('intake mode persists a ---PROFILE--- extraction block through the shared w
   assert.equal(writes[0].payload.intake_method, 'conversational');
 });
 
+test('a malformed field in a ---PROFILE--- block is dropped and logged, not allowed to sink the valid fields', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-lenient' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    'Noted.\n---PROFILE---\n{"preferred_language":"klingon","city":"Tripoli","country":"LB","sector":"construction","has_passport":false,"work_history":[]}\n---END---' }] } });
+  const errors = [];
+  const origErr = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  try {
+    const r = await ask({ message: 'details' }, caller({}, { id: 'sp-prior', is_complete: false, confirmed_by_user: false },
+      { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+    assert.equal(r.status, 200);
+  } finally { console.error = origErr; }
+
+  // the four good fields persisted; the bad language code did not
+  const profWrites = h.mock.__writes('profiles', 'upsert');
+  const intakeWrite = profWrites[profWrites.length - 1].payload; // last = applyIntake (an earlier {id}-only upsert ensures the row)
+  assert.equal(intakeWrite.city, 'Tripoli');
+  assert.equal(intakeWrite.sector, 'construction');
+  assert.ok(!('preferred_language' in intakeWrite));
+  const seekerWrites = h.mock.__writes('seeker_profiles', 'update');
+  assert.equal(seekerWrites.length, 1);
+  assert.equal(seekerWrites[0].payload.has_passport, false);
+  assert.deepEqual(seekerWrites[0].payload.work_history, []);
+  // ...and the rejection left a trace in the server log
+  assert.ok(errors.some(e => /concierge intake extraction rejected/.test(e) && /preferred_language/.test(e)));
+});
+
 test('a complete profile passes straight through to matching', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c2' }, error: null });
   const r = await ask({ message: 'electrician canada' }, caller());
