@@ -26,7 +26,11 @@ async function run() {
   const due = (rows || []).filter(u => u.subscription_status === 'active');
   for (const u of due) {
     const { error: e } = await supabase.from('users')
-      .update({ subscription_status: 'canceled', subscription_tier: 'none', subscription_cancel_at: null }).eq('id', u.id);
+      // access ends now — the retention policy's 30-day deletion window starts,
+      // and the pre-deletion warning flag resets for this lapse
+      .update({ subscription_status: 'canceled', subscription_tier: 'none', subscription_cancel_at: null,
+        data_retention_deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        retention_warned_at: null }).eq('id', u.id);
     if (e) throw e;
     sec.dropUserFromCache(String(u.id));
   }

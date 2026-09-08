@@ -53,7 +53,7 @@
   #authCard { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
               padding: 24px; width: 100%; max-width: 420px; }
   #authCard h2 { margin: 0 0 4px; font-size: 18px; }
-  #authCard .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 16px; }
+  #authCard .hint, #paywall .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 16px; }
   #authCard label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
   #authCard input, #authCard select { width: 100%; }
   #authCard .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; font-size: 13px; }
@@ -127,6 +127,7 @@
   <div id="chatPane">
     <div id="paywall">
       <b data-i18n="paywallText">Basic — $25/month. The concierge is a subscriber feature: real matched opportunities, logged answers, daily fair-use quota.</b>
+      <p class="hint" data-i18n="retentionNote">If you cancel, you keep access until the end of the paid period, then have 30 days to come back with everything as you left it. After that, your profile and intake details are permanently deleted — your account itself stays.</p>
       <button id="subscribeBtn" data-i18n="subscribeBtn">Subscribe with PayPal</button>
       <span id="subMsg"></span>
     </div>

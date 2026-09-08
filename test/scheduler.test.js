@@ -5,9 +5,9 @@ const { start, JOBS } = require('../lib/scheduler');
 test('scheduler runs the feed refresh, lapse and retention jobs', () => {
   delete process.env.JOBS;
   const timers = start();
-  assert.equal(timers.length, 3);
+  assert.equal(timers.length, 4);
   timers.forEach(t => clearInterval(t));
-  assert.deepEqual(JOBS.map(j => j.name), ['jobs-refresh', 'subscription-lapse', 'document-retention']);
+  assert.deepEqual(JOBS.map(j => j.name), ['jobs-refresh', 'subscription-lapse', 'document-retention', 'profile-retention']);
 });
 
 test('JOBS=off disables the in-process runner', () => {

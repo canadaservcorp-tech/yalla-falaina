@@ -20,6 +20,8 @@ create table if not exists public.users (
   subscription_tier text not null default 'none',-- 'none' | 'basic' (Phase 1; more per Section 4.3 later)
   subscription_period_end timestamptz,
   subscription_cancel_at timestamptz,            -- paid-until date a cancellation keeps
+  data_retention_deadline timestamptz,           -- profile/intake data deleted after this (30 days post-lapse, per policy)
+  retention_warned_at timestamptz,               -- set once the pre-deletion warning email has been sent
   terms_accepted_at timestamptz,
   terms_version text,
   signup_source text,

@@ -6,9 +6,10 @@ const NOW = new Date('2026-03-01T00:00:00.000Z');
 const FUTURE = '2026-03-20T00:00:00.000Z';
 const PAST = '2026-02-20T00:00:00.000Z';
 
-test('activation marks the account active and clears any pending lapse', () => {
+test('activation marks the account active and clears any pending lapse or retention countdown', () => {
   const p = ev.accountPatch('BILLING.SUBSCRIPTION.ACTIVATED', { billing_info: { next_billing_time: FUTURE } }, NOW);
-  assert.deepEqual(p, { subscription_status: 'active', subscription_cancel_at: null, subscription_period_end: FUTURE });
+  assert.deepEqual(p, { subscription_status: 'active', subscription_cancel_at: null, subscription_period_end: FUTURE,
+    data_retention_deadline: null, retention_warned_at: null });
 });
 
 test('a cancellation keeps the paid days instead of ending access at once', () => {
@@ -34,10 +35,12 @@ test('expiry keeps the period end it already had', () => {
   assert.ok(!('subscription_period_end' in p));
 });
 
-test('expiry ends access immediately', () => {
+test('expiry ends access immediately and starts the 30-day retention countdown', () => {
   const p = ev.accountPatch('BILLING.SUBSCRIPTION.EXPIRED', {}, NOW);
   assert.equal(p.subscription_status, 'canceled');
   assert.equal(p.subscription_cancel_at, null);
+  assert.equal(p.data_retention_deadline, '2026-03-31T00:00:00.000Z');
+  assert.equal(p.retention_warned_at, null);
 });
 
 test('a renewal payment re-activates and cancels a pending lapse', () => {
