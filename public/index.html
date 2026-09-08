@@ -224,7 +224,6 @@
       addMessage('system', t('welcomeSystemMessage'));
   }
   $('logoutBtn').onclick = () => { sessionStorage.removeItem(tokenKey); location.reload(); };
-  if (token()) enter();
 
   // ---------- subscription ----------
   async function refreshSub() {
@@ -358,6 +357,9 @@
     inputEl.dir = dialectDir();
     document.querySelectorAll('.msg:not(.system)').forEach(m => { m.dir = dialectDir(); });
   });
+  // Runs last: enter() touches messagesEl/dialectSelect, which aren't
+  // initialized until the chat section above.
+  if (token()) enter();
 </script>
 </body>
 </html>
