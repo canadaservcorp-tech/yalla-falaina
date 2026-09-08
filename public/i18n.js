@@ -62,6 +62,8 @@
       checkoutPending: '…',
       checkoutUnavailable: 'Checkout unavailable',
       unverifiedFlagLabel: 'unverified listing — verify independently',
+      previewUnlockLabel: '🔒 Subscribe to see the details & apply',
+      previewRemainingNotice: 'Free preview — {n} free replies left before subscribing.',
     },
     fr: {
       signOut: 'Se déconnecter',
@@ -105,6 +107,8 @@
       checkoutPending: '…',
       checkoutUnavailable: 'Paiement indisponible',
       unverifiedFlagLabel: 'annonce non vérifiée — à vérifier vous-même',
+      previewUnlockLabel: "🔒 Abonnez-vous pour voir les détails et postuler",
+      previewRemainingNotice: 'Aperçu gratuit — {n} réponses gratuites restantes avant l\'abonnement.',
     },
     ar: {
       signOut: 'تسجيل الخروج',
@@ -148,6 +152,8 @@
       checkoutPending: '…',
       checkoutUnavailable: 'الدفع غير متاح',
       unverifiedFlagLabel: 'إعلان غير موثّق — يُرجى التحقق بنفسك',
+      previewUnlockLabel: '🔒 اشترك لرؤية التفاصيل والتقديم',
+      previewRemainingNotice: 'معاينة مجانية — تبقّى لك {n} ردود مجانية قبل الاشتراك.',
     },
   };
 

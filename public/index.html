@@ -347,11 +347,17 @@
         '<div class="title"></div>' +
         '<div class="meta"></div>' +
         (j.url ? '<div class="meta"><a style="color:var(--accent)" target="_blank" rel="noopener"></a></div>' : '') +
+        (j.teaser ? '<div class="meta" style="color:var(--warn)"></div>' : '') +
         flags.join('');
       card.querySelector('.title').textContent = j.title;
       card.querySelector('.meta').textContent = [j.city, j.country, j.category].filter(Boolean).join(' · ') + (j.salaryNote ? ' — ' + j.salaryNote : '');
       const uf = card.querySelector('.flag.unverified'); if (uf) uf.textContent = t('unverifiedFlagLabel');
       const a = card.querySelector('a'); if (a) { a.href = j.url; a.textContent = t('viewPosting'); }
+      // Free preview (Section 4.3): the redacted fields (server-side, not a
+      // display trick) already hide the link above; this just names why —
+      // same "you can see there's a match, subscribe to act on it" as a
+      // dating app blurring a photo until you match.
+      if (j.teaser) card.querySelectorAll('.meta')[1].textContent = t('previewUnlockLabel');
       jobsListEl.appendChild(card);
     });
   }
@@ -378,6 +384,7 @@
       history.push({ role: 'assistant', content: data.reply });
       renderJobs(data.jobs);
       if (data.llmConfigured === false) addMessage('system', t('demoModeNotice'));
+      if (data.preview) addMessage('system', t('previewRemainingNotice', { n: data.previewRemaining }));
     } catch (err) {
       addMessage('system', t('networkError'));
       console.error(err);

@@ -19,6 +19,11 @@ const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929';
 const MAX_TURNS = 20;                    // conversation length sent back to the model
 const MAX_CHARS = 1500;                  // per message — seekers paste longer context
 const TIMEOUT_MS = 30000;                // never hold a request open on a stalled upstream
+// Idea-configuration doc: "first 3 messages free, before the paywall — meant
+// to build interest and push the person to subscribe." A lifetime count
+// (users.free_preview_used), not a daily one — this is a conversion funnel,
+// not the fair-use quota (lib/usage.js) which still applies underneath it.
+const FREE_PREVIEW_LIMIT = 3;
 // Read per request so the gate can be flipped by env change without a reload.
 const paywallOn = () => process.env.PAYWALL_ENFORCED === 'true';
 
@@ -57,6 +62,41 @@ function profileContext({ profile, seekerProfile }) {
   return ['SEEKER PROFILE (already collected — do not ask the seeker to repeat any of this; ' +
     'a "no"/false answer is a real, already-given answer, not a gap):', ...lines].join('\n');
 }
+
+// Free-preview mode: the seeker sees that real matches exist — enough to
+// feel it's worth paying for — but never the specifics that would let them
+// act without subscribing (the application link, and the exact requirements
+// text, which is often specific enough to find/apply to the posting
+// directly). This is enforced by NOT PUTTING the real fields in either the
+// model's JOB_CONTEXT or the client response, not by a prompt instruction
+// the model could be talked out of — same "tease, don't hand over the
+// payoff" mechanic as a dating app blurring a photo until you match.
+// employer was already never shown to the model or the client (see
+// formatJobsForPrompt/public/index.html) — nothing new to strip there.
+function teaserJob(j) {
+  return {
+    id: j.id, title: j.title, country: j.country, city: j.city, category: j.category,
+    track: j.track, salaryNote: j.salaryNote || null, sourceType: j.sourceType,
+    requirements: '[subscribe to see the full requirements]',
+    sourceLabel: '[subscribe to see the source and how to apply]',
+    url: '', honestyFlags: [], teaser: true,
+  };
+}
+const previewInstructions = (remaining) => [
+  'FREE PREVIEW MODE — this seeker has not subscribed yet. The idea-configuration',
+  'doc gives every seeker their first 3 concierge replies free, to build genuine',
+  'excitement before asking them to subscribe.',
+  'JOB_CONTEXT above has been redacted on purpose: the application link and the',
+  'exact requirements text are hidden until they subscribe.',
+  'You MAY tell them real matches exist, by title/country/city/category and a',
+  'general pay range, to build excitement — the same way a dating app shows you',
+  'a name and a photo before you match. Be warm and specific about WHAT exists.',
+  'You must NOT invent, guess, or paraphrase-around the hidden requirements or a',
+  'contact/application path — say plainly that subscribing unlocks the full',
+  'listing and exactly how to apply. Never imply the details are unavailable or',
+  'the listing is somehow incomplete — only that unlocking it needs a subscription.',
+  `Free preview replies left after this one: ${remaining}.`,
+].join('\n');
 
 const intakeInstructions = (missing) => [
   'INTAKE MODE — the seeker\'s profile is incomplete (Section 10 required fields).',
@@ -147,11 +187,16 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // Intake mode itself is not paywalled — completing the profile is the
     // useful next step whether or not a subscription is active yet.
     const { data: user } = await supabase.from('users')
-      .select('id, subscription_status, subscription_tier')
+      .select('id, subscription_status, subscription_tier, free_preview_used')
       .eq('id', req.user.id).maybeSingle();
     if (!user) return res.status(403).json({ error: 'Account not found', code: 'ERR_NOT_FOUND' });
     const active = user.subscription_status === 'active';
-    if (isComplete && paywallOn() && !active)
+    // The first FREE_PREVIEW_LIMIT matching turns run — teased, not blocked —
+    // before the hard paywall kicks in; intake-mode turns (isComplete false)
+    // are already unpaywalled above this and never touch the counter.
+    const previewUsed = Number(user.free_preview_used || 0);
+    const inPreview = isComplete && paywallOn() && !active && previewUsed < FREE_PREVIEW_LIMIT;
+    if (isComplete && paywallOn() && !active && !inPreview)
       return res.status(402).json({ error: 'A subscription is required to use the concierge', upgrade: true, code: 'ERR_PAYWALL' });
 
     // Intake turns never touch the daily quota (Section 4.3: the onboarding
@@ -175,6 +220,20 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       preferredCountry: sec.clean(req.body.preferredCountry, 60) || profileRow?.preferred_country || '',
       limit: 5,
     }) : [];
+    // Free preview: what the model sees and what the client gets back are
+    // BOTH the redacted shape — data minimization, not a prompt instruction
+    // the model could be talked out of. matched_job_ids in the audit log
+    // below still uses the real `jobs`, ids only, never anything redacted.
+    const outJobs = inPreview ? jobs.map(teaserJob) : jobs;
+    // Best-effort, never fails the seeker's turn: the counter existing at all
+    // is what makes preview mode self-limiting, but a write hiccup shouldn't
+    // block someone who's genuinely on their last free reply.
+    const markPreviewUsed = () => {
+      if (!inPreview) return;
+      supabase.from('users').update({ free_preview_used: previewUsed + 1 }).eq('id', user.id)
+        .then(({ error }) => { if (error) console.error('preview counter', error.message); },
+          e => console.error('preview counter', e.message));
+    };
 
     // First turn of a session opens a conversation row the client then echoes
     // back; an echoed id is only honored if the conversation is the caller's —
@@ -205,19 +264,24 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       // keyless deploy; incomplete ones get the intake prompt instead.
       const reply = isComplete
         ? "[Demo mode — no ANTHROPIC_API_KEY] Matching engine results:\n" +
-          (jobs.length
-            ? jobs.map(j => `• ${j.title} — ${j.city}, ${j.country} (${j.sourceType === 'informal_unverified' ? 'unverified listing' : 'licensed feed'})`).join('\n')
+          (outJobs.length
+            ? outJobs.map(j => `• ${j.title} — ${j.city}, ${j.country} (${j.teaser ? 'subscribe to unlock' : j.sourceType === 'informal_unverified' ? 'unverified listing' : 'licensed feed'})`).join('\n')
             : 'No jobs matched.')
         : `[Demo mode — no ANTHROPIC_API_KEY] Profile intake — still missing: ${missing.join(', ')}`;
       if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), isComplete ? usage.COST.text : 0);
       if (isComplete) await usage.charge(user.id, usage.COST.text);
-      return res.json({ success: true, reply, jobs, conversationId, llmConfigured: false, intake: !isComplete, isComplete, missing });
+      markPreviewUsed();
+      return res.json({
+        success: true, reply, jobs: outJobs, conversationId, llmConfigured: false, intake: !isComplete, isComplete, missing,
+        ...(inPreview ? { preview: true, previewRemaining: FREE_PREVIEW_LIMIT - previewUsed - 1 } : {}),
+      });
     }
 
     const context = profileContext({ profile: profileRow, seekerProfile });
-    const system = buildSystemPrompt({ jobs, dialectHint: sec.clean(req.body.dialectHint, 40) })
+    const system = buildSystemPrompt({ jobs: outJobs, dialectHint: sec.clean(req.body.dialectHint, 40) })
       + (context ? '\n\n' + context : '')
-      + (isComplete ? '' : '\n\n' + intakeInstructions(missing));
+      + (isComplete ? '' : '\n\n' + intakeInstructions(missing))
+      + (inPreview ? '\n\n' + previewInstructions(FREE_PREVIEW_LIMIT - previewUsed - 1) : '');
     const { status, body } = await ask(system, [...history, { role: 'user', content: message }]);
     if (status !== 200) {
       console.error('concierge upstream', status, body);
@@ -253,7 +317,11 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
 
     if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), isComplete ? usage.COST.text : 0);
     if (isComplete) await usage.charge(user.id, usage.COST.text);
-    res.json({ success: true, reply, jobs, conversationId, llmConfigured: true, intake: !nowComplete, isComplete: nowComplete, missing: nowMissing });
+    markPreviewUsed();
+    res.json({
+      success: true, reply, jobs: outJobs, conversationId, llmConfigured: true, intake: !nowComplete, isComplete: nowComplete, missing: nowMissing,
+      ...(inPreview ? { preview: true, previewRemaining: FREE_PREVIEW_LIMIT - previewUsed - 1 } : {}),
+    });
   } catch (e) {
     console.error('concierge', e.name, e.message);
     res.status(502).json({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });

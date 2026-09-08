@@ -26,6 +26,7 @@ create table if not exists public.users (
   terms_version text,
   signup_source text,
   banned boolean not null default false,
+  free_preview_used integer not null default 0,  -- lifetime count of free-preview concierge turns used (limit 3)
   created_at timestamptz default now()
 );
 create table if not exists public.banned_emails (   -- blocklist (can't re-subscribe)
