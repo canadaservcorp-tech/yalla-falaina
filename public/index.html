@@ -6,6 +6,7 @@
 <!--seo:start--><title>Yalla Falaina — Your Assistant to Travel</title><!--seo:end-->
 <!--analytics-->
 <link rel="manifest" href="/manifest.json">
+<script src="/i18n.js"></script>
 <style>
   :root {
     --bg: #0f1720; --panel: #16212c; --accent: #2fae6b; --accent-dim: #1f7a4a;
@@ -81,37 +82,42 @@
       <option value="French">Français</option>
       <option value="English">English</option>
     </select>
-    <input type="text" id="countryInput" placeholder="Preferred country (optional)">
+    <input type="text" id="countryInput" data-i18n-ph="countryInputPlaceholder" placeholder="Preferred country (optional)">
     <span id="subBar"></span>
-    <button class="ghost" id="logoutBtn" style="display:none">Sign out</button>
+    <button class="ghost" id="logoutBtn" style="display:none" data-i18n="signOut">Sign out</button>
+    <span id="langSwitch" style="font-size:12px;color:var(--text-dim)">
+      <a href="?lang=en" style="color:inherit">EN</a> ·
+      <a href="?lang=fr" style="color:inherit">FR</a> ·
+      <a href="?lang=ar" style="color:inherit">عربي</a>
+    </span>
   </div>
 </header>
 
 <div id="authWrap">
   <div id="authCard">
     <div class="tabs">
-      <button id="tabLogin" class="on">Sign in</button>
-      <button id="tabRegister">Create account</button>
+      <button id="tabLogin" class="on" data-i18n="tabSignIn">Sign in</button>
+      <button id="tabRegister" data-i18n="tabCreateAccount">Create account</button>
     </div>
-    <h2 id="authTitle">Welcome back</h2>
-    <div class="hint">Yalla Falaina is for job and immigration seekers 18 and older. The concierge connects you with real opportunities — it never replaces a licensed professional.</div>
-    <label>Email</label><input type="email" id="email">
-    <label>Password</label><input type="password" id="password">
+    <h2 id="authTitle" data-i18n="authTitleWelcome">Welcome back</h2>
+    <div class="hint" data-i18n="authHint">Yalla Falaina is for job and immigration seekers 18 and older. The concierge connects you with real opportunities — it never replaces a licensed professional.</div>
+    <label data-i18n="labelEmail">Email</label><input type="email" id="email">
+    <label data-i18n="labelPassword">Password</label><input type="password" id="password">
     <div id="regExtra" style="display:none">
-      <label>Full name</label><input type="text" id="name">
-      <label>Preferred language</label>
+      <label data-i18n="labelFullName">Full name</label><input type="text" id="name">
+      <label data-i18n="labelPreferredLanguage">Preferred language</label>
       <select id="prefLang">
         <option value="">—</option><option value="ar-LB">Lebanese Arabic</option>
         <option value="ar-SY">Syrian Arabic</option><option value="ar-EG">Egyptian Arabic</option>
         <option value="ar">Arabic (other)</option><option value="fr">Français</option><option value="en">English</option>
       </select>
-      <label>Preferred country <span style="color:var(--text-dim)">(a preference, not a filter)</span></label>
+      <label><span data-i18n="labelPreferredCountry">Preferred country</span> <span style="color:var(--text-dim)" data-i18n="preferredCountryNote">(a preference, not a filter)</span></label>
       <input type="text" id="prefCountry">
-      <label>Sector of work</label><input type="text" id="sector" placeholder="e.g. trades, kitchen, logistics">
-      <div class="row"><input type="checkbox" id="confirmAge"><label for="confirmAge" style="margin:0">I confirm I am 18 or older</label></div>
-      <div class="row"><input type="checkbox" id="acceptTerms"><label for="acceptTerms" style="margin:0">I accept the Terms of Use</label></div>
+      <label data-i18n="labelSector">Sector of work</label><input type="text" id="sector" data-i18n-ph="sectorPlaceholder" placeholder="e.g. trades, kitchen, logistics">
+      <div class="row"><input type="checkbox" id="confirmAge"><label for="confirmAge" style="margin:0" data-i18n="confirmAgeLabel">I confirm I am 18 or older</label></div>
+      <div class="row"><input type="checkbox" id="acceptTerms"><label for="acceptTerms" style="margin:0" data-i18n="acceptTermsLabel">I accept the Terms of Use</label></div>
     </div>
-    <div class="row"><button id="authGo">Sign in</button></div>
+    <div class="row"><button id="authGo" data-i18n="tabSignIn">Sign in</button></div>
     <div id="authMsg"></div>
   </div>
 </div>
@@ -119,19 +125,19 @@
 <main id="appMain" style="display:none">
   <div id="chatPane">
     <div id="paywall">
-      <b>Basic — $25/month.</b> The concierge is a subscriber feature: real matched opportunities, logged answers, daily fair-use quota.
-      <button id="subscribeBtn">Subscribe with PayPal</button>
+      <b data-i18n="paywallText">Basic — $25/month. The concierge is a subscriber feature: real matched opportunities, logged answers, daily fair-use quota.</b>
+      <button id="subscribeBtn" data-i18n="subscribeBtn">Subscribe with PayPal</button>
       <span id="subMsg"></span>
     </div>
     <div id="messages"></div>
     <div id="inputRow">
       <input type="text" id="messageInput" placeholder="Type your message… (kifak? / bonjour / hello)" autocomplete="off">
-      <button id="sendBtn">Send</button>
+      <button id="sendBtn" data-i18n="sendBtn">Send</button>
     </div>
   </div>
   <div id="jobsPane">
-    <h2>Matched opportunities</h2>
-    <div id="jobsList"><p style="color:var(--text-dim);font-size:13px;">Send a message to see what the matching engine finds — jobs shown here are the only ones the assistant is allowed to reference.</p></div>
+    <h2 data-i18n="jobsHeading">Matched opportunities</h2>
+    <div id="jobsList"><p style="color:var(--text-dim);font-size:13px;" data-i18n="jobsPlaceholder">Send a message to see what the matching engine finds — jobs shown here are the only ones the assistant is allowed to reference.</p></div>
   </div>
 </main>
 
@@ -143,15 +149,39 @@
   function token() { return sessionStorage.getItem(tokenKey) || ''; }
   function headers() { return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }; }
 
+  // ---------- language ----------
+  // The server already picked and stamped the language on <html lang> (and
+  // dir="rtl" for Arabic) from ?lang= before sending this page (server.js,
+  // lib/seo.js) — reading it back here keeps the client in lockstep with what
+  // the SEO head and canonical URLs already say, instead of re-deciding it.
+  // Server-returned API text (error/status strings) is NOT covered by this —
+  // see public/i18n.js's header comment for why.
+  // ?lang= wins; otherwise fall back to the choice the visitor made earlier
+  // this session (PayPal's return/cancel URLs drop the param, which would
+  // silently reset an ar/fr UI back to English mid-flow).
+  const qsLang = new URLSearchParams(location.search).get('lang');
+  const currentLang = i18n.LANGS.includes(qsLang) ? qsLang
+    : (i18n.LANGS.includes(sessionStorage.getItem('yf_lang')) ? sessionStorage.getItem('yf_lang')
+    : (i18n.LANGS.includes(document.documentElement.lang) ? document.documentElement.lang : 'en'));
+  sessionStorage.setItem('yf_lang', currentLang);
+  document.documentElement.lang = currentLang;
+  const t = (key, vars) => i18n.t(currentLang, key, vars);
+  function applyLang() {
+    document.documentElement.setAttribute('dir', i18n.isRTL(currentLang) ? 'rtl' : 'ltr');
+    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-ph')); });
+  }
+  applyLang();
+
   // ---------- auth ----------
   let mode = 'login';
   function setMode(m) {
     mode = m;
     $('tabLogin').className = m === 'login' ? 'on' : '';
     $('tabRegister').className = m === 'register' ? 'on' : '';
-    $('authTitle').textContent = m === 'login' ? 'Welcome back' : 'Create your account';
+    $('authTitle').textContent = m === 'login' ? t('authTitleWelcome') : t('authTitleCreate');
     $('regExtra').style.display = m === 'register' ? 'block' : 'none';
-    $('authGo').textContent = m === 'login' ? 'Sign in' : 'Create account';
+    $('authGo').textContent = m === 'login' ? t('tabSignIn') : t('tabCreateAccount');
     $('authMsg').textContent = '';
   }
   $('tabLogin').onclick = () => setMode('login');
@@ -161,22 +191,25 @@
     $('authMsg').textContent = '';
     const email = $('email').value.trim(), password = $('password').value;
     if (mode === 'register') {
-      if (!$('confirmAge').checked) return $('authMsg').textContent = 'Yalla Falaina is for people 18 and older.';
-      if (!$('acceptTerms').checked) return $('authMsg').textContent = 'Please accept the Terms of Use.';
+      if (!$('confirmAge').checked) return $('authMsg').textContent = t('errAgeGate');
+      if (!$('acceptTerms').checked) return $('authMsg').textContent = t('errAcceptTerms');
       const r = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name: $('name').value.trim(), preferredLanguage: $('prefLang').value,
           preferredCountry: $('prefCountry').value.trim(), sector: $('sector').value.trim(),
           confirmAge: true, acceptTerms: true }) });
       const d = await r.json();
+      // d.message / d.error come from the API and stay English (see the
+      // language note above) — only the client's own fallback text, used
+      // when the server doesn't supply one, is translated here.
       $('authMsg').textContent = r.ok
-        ? (d.emailSent === false ? 'Account created — we could not send the verification email yet; try signing in again shortly.' : (d.message || 'Check your email to verify.'))
-        : (d.error || 'Registration failed');
+        ? (d.emailSent === false ? t('msgAccountCreatedEmailPending') : (d.message || t('msgCheckEmail')))
+        : (d.error || t('errRegistrationFailed'));
       return;
     }
     const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }) });
     const d = await r.json();
-    if (!r.ok) return $('authMsg').textContent = d.error || 'Sign-in failed';
+    if (!r.ok) return $('authMsg').textContent = d.error || t('errSignInFailed');
     sessionStorage.setItem(tokenKey, d.token);
     enter();
   }
@@ -188,10 +221,9 @@
     $('logoutBtn').style.display = 'inline-block';
     refreshSub();
     if (!history.length)
-      addMessage('system', 'Ask me about real opportunities abroad — jobs, what a posting requires, or whether an offer looks safe. I answer in your language and dialect.');
+      addMessage('system', t('welcomeSystemMessage'));
   }
   $('logoutBtn').onclick = () => { sessionStorage.removeItem(tokenKey); location.reload(); };
-  if (token()) enter();
 
   // ---------- subscription ----------
   async function refreshSub() {
@@ -199,17 +231,17 @@
       const r = await fetch('/api/subscription/status', { headers: headers() });
       const d = await r.json();
       const active = d.status === 'active';
-      $('subBar').textContent = active ? `Basic — active (renews ${d.periodEnd ? d.periodEnd.slice(0,10) : '—'})` : '';
+      $('subBar').textContent = active ? t('subActiveRenews', { date: d.periodEnd ? d.periodEnd.slice(0,10) : '—' }) : '';
       $('paywall').style.display = active ? 'none' : 'block';
     } catch { /* status is advisory only */ }
   }
   $('subscribeBtn').onclick = async () => {
-    $('subMsg').textContent = '…';
+    $('subMsg').textContent = t('checkoutPending');
     try {
       const r = await fetch('/api/subscription/checkout', { method: 'POST', headers: headers() });
       const d = await r.json();
-      if (d.url) location.href = d.url; else $('subMsg').textContent = d.error || 'Checkout unavailable';
-    } catch { $('subMsg').textContent = 'Checkout unavailable'; }
+      if (d.url) location.href = d.url; else $('subMsg').textContent = d.error || t('checkoutUnavailable');
+    } catch { $('subMsg').textContent = t('checkoutUnavailable'); }
   };
   if (new URLSearchParams(location.search).get('sub') === 'success')
     setTimeout(refreshSub, 1500);
@@ -253,15 +285,24 @@
 
   function renderJobs(jobs) {
     if (!jobs || !jobs.length) {
-      jobsListEl.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">No opportunities matched this message.</p>';
+      const p = document.createElement('p');
+      p.style.cssText = 'color:var(--text-dim);font-size:13px;';
+      p.textContent = t('noJobsMatched');
+      jobsListEl.innerHTML = '';
+      jobsListEl.appendChild(p);
       return;
     }
     jobsListEl.innerHTML = '';
     jobs.forEach(j => {
       const card = document.createElement('div');
       card.className = 'job-card';
+      // Flag text is set via textContent below, never interpolated into this
+      // HTML string — translated strings shouldn't be treated as trusted
+      // markup even though they're developer-authored, not user input.
       const flags = [];
-      if (j.sourceType === 'informal_unverified') flags.push('<span class="flag unverified">unverified listing — verify independently</span>');
+      if (j.sourceType === 'informal_unverified') flags.push('<span class="flag unverified"></span>');
+      // honestyFlags are open-ended, provider-supplied strings (not a fixed
+      // vocabulary — see public/i18n.js) so they stay untranslated as-is.
       (j.honestyFlags || []).forEach(f => flags.push('<span class="flag honesty">' + String(f).replace(/_/g, ' ') + '</span>'));
       card.innerHTML =
         '<div class="title"></div>' +
@@ -270,7 +311,8 @@
         flags.join('');
       card.querySelector('.title').textContent = j.title;
       card.querySelector('.meta').textContent = [j.city, j.country, j.category].filter(Boolean).join(' · ') + (j.salaryNote ? ' — ' + j.salaryNote : '');
-      const a = card.querySelector('a'); if (a) { a.href = j.url; a.textContent = 'View posting ↗'; }
+      const uf = card.querySelector('.flag.unverified'); if (uf) uf.textContent = t('unverifiedFlagLabel');
+      const a = card.querySelector('a'); if (a) { a.href = j.url; a.textContent = t('viewPosting'); }
       jobsListEl.appendChild(card);
     });
   }
@@ -291,23 +333,33 @@
       const data = await res.json();
       if (res.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
       if (res.status === 402) { $('paywall').style.display = 'block'; addMessage('system', data.error); return; }
-      if (!res.ok) { addMessage('system', 'Error: ' + (data.error || res.statusText)); return; }
+      if (!res.ok) { addMessage('system', t('errorPrefix') + (data.error || res.statusText)); return; }
       conversationId = data.conversationId || conversationId;
       addMessage('bot', data.reply);
       history.push({ role: 'assistant', content: data.reply });
       renderJobs(data.jobs);
-      if (data.llmConfigured === false) addMessage('system', 'Demo mode — the assistant model is not configured yet; showing raw matches.');
+      if (data.llmConfigured === false) addMessage('system', t('demoModeNotice'));
     } catch (err) {
-      addMessage('system', 'Network error — please try again.');
+      addMessage('system', t('networkError'));
       console.error(err);
     } finally { sendBtn.disabled = false; inputEl.focus(); }
   }
   sendBtn.onclick = sendMessage;
   inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+  // The chat dialect only steers message direction — the interface layout
+  // stays tied to the UI language (an English UI talking Levantine Arabic
+  // keeps an LTR page with RTL bubbles/input).
+  const dialectDir = () => dialectSelect.value.includes('Arabic') ? 'rtl' : 'ltr';
+  const origAddMessage = addMessage;
+  addMessage = (role, text) => { origAddMessage(role, text); if (role !== 'system') messagesEl.lastChild.dir = dialectDir(); };
+  inputEl.dir = dialectDir();
   dialectSelect.addEventListener('change', () => {
-    const val = dialectSelect.value;
-    document.documentElement.setAttribute('dir', val.includes('Arabic') ? 'rtl' : 'ltr');
+    inputEl.dir = dialectDir();
+    document.querySelectorAll('.msg:not(.system)').forEach(m => { m.dir = dialectDir(); });
   });
+  // Runs last: enter() touches messagesEl/dialectSelect, which aren't
+  // initialized until the chat section above.
+  if (token()) enter();
 </script>
 </body>
 </html>
