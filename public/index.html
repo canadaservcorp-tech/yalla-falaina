@@ -219,10 +219,34 @@
         inputEl = $('messageInput'), sendBtn = $('sendBtn'),
         dialectSelect = $('dialectSelect'), countryInput = $('countryInput');
 
+  // Minimal safe Markdown for assistant replies: escape first, then transform —
+  // no raw model output ever reaches innerHTML. Links are limited to http(s).
+  function renderMarkdown(src) {
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    let out = esc(String(src || ''));
+    out = out.replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^\w])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:var(--accent)">$1</a>');
+    const lines = out.split('\n');
+    let html = '', inList = false;
+    for (const line of lines) {
+      const h = line.match(/^(#{1,3})\s+(.*)$/);
+      const li = line.match(/^\s*[-*]\s+(.*)$/);
+      if (li) { if (!inList) { html += '<ul style="margin:4px 0;padding-left:20px">'; inList = true; } html += '<li>' + li[1] + '</li>'; continue; }
+      if (inList) { html += '</ul>'; inList = false; }
+      if (h) html += '<div style="font-weight:600;margin:8px 0 2px">' + h[2] + '</div>';
+      else if (line.trim() === '') html += '<div style="height:6px"></div>';
+      else html += '<div>' + line + '</div>';
+    }
+    if (inList) html += '</ul>';
+    return html;
+  }
+
   function addMessage(role, text) {
     const div = document.createElement('div');
     div.className = 'msg ' + role;
-    div.textContent = text;
+    if (role === 'bot') div.innerHTML = renderMarkdown(text); else div.textContent = text;
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
