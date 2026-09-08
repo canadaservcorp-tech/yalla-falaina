@@ -84,6 +84,12 @@
     </select>
     <input type="text" id="countryInput" data-i18n-ph="countryInputPlaceholder" placeholder="Preferred country (optional)">
     <span id="subBar"></span>
+    <button class="ghost" id="cancelSubBtn" style="display:none;font-size:12px;padding:4px 8px" data-i18n="cancelSubBtn">Cancel subscription</button>
+    <span id="cancelSubConfirm" style="display:none;font-size:12px;color:var(--text-dim)">
+      <span data-i18n="cancelSubConfirmText">Cancel? You'll keep access until the paid period ends.</span>
+      <button class="ghost" id="cancelSubYes" style="font-size:12px;padding:2px 8px;color:var(--danger);border-color:var(--danger)" data-i18n="cancelSubYes">Yes, cancel</button>
+      <button class="ghost" id="cancelSubNo" style="font-size:12px;padding:2px 8px" data-i18n="cancelSubNo">Never mind</button>
+    </span>
     <button class="ghost" id="logoutBtn" style="display:none" data-i18n="signOut">Sign out</button>
     <span id="langSwitch" style="font-size:12px;color:var(--text-dim)">
       <a href="?lang=en" style="color:inherit">EN</a> ·
@@ -274,6 +280,11 @@
       // Known gap (CLAUDE_PROMPT.md item 5): don't show the $25/month pitch to
       // an unsubscribed visitor when the server isn't actually enforcing it.
       $('paywall').style.display = (paywallEnforced && !active) ? 'block' : 'none';
+      // The only place a subscriber could cancel used to be PayPal's own
+      // site — the paywall panel (the only button that existed) disappears
+      // the moment someone becomes active, so there was nothing to click here.
+      $('cancelSubBtn').style.display = active ? 'inline-block' : 'none';
+      if (!active) $('cancelSubConfirm').style.display = 'none';
     } catch { /* status is advisory only */ }
   }
   $('subscribeBtn').onclick = async () => {
@@ -286,6 +297,23 @@
   };
   if (new URLSearchParams(location.search).get('sub') === 'success')
     setTimeout(refreshSub, 1500);
+  $('cancelSubBtn').onclick = () => { $('cancelSubBtn').style.display = 'none'; $('cancelSubConfirm').style.display = 'inline'; };
+  $('cancelSubNo').onclick = () => { $('cancelSubConfirm').style.display = 'none'; $('cancelSubBtn').style.display = 'inline-block'; };
+  $('cancelSubYes').onclick = async () => {
+    $('cancelSubYes').disabled = true;
+    try {
+      const r = await fetch('/api/subscription/cancel', { method: 'POST', headers: headers() });
+      const d = await r.json();
+      $('cancelSubConfirm').style.display = 'none';
+      addMessage('system', r.ok ? t('cancelSubSuccess') : t('cancelSubFailed'));
+      if (r.ok) refreshSub();
+      else $('cancelSubBtn').style.display = 'inline-block';
+    } catch {
+      addMessage('system', t('cancelSubFailed'));
+      $('cancelSubConfirm').style.display = 'none';
+      $('cancelSubBtn').style.display = 'inline-block';
+    } finally { $('cancelSubYes').disabled = false; }
+  };
 
   // ---------- chat ----------
   const messagesEl = $('messages'), jobsListEl = $('jobsList'),
