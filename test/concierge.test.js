@@ -28,17 +28,24 @@ beforeEach(() => {
 });
 
 let uid = 0;
+// A full Section-10-complete profile pair — the completeness gate recomputes
+// live from the row fields on every call, so fixtures need the whole set.
+const COMPLETE_PROFILE = { id: 0, preferred_language: 'en', preferred_country: 'canada', sector: 'hospitality', role_type: null };
+const COMPLETE_SEEKER = { is_complete: true, confirmed_by_user: true,
+  work_history: [{ employer: 'X', title: 'cook' }], languages: [{ language: 'ar', level: 'native' }],
+  has_passport: true, has_visa: false, has_legal_residency_current_country: true, has_family_or_host_abroad: false };
 // A caller: every queued users row is complete — the route reads `users` twice
 // (requireActiveUser, then the subscription gate) and a partial row would 403.
-// Defaults to a complete seeker_profiles row too, so every existing test below
-// clears the Step 6 profile-completeness gate the same way it always implicitly
-// did before that gate existed; pass seekerProfile explicitly to test the gate itself.
-const caller = (sub = {}, seekerProfile = { is_complete: true, confirmed_by_user: true }) => {
+// Defaults to a complete profile pair too, so every existing test below
+// clears the profile-completeness gate the same way it always implicitly
+// did before that gate existed; pass seekerProfile explicitly to test intake mode.
+const caller = (sub = {}, seekerProfile = COMPLETE_SEEKER, profile = COMPLETE_PROFILE) => {
   const id = ++uid + 100;
   const row = { id, role: 'seeker', banned: false, email_verified: true,
     subscription_status: 'inactive', subscription_tier: 'none', ...sub };
   h.mock.__queue('users', { data: row, error: null }, { data: row, error: null }, { data: row, error: null });
   h.mock.__set('seeker_profiles', { data: seekerProfile, error: null });
+  h.mock.__set('profiles', { data: profile ? { ...profile, id } : null, error: null });
   return auth(actor(h, { id, role: 'seeker' }));
 };
 // The route is rate limited per address, so each call comes from its own visitor
@@ -111,27 +118,53 @@ test('a subscription is required when the paywall is enforced', async () => {
   assert.equal(upstream, null);
 });
 
-test('an incomplete profile is refused before the paywall/quota check, listing what is missing', async () => {
-  process.env.PAYWALL_ENFORCED = 'true';   // proves the profile gate runs first: this would otherwise 402
+test('an incomplete profile enters intake mode instead of being refused, with no job retrieval', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';   // intake mode also bypasses the paywall
   h.mock.__set('profiles', { data: { preferred_language: null, preferred_country: null, sector: null, role_type: null }, error: null });
-  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }));
-  assert.equal(r.status, 403);
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
   const j = await r.json();
-  assert.equal(j.code, 'ERR_PROFILE_INCOMPLETE');
-  assert.deepEqual(j.missing.sort(), ['confirmed_by_user', 'preferred_country', 'preferred_language', 'sector_or_role_type']);
-  assert.equal(upstream, null);
+  assert.equal(j.intake, true);
+  assert.equal(j.isComplete, false);
+  assert.deepEqual(j.jobs, []);
+  assert.ok(j.missing.includes('preferred_language'));
+  assert.ok(j.missing.includes('work_history'));
+  assert.ok(j.missing.includes('has_passport'));
+  assert.match(upstream.body.system, /INTAKE MODE/);
+  assert.match(upstream.body.system, /Do NOT mention, list, or recommend any jobs/);
 });
 
-test('no seeker_profiles row at all is treated as incomplete, not a crash', async () => {
-  h.mock.__set('profiles', { data: null, error: null });
-  const r = await ask({ message: 'hi' }, caller({}, null));
-  assert.equal(r.status, 403);
-  assert.equal((await r.json()).code, 'ERR_PROFILE_INCOMPLETE');
+test('no seeker_profiles row at all is intake mode, not a crash', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake2' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, null, null));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.intake, true);
+  assert.equal(j.isComplete, false);
+});
+
+test('intake mode persists a ---PROFILE--- extraction block through the shared write path and strips it from the reply', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake3' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text: 'Thanks! Saved that.\n---PROFILE---\n{"preferred_country":"canada","has_passport":true}\n---END---' }] } });
+  const r = await ask({ message: 'I want Canada and I have a passport' }, caller({}, { id: 'sp-prior', is_complete: false, confirmed_by_user: false }, { preferred_language: 'en', preferred_country: null, sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.intake, true);
+  assert.doesNotMatch(j.reply, /PROFILE---/);
+  assert.match(j.reply, /Thanks! Saved that/);
+  // an existing seeker_profiles row is updated by id, not duplicated
+  const writes = h.mock.__writes('seeker_profiles', 'update');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].payload.has_passport, true);
+  assert.equal(writes[0].payload.intake_method, 'conversational');
 });
 
 test('a complete profile passes straight through to matching', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c2' }, error: null });
-  const r = await ask({ message: 'electrician canada' }, caller({}, { is_complete: true, confirmed_by_user: true }));
+  const r = await ask({ message: 'electrician canada' }, caller());
   assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.intake, false);
   assert.match(upstream.body.system, /JOB_CONTEXT/);
 });
