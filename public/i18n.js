@@ -240,9 +240,11 @@
       ar: 'يرجى التحقق من الحقول المطلوبة والمحاولة مرة أخرى.',
     },
     ERR_WEAK_PASSWORD: {
-      en: 'Password must be at least 10 characters.',
-      fr: 'Le mot de passe doit contenir au moins 10 caractères.',
-      ar: 'يجب أن تتكون كلمة المرور من 10 أحرف على الأقل.',
+      // one code covers all of lib/security.js's passwordProblem() outcomes:
+      // too short, over 72 bytes, or a single repeated character
+      en: 'Password must be at least 10 characters, under 72 bytes, and not a single repeated character.',
+      fr: 'Le mot de passe doit contenir au moins 10 caractères, moins de 72 octets, et ne pas être un seul caractère répété.',
+      ar: 'يجب أن تتكون كلمة المرور من 10 أحرف على الأقل وألا تتجاوز 72 بايت وألا تكون حرفًا واحدًا مكررًا.',
     },
     ERR_TERMS_REQUIRED: {
       en: 'Please accept the Terms of Use.',
