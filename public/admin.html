@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrouvePro — Admin Moderation</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--teal:#0E7C86;--coral:#EC6A3C;--red:#E5544B;--bg:#EEF4F3;--surface:#fff;--ink:#12211F;--muted:#5E6E6B;--line:#DEE8E6}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+  h1{font-family:Sora,sans-serif;letter-spacing:-.02em}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 20px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input{font-family:Inter;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;flex:1;min-width:220px}
+  .btn{border:0;border-radius:10px;padding:9px 15px;font-weight:600;font-size:13px;cursor:pointer;font-family:Inter}
+  .btn-teal{background:var(--teal);color:#fff}
+  .btn-red{background:var(--red);color:#fff}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  table{width:100%;border-collapse:collapse;margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:10px 12px;font-size:13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#e7f4f2;color:var(--teal);font-weight:600}
+  tr:last-child td{border-bottom:0}
+  .kind{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#fff2e8;color:var(--coral)}
+  .kind.sexual{background:#fde8e8;color:var(--red)}
+  .muted{color:var(--muted)}
+  .msg{margin-top:10px;font-size:14px;min-height:18px}
+  .err{color:var(--red)} .ok{color:#2e7d43}
+  .empty{padding:22px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Admin · Moderation Queue</h1>
+  <p class="muted">Paste your admin JWT, then load the open reports. Block bans the user (forfeit + email blocklist); Illegal — escalate bans and keeps the record for reporting to Cybertip.ca; Dismiss clears the report. <code>image_strike</code> rows are photos automatically blocked by SafeSearch and never delivered — confirm before banning, false positives happen.</p>
+  <div class="row">
+    <input id="token" placeholder="Admin JWT (Bearer token)">
+    <button class="btn btn-teal" onclick="saveTokenAndLoad()">Load queue</button>
+    <button class="btn btn-ghost" onclick="loadQueue()">Refresh</button>
+  </div>
+  <div class="msg" id="msg"></div>
+  <div id="tablewrap"></div>
+</div>
+
+<script>
+  let token = localStorage.getItem('token') || '';
+  document.getElementById('token').value = token;
+
+  function setMsg(text, ok){ const m=document.getElementById('msg'); m.textContent=text||''; m.className='msg '+(ok?'ok':'err'); }
+
+  // fetch helper — always sends Authorization: Bearer <token>
+  async function api(path, opts={}){
+    opts.headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
+    if(token) opts.headers.Authorization = 'Bearer ' + token;
+    const res = await fetch(path, opts);
+    const body = await res.json().catch(()=>({}));
+    if(!res.ok){ throw new Error(body.error || ('HTTP '+res.status)); }
+    return body;
+  }
+
+  function saveTokenAndLoad(){
+    token = document.getElementById('token').value.trim();
+    localStorage.setItem('token', token);
+    loadQueue();
+  }
+
+  function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+  async function loadQueue(){
+    setMsg('Loading…', true);
+    try{
+      const j = await api('/api/report/admin/queue');
+      renderTable(j.reports || []);
+      setMsg(`${(j.reports||[]).length} open report(s).`, true);
+    }catch(e){
+      document.getElementById('tablewrap').innerHTML='';
+      // 403 { error:'Admin only' } surfaces here clearly
+      setMsg('Error: ' + e.message + (/admin/i.test(e.message) ? ' — this token is not an admin account.' : ''), false);
+    }
+  }
+
+  function renderTable(reports){
+    const wrap = document.getElementById('tablewrap');
+    if(!reports.length){ wrap.innerHTML = '<div class="empty">No open reports. 🎉</div>'; return; }
+    let html = '<table><thead><tr>'+
+      '<th>ID</th><th>Kind</th><th>Target user</th><th>Conv.</th><th>Reason</th><th>Created</th><th>Actions</th>'+
+      '</tr></thead><tbody>';
+    reports.forEach(r=>{
+      const kindClass = (r.kind === 'sexual' || r.kind === 'image_strike') ? 'kind sexual' : 'kind';
+      html += '<tr>'+
+        `<td>${esc(r.id)}</td>`+
+        `<td><span class="${kindClass}">${esc(r.kind)}</span></td>`+
+        `<td>${esc(r.target_user_id ?? '—')}</td>`+
+        `<td>${esc(r.conversation_id ?? '—')}</td>`+
+        `<td class="muted">${esc(r.reason || '')}</td>`+
+        `<td class="muted">${esc((r.created_at||'').slice(0,19).replace('T',' '))}</td>`+
+        `<td class="row">`+
+          `<button class="btn btn-red" onclick="act(${r.id},'block')">Block</button>`+
+          `<button class="btn btn-red" onclick="act(${r.id},'escalate')">Illegal — escalate</button>`+
+          `<button class="btn btn-ghost" onclick="act(${r.id},'dismiss')">Dismiss</button>`+
+        `</td>`+
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  async function act(id, action){
+    setMsg(`${action}…`, true);
+    try{
+      await api('/api/report/admin/'+id+'/action', { method:'POST', body: JSON.stringify({ action }) });
+      const done = { block: 'blocked', escalate: 'escalated \u2014 report it to Cybertip.ca and keep the record 21 days', dismiss: 'dismissed' }[action];
+      setMsg(`Report #${id} ${done}.`, true);
+      loadQueue(); // refresh
+    }catch(e){
+      setMsg('Error: ' + e.message, false);
+    }
+  }
+
+  // auto-load if a token is already stored
+  if(token) loadQueue();
+</script>
+</body>
+</html>
