@@ -24,28 +24,33 @@ const warnHtml = deadline => `
   back in, but the details would need to be rebuilt from scratch.</p>`;
 
 // Removes everything derived from the profile while keeping the users row.
+// Returns false on ANY failure and leaves the deadline untouched so the next
+// run retries — a partial deletion must not strand the remaining data paths.
 // Order matters: storage objects have no cascade, and concierge_conversations
 // only SET NULLs profile_id — both must be removed by hand before the
-// profiles row goes (it cascades seeker_profiles, document_uploads, daily_usage).
+// profiles row goes (it cascades seeker_profiles, document_uploads, daily_usage,
+// and with them the storage_path a retry would need).
 async function deleteProfileData(userId) {
-  const { data: docs } = await supabase.from('document_uploads')
+  const { data: docs, error: dSelErr } = await supabase.from('document_uploads')
     .select('id, storage_path').eq('profile_id', userId);
+  if (dSelErr) { console.error(`retention docs ${userId}`, dSelErr.message); return false; }
   for (const d of docs || []) {
     const { error: sErr } = await supabase.storage.from(BUCKET).remove([d.storage_path]);
-    if (sErr) console.error(`retention storage ${d.id}`, sErr.message);
+    if (sErr) { console.error(`retention storage ${d.id}`, sErr.message); return false; }
   }
-  const tables = ['concierge_conversations', 'profiles'];
-  for (const t of tables) {
-    const col = t === 'profiles' ? 'id' : 'profile_id';
-    const { error } = await supabase.from(t).delete().eq(col, userId);
-    if (error) console.error(`retention ${t} ${userId}`, error.message);
-  }
+  const { error: cErr } = await supabase.from('concierge_conversations')
+    .delete().eq('profile_id', userId);
+  if (cErr) { console.error(`retention conversations ${userId}`, cErr.message); return false; }
+  const { error: pErr } = await supabase.from('profiles').delete().eq('id', userId);
+  if (pErr) { console.error(`retention profiles ${userId}`, pErr.message); return false; }
+  return true;
 }
 
 async function run() {
   const now = Date.now();
   const { data: due, error } = await supabase.from('users')
     .select('id, email, data_retention_deadline, retention_warned_at')
+    .eq('subscription_status', 'canceled')
     .not('data_retention_deadline', 'is', null);
   if (error) throw error;
 
@@ -53,11 +58,23 @@ async function run() {
   for (const u of due || []) {
     const deadline = new Date(u.data_retention_deadline).getTime();
     if (deadline <= now) {
-      await deleteProfileData(u.id);
-      // clear both fields — the row is empty now, and a future subscription
-      // starts a clean countdown rather than an already-spent one
+      // Revalidate immediately before destructive work — a concurrent PayPal
+      // activation/renewal can clear the deadline between this list read and
+      // the deletes, and that user must keep their data.
+      const { data: still } = await supabase.from('users')
+        .select('id').eq('id', u.id)
+        .eq('subscription_status', 'canceled')
+        .eq('data_retention_deadline', u.data_retention_deadline)
+        .maybeSingle();
+      if (!still) continue;
+      if (!(await deleteProfileData(u.id))) continue; // leave the deadline — retry next run
+      // The account survives as credentials only: the profile fields register()
+      // copied here (name, phone) are part of the deleted profile data.
+      // The conditional .eq on the deadline keeps a concurrent reactivation
+      // from being overwritten — if it fired, this update matches no row.
       const { error: e } = await supabase.from('users')
-        .update({ data_retention_deadline: null, retention_warned_at: null }).eq('id', u.id);
+        .update({ name: null, phone: null, data_retention_deadline: null, retention_warned_at: null })
+        .eq('id', u.id).eq('data_retention_deadline', u.data_retention_deadline);
       if (e) console.error(`retention clear ${u.id}`, e.message); else deleted++;
     } else if (!u.retention_warned_at && deadline - now <= WARN_BEFORE_MS) {
       try {

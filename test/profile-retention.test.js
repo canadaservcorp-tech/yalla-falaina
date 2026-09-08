@@ -33,6 +33,23 @@ test('a user past the deadline loses profile + intake data but keeps the account
   const clear = mock.__writes('users', 'update');
   assert.equal(clear.length, 1);
   assert.equal(clear[0].payload.data_retention_deadline, null);
+  // profile data register() copied onto the account row goes with the profile
+  assert.equal(clear[0].payload.name, null);
+  assert.equal(clear[0].payload.phone, null);
+});
+
+test('a failed deletion step keeps the deadline so the next run retries', async () => {
+  mock.__set('users', { data: [{ id: 7, email: 'gone@example.com', data_retention_deadline: inDays(-1), retention_warned_at: null }], error: null });
+  // the document lookup itself fails — nothing downstream may run
+  mock.__set('document_uploads', { data: null, error: { message: 'db unreachable' } });
+  const logs = [];
+  const orig = console.error;
+  console.error = (...a) => logs.push(a.join(' '));
+  try { await run(); } finally { console.error = orig; }
+  assert.equal(mock.__writes('concierge_conversations', 'delete').length, 0);
+  assert.equal(mock.__writes('profiles', 'delete').length, 0);
+  assert.equal(mock.__writes('users', 'update').length, 0);   // deadline stays set
+  assert.ok(logs.some(l => /retention docs/.test(l)));
 });
 
 test('a deadline inside the warning window sends the email once', async () => {
