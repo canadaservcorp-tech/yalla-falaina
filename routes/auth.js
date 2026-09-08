@@ -27,15 +27,15 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     const name = sec.clean(req.body.name, 80);
     const phone = sec.clean(req.body.phone, 30) || '';
     const signup_source = (sec.clean(req.body.source, 40) || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '') || null;
-    if (!sec.isEmail(email) || !name) return res.status(400).json({ error: 'Missing or invalid fields' });
+    if (!sec.isEmail(email) || !name) return res.status(400).json({ error: 'Missing or invalid fields', code: 'ERR_BAD_INPUT' });
     const pwProblem = sec.passwordProblem(password);
-    if (pwProblem) return res.status(400).json({ error: pwProblem });
-    if (req.body.acceptTerms !== true) return res.status(400).json({ error: 'You must accept the Terms of Use' });
+    if (pwProblem) return res.status(400).json({ error: pwProblem, code: 'ERR_WEAK_PASSWORD' });
+    if (req.body.acceptTerms !== true) return res.status(400).json({ error: 'You must accept the Terms of Use', code: 'ERR_TERMS_REQUIRED' });
     // Hard 18+ gate (Sections 4.3/10) — the platform does not serve minors.
-    if (req.body.confirmAge !== true) return res.status(400).json({ error: 'You must be 18 or older to use Yalla Falaina' });
+    if (req.body.confirmAge !== true) return res.status(400).json({ error: 'You must be 18 or older to use Yalla Falaina', code: 'ERR_AGE_GATE' });
 
     const { data: banned } = await supabase.from('banned_emails').select('email').eq('email', email).maybeSingle();
-    if (banned) return res.status(403).json({ error: 'This email is blocked' });
+    if (banned) return res.status(403).json({ error: 'This email is blocked', code: 'ERR_EMAIL_BLOCKED' });
     const { data: exists } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
     // don't confirm which addresses are registered — same reply either way
     if (exists) {
@@ -81,7 +81,7 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
         `<p>Welcome to Yalla Falaina. Confirm your email:</p><p><a href="${link}">${link}</a></p>`);
     } catch (e) { emailSent = false; console.error('register:verify email', e.message); }
     res.json({ success: true, message: 'Registered — check your email to verify.', userId: user.id, emailSent });
-  } catch (e) { console.error('register', e); res.status(500).json({ error: 'Registration failed' }); }
+  } catch (e) { console.error('register', e); res.status(500).json({ error: 'Registration failed', code: 'ERR_SERVER' }); }
 });
 
 router.get('/verify', sec.limits.verify, async (req, res) => {
@@ -99,16 +99,19 @@ router.post('/login', sec.limits.credentials, async (req, res) => {
     const email = sec.normalizeEmail(req.body.email);
     const { password } = req.body;
     if (!sec.isEmail(email) || typeof password !== 'string' || !password)
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid credentials', code: 'ERR_INVALID_CREDENTIALS' });
     const { data: user } = await supabase.from('users')
       .select('id, email, name, role, password_hash, email_verified, banned').eq('email', email).maybeSingle();
     // always run a comparison so a missing account isn't measurably faster
     const hash = user?.password_hash || DUMMY_HASH;
     const ok = await bcrypt.compare(password, hash).catch(() => false);
-    if (!user || user.banned || !ok) return res.status(401).json({ error: 'Invalid credentials' });
-    if (!user.email_verified) return res.status(403).json({ error: 'Please verify your email first' });
+    // Same code as the malformed-input case above (both say "Invalid
+    // credentials"): the code must not let a client distinguish "wrong
+    // password" from "no such account" any more than the text already does.
+    if (!user || user.banned || !ok) return res.status(401).json({ error: 'Invalid credentials', code: 'ERR_INVALID_CREDENTIALS' });
+    if (!user.email_verified) return res.status(403).json({ error: 'Please verify your email first', code: 'ERR_UNVERIFIED' });
     const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '2d' });
     res.json({ success: true, token, user: { id: user.id, email, name: user.name, role: user.role } });
-  } catch (e) { console.error('login', e); res.status(500).json({ error: 'Login failed' }); }
+  } catch (e) { console.error('login', e); res.status(500).json({ error: 'Login failed', code: 'ERR_SERVER' }); }
 });
 module.exports = router;

@@ -37,7 +37,7 @@ async function ask(system, messages) {
 // Why the concierge is failing is invisible from the outside: a bad key, an unavailable
 // model and a blocked egress all surface as 502. Admins can read the upstream verdict.
 router.get('/diag', authenticate, sec.requireActiveUser, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only', code: 'ERR_FORBIDDEN' });
   if (!process.env.ANTHROPIC_API_KEY)
     return res.json({ configured: false, model: MODEL });
   try {
@@ -66,22 +66,22 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
       .slice(-MAX_TURNS)
       .map(m => ({ role: m.role, content: m.content.slice(0, MAX_CHARS) }));
-    if (!message) return res.status(400).json({ error: 'message is required' });
+    if (!message) return res.status(400).json({ error: 'message is required', code: 'ERR_BAD_INPUT' });
 
     // Subscription gate (Section 4.3): the $25 Basic tier is the paid lane;
     // the quota still applies to everyone so a trial can't burn the model.
     const { data: user } = await supabase.from('users')
       .select('id, subscription_status, subscription_tier')
       .eq('id', req.user.id).maybeSingle();
-    if (!user) return res.status(403).json({ error: 'Account not found' });
+    if (!user) return res.status(403).json({ error: 'Account not found', code: 'ERR_NOT_FOUND' });
     const active = user.subscription_status === 'active';
     if (paywallOn() && !active)
-      return res.status(402).json({ error: 'A subscription is required to use the concierge', upgrade: true });
+      return res.status(402).json({ error: 'A subscription is required to use the concierge', upgrade: true, code: 'ERR_PAYWALL' });
 
     const tier = active ? (user.subscription_tier || 'basic') : 'none';
     const quota = await usage.checkQuota(user.id, tier, usage.COST.text);
     if (!quota.allowed)
-      return res.status(429).json({ error: 'Daily limit reached — come back tomorrow or upgrade', quota });
+      return res.status(429).json({ error: 'Daily limit reached — come back tomorrow or upgrade', quota, code: 'ERR_QUOTA' });
 
     const jobs = await retrieveJobs({
       query: message,
@@ -128,17 +128,17 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     const { status, body } = await ask(system, [...history, { role: 'user', content: message }]);
     if (status !== 200) {
       console.error('concierge upstream', status, body);
-      return res.status(502).json({ error: 'Concierge unavailable' });
+      return res.status(502).json({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
     }
     const reply = (body.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
-    if (!reply) return res.status(502).json({ error: 'Concierge unavailable' });
+    if (!reply) return res.status(502).json({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
 
     if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), usage.COST.text);
     await usage.charge(user.id, usage.COST.text);
     res.json({ success: true, reply, jobs, conversationId, llmConfigured: true });
   } catch (e) {
     console.error('concierge', e.name, e.message);
-    res.status(502).json({ error: 'Concierge unavailable' });
+    res.status(502).json({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
   }
 });
 
