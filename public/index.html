@@ -151,6 +151,16 @@
   function token() { return sessionStorage.getItem(tokenKey) || ''; }
   function headers() { return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }; }
 
+  // ---------- paywall enforcement flag ----------
+  // /api/health's `paywall` boolean is the same PAYWALL_ENFORCED the server
+  // gates the concierge on — read once, unauthenticated, so refreshSub()
+  // below can tell "no active subscription" apart from "not enforced right
+  // now" instead of nagging every free/demo-mode visitor to subscribe.
+  // Conservative default (true) until it resolves: better a beat of an
+  // unnecessary banner than a hidden one while enforcement is actually on.
+  let paywallEnforced = true;
+  fetch('/api/health').then(r => r.json()).then(d => { paywallEnforced = Boolean(d.paywall); }).catch(() => {});
+
   // ---------- language ----------
   // The server already picked and stamped the language on <html lang> (and
   // dir="rtl" for Arabic) from ?lang= before sending this page (server.js,
@@ -259,7 +269,9 @@
       const d = await r.json();
       const active = d.status === 'active';
       $('subBar').textContent = active ? t('subActiveRenews', { date: d.periodEnd ? d.periodEnd.slice(0,10) : '—' }) : '';
-      $('paywall').style.display = active ? 'none' : 'block';
+      // Known gap (CLAUDE_PROMPT.md item 5): don't show the $25/month pitch to
+      // an unsubscribed visitor when the server isn't actually enforcing it.
+      $('paywall').style.display = (paywallEnforced && !active) ? 'block' : 'none';
     } catch { /* status is advisory only */ }
   }
   $('subscribeBtn').onclick = async () => {
