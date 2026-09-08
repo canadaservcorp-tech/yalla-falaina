@@ -56,8 +56,3 @@ test('a renewal is attributed to its agreement, not to the payment id', () => {
   assert.equal(ev.subscriptionId('PAYMENT.SALE.COMPLETED', { id: 'SALE-1' }), '');
   assert.equal(ev.subscriptionId('BILLING.SUBSCRIPTION.ACTIVATED', { id: 'I-SUB' }), 'I-SUB');
 });
-
-test('boost subscriptions are recognised by their tag', () => {
-  assert.equal(ev.boostUserId('BILLING.SUBSCRIPTION.ACTIVATED', { custom_id: 'boost:412' }), 412);
-  assert.equal(ev.boostUserId('BILLING.SUBSCRIPTION.ACTIVATED', { custom_id: '412' }), null);
-});

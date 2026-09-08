@@ -5,14 +5,14 @@ const { getApp } = require('./helpers/appHarness');
 const h = getApp();
 after(() => h.stop());
 
-test('GET /api/health -> 200 { ok:true, phase:3 }', async () => {
+test('GET /api/health -> 200 with feature booleans only', async () => {
   const res = await fetch(h.base + '/api/health');
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), {
-    ok: true, phase: 3,
+    ok: true, phase: 1,
     paywall: process.env.PAYWALL_ENFORCED === 'true',
-    moderation: Boolean(process.env.GOOGLE_VISION_API_KEY),
     concierge: Boolean(process.env.ANTHROPIC_API_KEY),
+    jobsFeed: process.env.JOB_API_PROVIDER || 'seed',
     analytics: Boolean(process.env.GA_MEASUREMENT_ID),
   });
 });

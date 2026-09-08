@@ -2,13 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { start, JOBS } = require('../lib/scheduler');
 
-test('scheduler schedules the booking-hold, expiry and lapse jobs', () => {
+test('scheduler runs the feed refresh, lapse and retention jobs', () => {
   delete process.env.JOBS;
   const timers = start();
   assert.equal(timers.length, 3);
   timers.forEach(t => clearInterval(t));
-  assert.deepEqual(JOBS.map(j => j.name), ['booking-holds', 'notify-expiries', 'subscription-lapse']);
-  assert.equal(JOBS[0].everyMs, 3600000);
+  assert.deepEqual(JOBS.map(j => j.name), ['jobs-refresh', 'subscription-lapse', 'document-retention']);
 });
 
 test('JOBS=off disables the in-process runner', () => {

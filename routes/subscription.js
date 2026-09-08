@@ -1,22 +1,20 @@
-// Phase 2 — provider subscription via PayPal ($15 for the first 3 months, then $10/month).
+// Seeker subscription via PayPal — Phase 1 ships a single $25/month "Basic"
+// tier (Section 4.3; the plan itself is created by scripts/paypal-setup.js).
 const express = require('express');
 const supabase = require('../db');
 const { authenticate } = require('../lib/auth-mw');
 const { configured, pp } = require('../lib/paypal');
 const sec = require('../lib/security');
-const boost = require('./boost');
 const ev = require('../lib/subscription-events');
-const funnel = require('../lib/funnel');
-const founding = require('../lib/founding');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
 const WEBHOOK_ID = process.env.PAYPAL_WEBHOOK_ID || '';
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
+const TIER = 'basic';                    // the only live tier in Phase 1
 
-// Start a subscription (provider only) — returns the PayPal approval URL.
+// Start a subscription — returns the PayPal approval URL.
 router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, async (req, res) => {
-  if (req.user.role !== 'provider') return res.status(403).json({ error: 'Providers only' });
   if (!configured() || !PLAN) return res.status(500).json({ error: 'PayPal not configured' });
   try {
     const { data: u } = await supabase.from('users').select('id, email').eq('id', req.user.id).maybeSingle();
@@ -25,14 +23,13 @@ router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, 
       custom_id: String(u.id),
       subscriber: { email_address: u.email },
       application_context: {
-        brand_name: 'TrouvePro',
+        brand_name: 'Yalla Falaina',
         user_action: 'SUBSCRIBE_NOW',
         return_url: `${PUBLIC_URL}/?sub=success`,
         cancel_url: `${PUBLIC_URL}/?sub=cancel`,
       },
     });
     await supabase.from('users').update({ paypal_subscription_id: sub.id }).eq('id', u.id);
-    funnel.track('checkout', { userId: u.id });
     const approve = (sub.links || []).find(l => l.rel === 'approve');
     if (!approve) return res.status(500).json({ error: 'PayPal returned no approval link' });
     res.json({ success: true, url: approve.href });
@@ -40,12 +37,19 @@ router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, 
 });
 
 router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
-  const { data } = await supabase.from('users').select('subscription_status, subscription_period_end').eq('id', req.user.id).maybeSingle();
-  res.json({ success: true, status: data?.subscription_status || 'inactive', periodEnd: data?.subscription_period_end || null });
+  const { data } = await supabase.from('users')
+    .select('subscription_status, subscription_tier, subscription_period_end')
+    .eq('id', req.user.id).maybeSingle();
+  res.json({
+    success: true,
+    status: data?.subscription_status || 'inactive',
+    tier: data?.subscription_tier || 'none',
+    periodEnd: data?.subscription_period_end || null,
+  });
 });
 
-
-// PayPal webhook — raw body is kept (see server.js) so the signature is checked against the exact payload.
+// PayPal webhook — raw body is kept (see server.js) so the signature is checked
+// against the exact payload.
 router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
   if (!configured() || !WEBHOOK_ID) return res.status(500).end();
   let event;
@@ -71,23 +75,6 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
     const isRenewal = type === ev.RENEWAL;
     if (isRenewal && !subId) return res.json({ received: true });   // a one-time order, not a subscription
 
-    // Auto-renewing top placement uses its own PayPal plan, tagged "boost:<userId>";
-    // a renewal payment carries no tag, so it is matched on the agreement instead.
-    let boostUser = ev.boostUserId(type, r);
-    if (!boostUser && subId) {
-      const { data: p } = await supabase.from('providers')
-        .select('user_id').eq('boost_subscription_id', subId).maybeSingle();
-      if (p) boostUser = p.user_id;
-    }
-    if (boostUser) {
-      if (ev.ACTIVE.has(type) || isRenewal) {
-        await boost.extendBoost(boostUser, boost.BOOST_PLANS.auto30.days, 'auto30', subId);
-      } else if (ev.GRACE.has(type) || ev.ENDED.has(type)) {
-        await supabase.from('providers').update({ boost_subscription_id: null }).eq('user_id', boostUser);
-      }
-      return res.json({ received: true });
-    }
-
     // A renewal payment says nothing about the next billing date, so it is read back
     // from the agreement (a failure here must not lose the payment itself).
     let resource = r;
@@ -104,12 +91,10 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
       const patch = ev.accountPatch(type, resource, new Date(), user.subscription_period_end);
       if (patch) {
         if (subId && !isRenewal) patch.paypal_subscription_id = subId;
+        if (patch.subscription_status === 'active') patch.subscription_tier = TIER;
+        if (patch.subscription_status === 'canceled') patch.subscription_tier = 'none';
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
-        if (patch.subscription_status === 'active') {
-          funnel.track('subscribed', { userId: user.id });
-          await founding.assign(user.id);   // a place is taken by a payment, not by a signup
-        }
       }
     }
     res.json({ received: true });
