@@ -1,14 +1,14 @@
 {
-  "name": "TrouvePro — le bon pro, tout près",
-  "short_name": "TrouvePro",
-  "description": "Trouvez les prestataires de confiance les plus proches. Find trusted providers nearby.",
-  "lang": "fr-CA",
+  "name": "Yalla Falaina — Your Assistant to Travel",
+  "short_name": "Yalla Falaina",
+  "description": "A trilingual concierge connecting job seekers with real, verified opportunities abroad.",
+  "lang": "en",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#F7F5F2",
-  "theme_color": "#0E7C86",
+  "background_color": "#0f1720",
+  "theme_color": "#2fae6b",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }

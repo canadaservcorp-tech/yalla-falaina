@@ -1,5 +1,5 @@
 {
-  "name": "trouvepro",
+  "name": "yalla-falaina",
   "version": "1.0.0",
   "private": true,
   "engines": {
@@ -8,7 +8,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --test --test-force-exit test/*.test.js"
+    "test": "node --test --test-force-exit test/*.test.js",
+    "jobs:refresh": "node lib/jobsIngest.js",
+    "retention": "node scripts/document-retention.js",
+    "paypal:setup": "node scripts/paypal-setup.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

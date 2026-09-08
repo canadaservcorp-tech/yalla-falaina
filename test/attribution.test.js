@@ -17,7 +17,7 @@ const register = source => fetch(h.base + '/api/auth/register', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     email: `src${n++}@example.invalid`, password: 'longenoughpw1',
-    name: 'S', role: 'seeker', acceptTerms: true, source,
+    name: 'S', role: 'seeker', acceptTerms: true, confirmAge: true, source,
   }),
 });
 const inserted = () => h.mock.__writes('users', 'insert').slice(-1)[0].payload;
@@ -49,7 +49,7 @@ test('a non-string source cannot reach the database', async () => {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email: 'objsrc@example.invalid', password: 'longenoughpw1',
-      name: 'S', role: 'seeker', acceptTerms: true, source: { evil: true },
+      name: 'S', role: 'seeker', acceptTerms: true, confirmAge: true, source: { evil: true },
     }),
   });
   assert.equal(r.status, 200);

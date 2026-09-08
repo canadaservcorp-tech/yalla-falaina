@@ -1,1697 +1,287 @@
-<!doctype html>
-<html lang="fr">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!--seo:start-->
-<title>TrouvePro — Services près de chez vous à Laval et Montréal</title>
-<meta name="description" content="Trouvez un plombier, un électricien, une infirmière ou un homme à tout faire près de chez vous à Laval, Montréal et sur la Rive-Nord. Recherche gratuite par proximité, prestataires licenciés RBQ.">
-<!--seo:end-->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--seo:start--><title>Yalla Falaina — Your Assistant to Travel</title><!--seo:end-->
 <!--analytics-->
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0E7C86">
-<link rel="icon" href="/icons/icon-32.png" sizes="32x32">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --teal-900:#0A3538; --teal:#0E7C86; --teal-300:#5BB7BE;
-    --coral:#EC6A3C; --amber:#F2B035; --red:#E5544B;
-    --bg:#EEF4F3; --surface:#FFFFFF; --ink:#12211F; --muted:#5E6E6B; --line:#DEE8E6;
-    --r:16px; --sh:0 8px 30px rgba(10,53,56,.08); --sh2:0 2px 10px rgba(10,53,56,.06);
+  :root {
+    --bg: #0f1720; --panel: #16212c; --accent: #2fae6b; --accent-dim: #1f7a4a;
+    --text: #eef3f7; --text-dim: #9fb1bf; --bubble-user: #22384a; --bubble-bot: #1c2b36;
+    --border: #24343f; --warn: #d9a441; --danger: #d9614a;
   }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
-  h1,h2,h3,.brand{font-family:Sora,system-ui,sans-serif}
-  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
-  /* above .sheet: the language switch must stay clickable while a sheet is open */
-  header{position:sticky;top:0;z-index:45;background:rgba(238,244,243,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-  .bar{display:flex;align-items:center;gap:14px;height:62px}
-  .brand{font-weight:700;font-size:20px;letter-spacing:-.02em;display:flex;align-items:center;gap:9px;cursor:pointer}
-  .dot{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 50% 50%,var(--ink) 0 24%,transparent 25%),conic-gradient(from 0deg,var(--teal),var(--amber),var(--coral),var(--red),var(--teal))}
-  .brand small{font-family:Inter;font-weight:500;color:var(--muted);font-size:12px}
-  .spacer{flex:1}
-  .lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-size:13px}
-  .lang button{border:0;background:transparent;padding:6px 11px;cursor:pointer;color:var(--muted);font-weight:600}
-  .lang button.on{background:var(--teal);color:#fff}
-  .btn{border:0;border-radius:999px;padding:10px 18px;font-weight:600;font-size:14px;cursor:pointer;font-family:Inter;transition:.15s transform}
-  .btn:active{transform:translateY(1px)}
-  .btn-primary{background:var(--coral);color:#fff;box-shadow:0 4px 14px rgba(236,106,60,.35)}
-  .btn-ghost{background:transparent;color:var(--teal);border:1px solid var(--teal)}
-  .btn-teal{background:var(--teal);color:#fff}
-  .btn-block{width:100%;justify-content:center;display:flex;padding:13px}
-  .hero{padding:38px 0 26px;display:grid;grid-template-columns:1.1fr .9fr;gap:30px;align-items:center}
-  .hero h1{font-size:40px;line-height:1.05;letter-spacing:-.03em;margin:0 0 14px}
-  .hero h1 em{font-style:normal;color:var(--teal)}
-  .hero p{color:var(--muted);font-size:17px;margin:0 0 22px;max-width:42ch}
-  .search{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh2)}
-  .search .row{display:flex;gap:10px;flex-wrap:wrap}
-  .field{flex:1;min-width:140px;display:flex;flex-direction:column;gap:5px}
-  .field label{font-size:12px;font-weight:600;color:var(--muted)}
-  select,input,textarea{font-family:Inter;font-size:15px;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);width:100%}
-  input:focus,select:focus,textarea:focus{outline:2px solid var(--teal-300);border-color:var(--teal)}
-  .radiuslabel{font-size:12px;color:var(--muted);font-weight:600}
-  .radar{aspect-ratio:1;max-width:320px;margin:0 auto;width:100%}
-  @media (prefers-reduced-motion:no-preference){
-    .pulse{transform-origin:center;animation:pp 3.4s ease-out infinite}
-    .pulse.b{animation-delay:1.1s}.pulse.c{animation-delay:2.2s}
-    @keyframes pp{0%{r:8;opacity:.55}80%{opacity:0}100%{r:150;opacity:0}}
-    .node{animation:fl 2.6s ease-in-out infinite}.node.b{animation-delay:.5s}.node.c{animation-delay:1s}.node.d{animation-delay:1.5s}
-    @keyframes fl{0%,100%{opacity:.85}50%{opacity:.35}}
-  }
-  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:6px 0 18px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh2);display:flex;flex-direction:column;gap:9px}
-  .card h3{margin:0;font-size:17px}
-  .pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px}
-  .pill-dist{background:#e7f4f2;color:var(--teal)}
-  .pill-lic{background:#eaf6ec;color:#2e7d43}
-  .pill-now{background:#fff2e8;color:var(--coral)}
-  .pill-off{background:#f1f5f9;color:var(--muted)}
-  .pill-boost{background:#eef6ff;color:#1d5c9e}
-  .pill-found{background:#fff3d9;color:#8a5a00}
-  .hours{font-size:13px;color:var(--muted);margin-top:4px}
-  .shot{width:74px;height:74px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
-  .shotwrap{position:relative;display:inline-block}
-  .shotwrap button{position:absolute;top:-6px;right:-6px;border:0;background:var(--coral);color:#fff;border-radius:999px;width:20px;height:20px;line-height:18px;cursor:pointer}
-  .pill-lang{background:#f1f0ec;color:var(--muted)}
-  .tags{display:flex;gap:6px;flex-wrap:wrap}
-  .muted{color:var(--muted)} .center{text-align:center}
-  .badge-featured{position:absolute;top:12px;right:12px;background:var(--amber);color:#3a2c00;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
-  .view{display:none} .view.on{display:block}
-  section.pad{padding:8px 0 40px}
-  .sheet{position:fixed;inset:0;background:rgba(10,53,56,.35);display:none;align-items:center;justify-content:center;z-index:40;padding:78px 16px 16px}
-  .sheet.on{display:flex}
-  .modal{background:var(--surface);border-radius:20px;max-width:420px;width:100%;padding:22px;box-shadow:var(--sh);overflow-wrap:anywhere}
-  .modal h2{margin:0 0 4px;font-size:22px}
-  .seg{display:flex;background:var(--bg);border-radius:12px;padding:4px;margin:12px 0}
-  .seg button{flex:1;border:0;background:transparent;padding:9px;border-radius:9px;font-weight:600;cursor:pointer;color:var(--muted)}
-  .seg button.on{background:#fff;color:var(--teal);box-shadow:var(--sh2)}
-  .stack{display:flex;flex-direction:column;gap:11px;margin-top:6px}
-  .err{color:var(--red);font-size:13px;min-height:16px}
-  .ok{color:#2e7d43;font-size:14px}
-  .locked{color:var(--muted);font-size:13px;background:#f3f4f6;border-radius:10px;padding:8px 12px;display:inline-block}
-  .x{background:transparent;border:0;font-size:22px;cursor:pointer;color:var(--muted);float:right;line-height:1}
-  .svc-list{display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:10px}
-  .svc-list label{display:flex;gap:7px;font-size:13px;align-items:center;font-weight:500;color:var(--ink)}
-  .count{font-size:12px;color:var(--muted)}
-  footer{border-top:1px solid var(--line);padding:22px 0;color:var(--muted);font-size:13px}
-  .cookiebar{position:fixed;left:12px;right:12px;bottom:12px;z-index:80;display:none;gap:12px;align-items:center;flex-wrap:wrap;
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh2);padding:14px 16px;font-size:13px;color:var(--ink);max-width:760px;margin:auto}
-  .cookiebar p{margin:0;flex:1 1 260px}
-  .cookiebar .btn{padding:9px 14px;font-size:13px}
-  /* the bar is fixed over the bottom of the viewport, so while it is up the page ends higher and
-     the concierge bubble sits above it — otherwise both are unreachable on a phone */
-  body.cookiebar-open{padding-bottom:var(--cookiebar-h,0px)}
-  body.cookiebar-open #cc{bottom:calc(16px + var(--cookiebar-h,0px))}
-  .chatwrap{display:grid;grid-template-columns:250px 1fr;gap:14px;align-items:start}
-  .convlist{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px;box-shadow:var(--sh2);max-height:520px;overflow:auto}
-  .conv{border:0;background:transparent;text-align:left;width:100%;padding:10px;border-radius:11px;cursor:pointer;font-family:Inter;font-size:14px;font-weight:600;color:var(--ink)}
-  .conv:hover{background:var(--bg)} .conv.on{background:#e7f4f2;color:var(--teal)}
-  .thread{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh2);display:flex;flex-direction:column;gap:10px}
-  .msgs{display:flex;flex-direction:column;gap:8px;min-height:220px;max-height:380px;overflow:auto}
-  .msg{max-width:76%;padding:9px 12px;border-radius:14px;font-size:14px;background:var(--bg);overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap}
-  .msg.mine{align-self:flex-end;background:var(--teal);color:#fff}
-  .msg time{display:block;font-size:10px;opacity:.65;margin-top:3px}
-  .photostrip{display:flex;gap:8px;flex-wrap:wrap}
-  .photostrip img{width:74px;height:74px;object-fit:cover;border-radius:11px;border:1px solid var(--line)}
-  .sendrow{display:flex;gap:8px;align-items:center}
-  .subbox{background:#fff8ec;border:1px solid #f0dcb4;border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
-  .legal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;box-shadow:var(--sh2);max-width:780px;margin:0 auto}
-  .legal h2{font-size:22px;margin:0 0 2px}
-  .legal h3{font-size:16px;margin:20px 0 4px}
-  .legal p{margin:0;color:var(--ink);font-size:14px;line-height:1.6}
-  .legal .updated{font-size:12px;color:var(--muted);margin-bottom:6px}
-  .faqitem{border-bottom:1px solid var(--line)}
-  .faqitem summary{cursor:pointer;padding:12px 0;font-size:15px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:baseline}
-  .faqitem summary::-webkit-details-marker{display:none}
-  .faqitem summary::before{content:'+';color:var(--teal);font-weight:700;flex:0 0 auto}
-  .faqitem[open] summary::before{content:'\2212'}
-  .faqitem p{padding:0 0 14px 20px}
-  .accept{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.45}
-  .accept input{width:16px;height:16px;flex:0 0 auto;margin-top:2px}
-  .accept a{color:var(--teal)}
-  footer a{color:var(--teal);text-decoration:none;margin-left:12px}
-  #cc{position:fixed;right:16px;bottom:16px;z-index:40;max-width:calc(100vw - 32px)}
-  #cc [hidden]{display:none}
-  #ccbtn{box-shadow:var(--sh);min-height:44px}
-  #ccpanel{display:flex;flex-direction:column;width:min(340px,calc(100vw - 32px));height:min(460px,70vh);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
-  #cchead{display:flex;align-items:center;gap:8px;background:var(--teal);color:#fff;padding:11px 12px;font-weight:600;font-family:Sora,system-ui,sans-serif;font-size:15px}
-  #cchead #ccx{margin-left:auto;background:transparent;border:0;color:#fff;font-size:15px;cursor:pointer;min-width:32px;min-height:32px}
-  #ccnote{font-size:11px;color:var(--muted);padding:7px 12px;border-bottom:1px solid var(--line);line-height:1.35}
-  #ccnote a{color:var(--teal)}
-  #cclog{flex:1;overflow-y:auto;padding:12px;font-size:14px;line-height:1.45}
-  .ccrow{margin:0 0 8px;display:flex}
-  .ccrow.user{justify-content:flex-end}
-  .ccrow span{display:inline-block;padding:8px 11px;border-radius:12px;background:var(--bg);max-width:85%;white-space:pre-wrap;overflow-wrap:anywhere}
-  .ccrow.user span{background:var(--coral);color:#fff}
-  .ccdo{display:block;margin:2px 0 10px;font-size:13px;padding:9px 13px}
-  #ccbar{display:flex;gap:8px;padding:9px;border-top:1px solid var(--line)}
-  #ccbar input{flex:1;min-width:0}
-  #ccsend{white-space:nowrap;min-height:42px}
-  @media(max-width:760px){ .hero{grid-template-columns:1fr;gap:8px} .hero h1{font-size:32px} .radar{max-width:230px} .svc-list{grid-template-columns:1fr} .chatwrap{grid-template-columns:1fr} }
-  @media(max-width:560px){
-    .wrap{padding:0 14px}
-    .bar{flex-wrap:wrap;height:auto;min-height:58px;padding:8px 0;gap:6px}
-    .brand{font-size:17px;gap:6px}
-    .brand small{display:none}
-    .bar .btn{padding:8px 12px;font-size:13px;min-height:42px}
-    .lang{font-size:12px}
-    .lang button{padding:6px 11px;min-height:42px}
-    #navchatlbl,#navfavlbl,#navbooklbl{display:none}
-    footer a{margin:0 12px 0 0;display:inline-block}
-  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+         background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border);
+           display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  select, input[type="text"], input[type="email"], input[type="password"], input[type="tel"] {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+  button { background: var(--accent); color: #08150e; border: none; border-radius: 6px;
+           padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 13px; }
+  button:hover { background: var(--accent-dim); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  main { flex: 1; display: flex; overflow: hidden; }
+  #chatPane { flex: 2; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; }
+  #jobsPane { flex: 1; padding: 14px; overflow-y: auto; background: var(--panel); min-width: 260px; }
+  #jobsPane h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin: 0 0 10px 0; }
+  .job-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+              padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .job-card .title { font-weight: 600; margin-bottom: 2px; }
+  .job-card .meta { color: var(--text-dim); font-size: 12px; margin-bottom: 4px; }
+  .job-card .flag { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-top: 6px; margin-right: 4px; }
+  .flag.unverified { background: rgba(217, 164, 65, 0.18); color: var(--warn); }
+  .flag.honesty { background: rgba(217, 97, 74, 0.15); color: var(--danger); }
+  #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; line-height: 1.45; font-size: 14px; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--bubble-user); border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--bubble-bot); border-bottom-left-radius: 4px; }
+  .msg.system { align-self: center; background: transparent; color: var(--text-dim); font-size: 12px; text-align: center; }
+  #inputRow { display: flex; gap: 8px; padding: 14px; border-top: 1px solid var(--border); }
+  #inputRow input { flex: 1; font-size: 14px; padding: 10px 12px; }
+  [dir="rtl"] .msg.user { align-self: flex-start; border-bottom-left-radius: 4px; border-bottom-right-radius: 12px; }
+  [dir="rtl"] .msg.bot { align-self: flex-end; border-bottom-right-radius: 4px; border-bottom-left-radius: 12px; }
+  #authWrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #authCard { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+              padding: 24px; width: 100%; max-width: 420px; }
+  #authCard h2 { margin: 0 0 4px; font-size: 18px; }
+  #authCard .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 16px; }
+  #authCard label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
+  #authCard input, #authCard select { width: 100%; }
+  #authCard .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; font-size: 13px; }
+  #authCard .row input { width: auto; }
+  #authMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-top: 8px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+  .tabs button { flex: 1; background: var(--bg); color: var(--text-dim); }
+  .tabs button.on { background: var(--accent); color: #08150e; }
+  #paywall { background: var(--panel); border: 1px solid var(--warn); border-radius: 10px;
+             margin: 14px; padding: 14px; font-size: 13px; display: none; }
+  #subBar { font-size: 12px; color: var(--text-dim); }
 </style>
 </head>
 <body>
-<header><div class="wrap bar">
-  <div class="brand" onclick="go('search')"><span class="dot"></span>TrouvePro <small id="tag">· Près de toi</small></div>
-  <span class="spacer"></span>
-  <div class="lang">
-    <button id="lfr" class="on" onclick="setLang('fr')">FR</button>
-    <button id="len" onclick="setLang('en')">EN</button>
+<header>
+  <div>
+    <h1>Yalla Falaina — يلا فلاينة</h1>
+    <div class="subtitle">"Your Assistant to Travel" · مساعدك للسفر · Votre assistant de voyage</div>
   </div>
-  <button class="btn btn-ghost" id="navchat" style="display:none" onclick="openChat()">💬 <span id="navchatlbl">Messages</span></button>
-  <button class="btn btn-ghost" id="navfav" style="display:none" onclick="openFavorites()">★ <span id="navfavlbl">Favoris</span></button>
-  <button class="btn btn-ghost" id="navbook" style="display:none" onclick="openBookings()">📅 <span id="navbooklbl">Réservations</span></button>
-  <button class="btn btn-ghost" id="navnotif" style="display:none" onclick="openNotifications()">🔔<span id="notifbadge" style="display:none;margin-left:4px;background:#c0392b;color:#fff;border-radius:10px;padding:0 6px;font-size:11px">0</span></button>
-  <button class="btn btn-ghost" id="navauth" onclick="openAuth('login')">Connexion</button>
-  <button class="btn btn-ghost" id="navout" style="display:none" onclick="logout()">Déconnexion</button>
-</div></header>
-
-<div id="view-search" class="view on"><section class="pad"><div class="wrap">
-  <div class="hero">
-    <div>
-      <h1 id="h1">Le bon pro, <em>tout près</em> de vous.</h1>
-      <p id="hsub">Une infirmière dans votre immeuble, un plombier au coin de la rue. TrouvePro vous montre les prestataires de confiance les plus proches — et vous met en contact.</p>
-      <div class="search">
-        <div class="row">
-          <div class="field">
-            <label id="lblkw">Que cherchez-vous ?</label>
-            <input id="fq" maxlength="80" placeholder="ex. jardinier, élagage, gardener…" oninput="clearService()" onkeydown="if(event.key==='Enter')doSearch()">
-          </div>
-        </div>
-        <p class="muted" id="kwhint" style="font-size:12px;margin:6px 0 0"></p>
-        <div class="row" style="margin-top:12px">
-          <div class="field">
-            <label id="lblservice">Quel service ?</label>
-            <select id="fservice" onchange="clearKeyword()"><option value="">Tous les services</option></select>
-          </div>
-          <div class="field" style="max-width:150px">
-            <label id="lblradius" class="radiuslabel">Rayon : 5 km</label>
-            <input type="range" id="fradius" min="1" max="25" value="5" oninput="radlbl()">
-          </div>
-        </div>
-        <div class="row" style="margin-top:12px">
-          <button class="btn btn-primary btn-block" id="btnsearch" onclick="doSearch()">📍 Voir qui est près de moi</button>
-        </div>
-        <div class="err center" id="searcherr"></div>
-      </div>
-    </div>
-    <div>
-      <svg class="radar" viewBox="0 0 300 300" role="img" aria-label="proximity radar">
-        <defs><radialGradient id="g"><stop offset="0" stop-color="#0E7C86" stop-opacity=".12"/><stop offset="1" stop-color="#0E7C86" stop-opacity="0"/></radialGradient></defs>
-        <circle cx="150" cy="150" r="150" fill="url(#g)"/>
-        <g fill="none" stroke="#CFE3E1" stroke-width="1.5">
-          <circle cx="150" cy="150" r="52"/><circle cx="150" cy="150" r="98"/><circle cx="150" cy="150" r="144"/>
-        </g>
-        <circle class="pulse" cx="150" cy="150" r="8" fill="none" stroke="#0E7C86" stroke-width="2"/>
-        <circle class="pulse b" cx="150" cy="150" r="8" fill="none" stroke="#0E7C86" stroke-width="2"/>
-        <circle class="pulse c" cx="150" cy="150" r="8" fill="none" stroke="#0E7C86" stroke-width="2"/>
-        <circle cx="150" cy="150" r="9" fill="#12211F"/>
-        <circle class="node" cx="196" cy="120" r="8" fill="#EC6A3C"/>
-        <circle class="node b" cx="108" cy="196" r="8" fill="#F2B035"/>
-        <circle class="node c" cx="214" cy="196" r="7" fill="#0E7C86"/>
-        <circle class="node d" cx="92" cy="104" r="7" fill="#E5544B"/>
-      </svg>
-    </div>
-  </div>
-</div></section></div>
-
-<div id="view-results" class="view"><section class="pad"><div class="wrap">
-  <div class="toolbar">
-    <div class="field" style="max-width:220px">
-      <label id="rlblkw" class="radiuslabel">Que cherchez-vous ?</label>
-      <input id="rq" maxlength="80" oninput="clearService()" onchange="doSearch()" onkeydown="if(event.key==='Enter')doSearch()">
-    </div>
-    <div class="field" style="max-width:230px">
-      <label id="rlblservice" class="radiuslabel">Service</label>
-      <select id="rservice" onchange="clearKeyword();doSearch()"><option value="">Tous les services</option></select>
-    </div>
-    <div class="field" style="max-width:180px">
-      <label id="rlblradius" class="radiuslabel">Rayon : 5 km</label>
-      <input type="range" id="rradius" min="1" max="25" value="5" oninput="rradlbl()" onchange="doSearch()">
-    </div>
-    <div class="field" style="max-width:150px">
-      <label id="rlbllang" class="radiuslabel">Langue</label>
-      <select id="rlangs" onchange="doSearch()">
-        <option value="">—</option><option value="fr">fr</option><option value="en">en</option>
-        <option value="ar">ar</option><option value="es">es</option><option value="it">it</option>
-      </select>
-    </div>
-    <label class="radiuslabel" style="display:flex;align-items:center;gap:6px">
-      <input type="checkbox" id="ronlynow" onchange="doSearch()" style="width:auto">
-      <span id="rlblnow">Disponible maintenant</span>
-    </label>
-    <button class="btn btn-ghost" onclick="go('search')" id="btnback">← Nouvelle recherche</button>
-  </div>
-  <p class="muted" id="rcount"></p>
-  <div class="grid" id="results"></div>
-</div></section></div>
-
-<div id="view-provider" class="view"><section class="pad"><div class="wrap" style="max-width:640px">
-  <div class="subbox" id="subbox">
-    <strong id="subtitle">Abonnement prestataire</strong>
-    <span class="muted" id="substate" style="font-size:13px"></span>
-    <span class="muted" id="foundingstate" style="font-size:13px"></span>
-    <button class="btn btn-primary" id="subbtn" onclick="startCheckout()">S'abonner avec PayPal — 5,49 $/mois les 3 premiers mois, puis 10,66 $/mois + taxes</button>
-    <div class="err" id="suberr"></div>
-  </div>
-  <div class="subbox" id="boostbox" style="display:none;background:#eef6ff;border-color:#c9def7">
-    <strong id="boosttitle">Placement en tête de liste</strong>
-    <span class="muted" id="booststate" style="font-size:13px"></span>
-    <div class="tags" id="boostplans"></div>
-    <button class="btn btn-ghost" id="boostcancel" style="display:none" onclick="cancelAutoBoost()"></button>
-    <div class="err" id="boosterr"></div>
-  </div>
-  <div class="card" id="leadsbox" style="display:none;box-shadow:none;margin-bottom:14px;border-left:4px solid #0f7c7b">
-    <h3 id="leadstitle" style="margin:0">Demandes de clients</h3>
-    <div class="muted" id="leadsviews" style="font-size:13px"></div>
-    <div id="leadslist" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
-  </div>
-  <div class="card" id="claimbox" style="box-shadow:none;margin-bottom:14px">
-    <h3 id="claimtitle" style="margin:0">Réclamer votre fiche RBQ</h3>
-    <div class="muted" id="claimsub" style="font-size:13px">Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.</div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <input id="claim_q" placeholder="Nom de l'entreprise">
-      <button class="btn btn-ghost" id="claimsearchbtn" onclick="claimSearch()">Chercher</button>
-    </div>
-    <div id="claim_results" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
-    <div class="ok" id="claim_msg"></div>
-  </div>
-  <h1 id="pptitle" style="font-size:26px">Mon profil prestataire</h1>
-  <p class="muted" id="ppsub">Renseignez votre profil pour apparaître dans les recherches près de chez vos clients.</p>
-  <div class="stack">
-    <div class="field"><label>Nom affiché</label><input id="pp_name"></div>
-    <div class="field"><label>À propos (bio)</label><textarea id="pp_bio" rows="2" maxlength="1000"></textarea></div>
-    <div class="row" style="display:flex;gap:10px">
-      <div class="field"><label>Ville</label><input id="pp_city" placeholder="Laval"></div>
-      <div class="field"><label>Langues</label><input id="pp_lang" placeholder="fr, en, ar"></div>
-    </div>
-    <div class="field"><label>Disponibilité</label>
-      <select id="pp_avail"><option value="available">Disponible</option><option value="busy">Occupé</option><option value="away">Absent</option></select>
-    </div>
-    <div class="field"><label>Horaire (ex. soirs & week-ends, à domicile)</label><input id="pp_hours"></div>
-    <label class="radiuslabel" style="display:flex;align-items:center;gap:6px">
-      <input type="checkbox" id="pp_now" style="width:auto">
-      <span id="lb_now">Disponible maintenant (prêt à recevoir une demande)</span>
-    </label>
-    <div class="field"><label id="lb_price">Tarifs (ex. 80 $/h — estimation gratuite)</label><input id="pp_price" maxlength="200"></div>
-    <div class="row" style="display:flex;gap:10px">
-      <div class="field"><label id="lb_cmail">Courriel affiché</label><input id="pp_cmail" type="email" maxlength="120"></div>
-      <div class="field"><label id="lb_cphone">Mobile affiché</label><input id="pp_cphone" maxlength="25" placeholder="514 555-0123"></div>
-    </div>
-    <div class="muted" id="contacthint" style="font-size:12px;margin-top:-4px"></div>
-    <div class="field"><label>Licence RBQ (optionnel — pour le badge « Licencié »)</label><input id="pp_rbq" placeholder="ex. 1234-5678-01"></div>
-    <div>
-      <label class="radiuslabel" id="lb_portfolio">Photos de vos réalisations (max 6)</label>
-      <div class="tags" id="pp_portfolio"></div>
-      <input type="file" id="pp_portfile" accept="image/*" style="margin-top:6px" onchange="uploadPortfolio(this)">
-      <div class="err" id="pperrphoto"></div>
-    </div>
-    <div>
-      <label class="radiuslabel">Vos services (max 4) — <span class="count" id="svccount">0/4</span></label>
-      <div class="svc-list" id="pp_services"></div>
-    </div>
-    <div class="field">
-      <button class="btn btn-teal" onclick="setProviderLoc()">📍 Utiliser ma position actuelle</button>
-      <div class="muted" id="pplocval" style="font-size:12px;margin-top:4px"></div>
-    </div>
-    <div class="err" id="pperr"></div>
-    <button class="btn btn-primary btn-block" id="ppsave" onclick="saveProvider()">Enregistrer mon profil</button>
-  </div>
-</div></section></div>
-
-<div id="view-legal" class="view"><section class="pad"><div class="wrap">
-  <div class="toolbar">
-    <div class="seg" style="max-width:420px;flex:1">
-      <button id="tabterms" class="on" onclick="openLegal('terms')">Conditions d'utilisation</button>
-      <button id="tabprivacy" onclick="openLegal('privacy')">Politique de confidentialité</button>
-    </div>
-    <button class="btn btn-ghost" onclick="go('search')" id="legalback">← Retour</button>
-  </div>
-  <div class="legal" id="legalbody"></div>
-</div></section></div>
-
-<div id="view-faq" class="view"><section class="pad"><div class="wrap">
-  <div class="toolbar">
-    <h1 style="font-size:24px;margin:0" id="faqtitle">Foire aux questions</h1>
-    <span class="spacer" style="flex:1"></span>
-    <button class="btn btn-ghost" onclick="go('search')" id="faqback">← Retour</button>
-  </div>
-  <div class="legal" id="faqbody"></div>
-  <p class="center muted" style="font-size:13px" id="faqcontact"></p>
-</div></section></div>
-
-<div id="view-favorites" class="view"><section class="pad"><div class="wrap">
-  <div class="toolbar">
-    <h1 style="font-size:24px;margin:0" id="favtitle">Favoris</h1>
-    <span class="spacer" style="flex:1"></span>
-    <button class="btn btn-ghost" onclick="go('search')" id="favback">← Retour</button>
-  </div>
-  <p class="muted" id="favempty" style="display:none">Aucun favori pour le moment.</p>
-  <div class="grid" id="favlist"></div>
-</div></section></div>
-
-<div id="view-bookings" class="view"><section class="pad"><div class="wrap">
-  <div class="toolbar">
-    <h1 style="font-size:24px;margin:0" id="booktitle">Réservations</h1>
-    <span class="spacer" style="flex:1"></span>
-    <button class="btn btn-ghost" onclick="go('search')" id="bookback">← Retour</button>
-  </div>
-  <p class="muted" id="bookempty" style="display:none">Aucune réservation.</p>
-  <div class="grid" id="booklist"></div>
-</div></section></div>
-
-<div id="view-notifications" class="view"><section class="pad"><div class="wrap">
-  <div class="toolbar">
-    <h1 style="font-size:24px;margin:0" id="notiftitle">Notifications</h1>
-    <span class="spacer" style="flex:1"></span>
-    <button class="btn btn-ghost" id="notifread" onclick="markAllRead()">Tout marquer comme lu</button>
-    <button class="btn btn-ghost" id="notifpref" onclick="toggleNotifEmail()">Se désabonner des courriels</button>
-    <button class="btn btn-ghost" onclick="go('search')" id="notifback">← Retour</button>
-  </div>
-  <p class="muted" id="notifempty" style="display:none">Aucune notification.</p>
-  <div class="grid" id="notiflist"></div>
-</div></section></div>
-
-<div id="view-chat" class="view"><section class="pad"><div class="wrap">
-  <div class="toolbar">
-    <h1 style="font-size:24px;margin:0" id="chattitle">Messages</h1>
-    <span class="spacer" style="flex:1"></span>
-    <button class="btn btn-ghost" onclick="go('search')" id="chatback">← Retour</button>
-  </div>
-  <div class="chatwrap">
-    <div class="convlist" id="convlist"></div>
-    <div class="thread">
-      <div style="display:flex;align-items:center;gap:10px">
-        <strong id="threadwith" class="muted">—</strong>
-        <span class="spacer" style="flex:1"></span>
-        <button class="btn btn-ghost" id="btnreport" style="font-size:12px;padding:6px 12px;display:none" onclick="openReport()">⚑ <span id="reportlbl">Signaler</span></button>
-      </div>
-      <div class="msgs" id="msgs"></div>
-      <div class="photostrip" id="photostrip"></div>
-      <div class="sendrow">
-        <input id="msgtext" maxlength="2000" placeholder="Votre message…" onkeydown="if(event.key==='Enter')sendMsg()">
-        <button class="btn btn-ghost" id="btnphoto" title="Photo" onclick="document.getElementById('photofile').click()">📷</button>
-        <button class="btn btn-teal" id="btnsend" onclick="sendMsg()">Envoyer</button>
-        <input type="file" id="photofile" accept="image/*" style="display:none" onchange="uploadPhoto(this)">
-      </div>
-      <div class="muted" style="font-size:12px" id="photohint">Max 3 photos par conversation — elles sont supprimées à la fermeture du chat.</div>
-      <div class="err" id="chaterr"></div>
-    </div>
-  </div>
-</div></section></div>
-
-<div class="sheet" id="prosheet"><div class="modal">
-  <button class="x" onclick="closePro()">×</button>
-  <div id="probody"></div>
-</div></div>
-
-<div class="sheet" id="reportsheet"><div class="modal">
-  <button class="x" onclick="closeReport()">×</button>
-  <h2 id="reporttitle">Signaler</h2>
-  <div class="stack">
-    <select id="r_kind">
-      <option value="sexual">Contenu sexuel / explicite</option>
-      <option value="harassment">Harcèlement</option>
-      <option value="scam">Fraude / arnaque</option>
-      <option value="other">Autre</option>
+  <div class="controls">
+    <select id="dialectSelect">
+      <option value="">Auto-detect language/dialect</option>
+      <option value="Lebanese Arabic">Lebanese Arabic / لبناني</option>
+      <option value="Syrian Arabic">Syrian Arabic / سوري</option>
+      <option value="Egyptian Arabic">Egyptian Arabic / مصري</option>
+      <option value="French">Français</option>
+      <option value="English">English</option>
     </select>
-    <textarea id="r_reason" rows="3" maxlength="1000" placeholder="Détails (optionnel)"></textarea>
-    <div class="err" id="reporterr"></div><div class="ok" id="reportok"></div>
-    <button class="btn btn-primary btn-block" id="reportsubmit" onclick="submitReport()">Envoyer le signalement</button>
+    <input type="text" id="countryInput" placeholder="Preferred country (optional)">
+    <span id="subBar"></span>
+    <button class="ghost" id="logoutBtn" style="display:none">Sign out</button>
   </div>
-</div></div>
+</header>
 
-<div class="sheet" id="leadsheet"><div class="modal">
-  <button class="x" onclick="closeLead()">×</button>
-  <h2 id="leadtitle">Demander ce prestataire</h2>
-  <div class="muted" id="leadnotice" style="font-size:13px"></div>
-  <div class="stack">
-    <input id="l_name" maxlength="60" placeholder="Votre nom">
-    <input id="l_contact" maxlength="120" placeholder="Téléphone ou courriel">
-    <textarea id="l_msg" rows="3" maxlength="600" placeholder="Ce dont vous avez besoin (optionnel)"></textarea>
-    <label class="accept"><input type="checkbox" id="l_consent"><span id="leadconsentlbl"></span></label>
-    <div class="err" id="leaderr"></div><div class="ok" id="leadok"></div>
-    <button class="btn btn-primary btn-block" id="leadsubmit" onclick="submitLead()">Envoyer ma demande</button>
+<div id="authWrap">
+  <div id="authCard">
+    <div class="tabs">
+      <button id="tabLogin" class="on">Sign in</button>
+      <button id="tabRegister">Create account</button>
+    </div>
+    <h2 id="authTitle">Welcome back</h2>
+    <div class="hint">Yalla Falaina is for job and immigration seekers 18 and older. The concierge connects you with real opportunities — it never replaces a licensed professional.</div>
+    <label>Email</label><input type="email" id="email">
+    <label>Password</label><input type="password" id="password">
+    <div id="regExtra" style="display:none">
+      <label>Full name</label><input type="text" id="name">
+      <label>Preferred language</label>
+      <select id="prefLang">
+        <option value="">—</option><option value="ar-LB">Lebanese Arabic</option>
+        <option value="ar-SY">Syrian Arabic</option><option value="ar-EG">Egyptian Arabic</option>
+        <option value="ar">Arabic (other)</option><option value="fr">Français</option><option value="en">English</option>
+      </select>
+      <label>Preferred country <span style="color:var(--text-dim)">(a preference, not a filter)</span></label>
+      <input type="text" id="prefCountry">
+      <label>Sector of work</label><input type="text" id="sector" placeholder="e.g. trades, kitchen, logistics">
+      <div class="row"><input type="checkbox" id="confirmAge"><label for="confirmAge" style="margin:0">I confirm I am 18 or older</label></div>
+      <div class="row"><input type="checkbox" id="acceptTerms"><label for="acceptTerms" style="margin:0">I accept the Terms of Use</label></div>
+    </div>
+    <div class="row"><button id="authGo">Sign in</button></div>
+    <div id="authMsg"></div>
   </div>
-</div></div>
-
-<div class="sheet" id="authsheet"><div class="modal">
-  <button class="x" onclick="closeAuth()">×</button>
-  <h2 id="authtitle">Connexion</h2>
-  <div class="muted" id="claimhint" style="display:none;font-size:13px"></div>
-  <div class="seg" id="rolewrap" style="display:none">
-    <button id="roleSeeker" class="on" onclick="setRole('seeker')">Je cherche</button>
-    <button id="roleProvider" onclick="setRole('provider')">J'offre un service</button>
-  </div>
-  <div class="stack">
-    <input id="a_name" placeholder="Nom complet" style="display:none">
-    <input id="a_email" placeholder="Courriel" type="email">
-    <input id="a_phone" placeholder="Téléphone" style="display:none">
-    <input id="a_pass" placeholder="Mot de passe" type="password" minlength="10" autocomplete="current-password">
-    <div class="muted" id="pwhint" style="font-size:12px;display:none">Minimum 10 caractères.</div>
-    <label class="accept" id="acceptwrap" style="display:none">
-      <input type="checkbox" id="a_terms">
-      <span id="acceptlbl"></span>
-    </label>
-    <div class="err" id="autherr"></div><div class="ok" id="authok"></div>
-    <button class="btn btn-primary btn-block" id="authsubmit" onclick="submitAuth()">Se connecter</button>
-    <p class="center muted" style="font-size:13px" id="authswitch"></p>
-  </div>
-</div></div>
-
-<!-- Law 25: analytics only runs after the visitor accepts, and the bar appears only when a
-     measurement id is configured (window.TP_GA_ID, injected server-side). -->
-<div class="cookiebar" id="cookiebar" role="dialog" aria-live="polite">
-  <p id="cookietxt"></p>
-  <button class="btn" id="cookieno" onclick="setAnalyticsConsent('no')"></button>
-  <button class="btn btn-primary" id="cookieok" onclick="setAnalyticsConsent('yes')"></button>
 </div>
 
-<footer><div class="wrap" id="foot">
-  <span id="footco">TrouvePro — Près de toi · Near To You · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC</span>
-  <a href="/terms" id="footterms" onclick="openLegal('terms');return false">Conditions d'utilisation</a>
-  <a href="/privacy" id="footprivacy" onclick="openLegal('privacy');return false">Politique de confidentialité</a>
-  <a href="/faq" id="footfaq" onclick="openFaq();return false">Aide</a>
-  <a href="/verification" id="footverif">Vérifier une licence RBQ</a>
-  <a href="https://www.instagram.com/mytrouvepro" id="footig" target="_blank" rel="noopener noreferrer">Instagram</a>
-</div></footer>
+<main id="appMain" style="display:none">
+  <div id="chatPane">
+    <div id="paywall">
+      <b>Basic — $25/month.</b> The concierge is a subscriber feature: real matched opportunities, logged answers, daily fair-use quota.
+      <button id="subscribeBtn">Subscribe with PayPal</button>
+      <span id="subMsg"></span>
+    </div>
+    <div id="messages"></div>
+    <div id="inputRow">
+      <input type="text" id="messageInput" placeholder="Type your message… (kifak? / bonjour / hello)" autocomplete="off">
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+  <div id="jobsPane">
+    <h2>Matched opportunities</h2>
+    <div id="jobsList"><p style="color:var(--text-dim);font-size:13px;">Send a message to see what the matching engine finds — jobs shown here are the only ones the assistant is allowed to reference.</p></div>
+  </div>
+</main>
 
-<script src="/legal.js"></script>
-<script src="/faq.js"></script>
-<script src="/concierge.js" defer></script>
 <script>
-const S = { lang:'fr', token:localStorage.getItem('tp_token')||null, user:null, catalog:[], mode:'login', role:'seeker', favs:new Set() };
-try{ S.user = JSON.parse(localStorage.getItem('tp_user')||'null'); }catch(e){}
+  const $ = id => document.getElementById(id);
+  const tokenKey = 'yf_token';
+  let history = [], conversationId = null;
 
-const T = {
-  fr:{ login:'Connexion', logout:'Déconnexion', tag:'· Près de toi',
-    h1:'Le bon pro, <em>tout près</em> de vous.',
-    hsub:"Une infirmière dans votre immeuble, un plombier au coin de la rue. TrouvePro vous montre les prestataires de confiance les plus proches — et vous met en contact.",
-    service:'Quel service ?', allsvc:'Tous les services', radius:'Rayon', search:'📍 Voir qui est près de moi',
-    kw:'Que cherchez-vous ?', kwph:'ex. jardinier, élagage, gardener…', kwhint:'Un mot suffit : nous cherchons aussi les métiers proches, en français comme en anglais.',
-    back:'← Nouvelle recherche', count:(n)=>`${n} prestataire(s) près de vous`, none:'Aucun prestataire dans ce rayon. Élargissez la recherche.',
-    licensed:'Licencié RBQ', now:'Disponible', contact:'Contacter', loginto:'Connectez-vous pour contacter',
-    flang:'Langue', fnow:'Disponible maintenant', lbnow:'Disponible maintenant (prêt à recevoir une demande)',
-    profile:'Mon profil', myprofile:'Mon profil prestataire',
-    authL:'Connexion', authR:'Créer un compte', toReg:"Pas de compte ? Créez-en un", toLog:'Déjà inscrit ? Connectez-vous',
-    save:'Enregistrer mon profil', saved:'Profil enregistré ✓', locset:'Position enregistrée ✓',
-    checkmail:'Compte créé — vérifiez votre courriel pour confirmer.',
-    messages:'Messages', chatback:'← Retour', send:'Envoyer', msgph:'Votre message…',
-    noconv:'Aucune conversation pour le moment.', pickconv:'Choisissez une conversation.',
-    photohint:'Max 3 photos par conversation — elles sont supprimées à la fermeture du chat.',
-    photoblocked:'Photo bloquée : notre filtre l’a jugée explicite. Elle n’a pas été envoyée et sera revue par un modérateur. Les récidives entraînent la fermeture du compte.',
-    report:'Signaler', reportsend:'Envoyer le signalement', reportsent:'Signalement envoyé ✓',
-    subtitle:'Abonnement prestataire', subbtn:"S'abonner avec PayPal — 5,49 $/mois les 3 premiers mois, puis 10,66 $/mois + TPS/TVQ",
-    subactive:'Abonnement actif ✓', subinactive:'Aucun abonnement actif.', submanage:'Abonnement actif',
-    subok:'Abonnement activé ✓', subcancel:'Paiement annulé.',
-    unclaimed:'Fiche RBQ non réclamée — est-ce vous ?', notavail:'Non disponible',
-    openfree:'Gratuit ce mois-ci', leadcta:'Demander ce prestataire',
-    leadtitle:'Demander ce prestataire',
-    leadnotice:(name,until)=>`${name} est joignable gratuitement grâce à myTROUVEpro jusqu’au ${until}. En continuant, ${name} sera avisé qu’un client l’a trouvé ici et pourra vous rappeler.`,
-    leadconsent:'J’accepte que mon nom et mes coordonnées soient transmis à ce prestataire.',
-    leadsend:'Envoyer ma demande',
-    leadsent:'Demande envoyée. Le prestataire est avisé et vous rappellera.',
-    leadneed:'Un nom et un téléphone ou courriel sont requis.',
-    leadsttl:'Demandes de clients', leadsviews:n=>`${n} visite(s) de votre fiche dans les 30 derniers jours.`,
-    leadsnone:'Aucune demande pour le moment.',
-    openbanner:(until,days)=>`Mois de lancement : jusqu’au ${until} (${days} j), vous pouvez joindre gratuitement les fiches RBQ non réclamées.`,
-    offline:'Hors ligne', offlinehint:"Ce prestataire n'a pas d'abonnement actif : distance masquée, contact impossible.",
-    hours:'Heures', prices:'Tarifs', details:'Voir la fiche',
-    rvtitle:'Avis', rvnone:'Aucun avis pour le moment.', rvwrite:'Écrire un avis',
-    rvrating:'Note (1 à 5)', rvph:'Partagez votre expérience…', rvsubmit:'Publier', rvsaved:'Avis publié ✓',
-    rvreply:'Réponse du prestataire', rvreplyph:'Répondre à cet avis…', rvreplysend:'Répondre',
-    rvreport:'Signaler cet avis', rvreported:'Signalé — merci',
-    notifs:'Notifications', notifnone:'Aucune notification.', notifread:'Tout marquer comme lu',
-    notifoff:'Se désabonner des courriels', notifon:'Recevoir les courriels',
-    books:'Réservations', booknone:'Aucune réservation.', bookbtn:'📅 Réserver',
-    bookwhen:'Date et heure du rendez-vous', bookamount:'Prix estimé convenu (CAD)',
-    booknotelbl:'Détails (optionnel)', bookdep:'Dépôt à autoriser',
-    booksend:'Demander ce rendez-vous', booksent:'Demande envoyée ✓',
-    bookacc:'Accepter', bookdec:'Refuser', bookauth:'Autoriser le dépôt',
-    bookdone:'Marquer comme terminé', bookcancel:'Annuler', booknoshow:'Signaler une absence',
-    bookauthlater:(d)=>`Dépôt à autoriser à partir du ${d}`,
-    st_requested:'Demande envoyée — en attente du prestataire',
-    st_declined:'Refusée par le prestataire', st_accepted:'Acceptée — dépôt à autoriser',
-    st_authorized:'Confirmée — dépôt autorisé (non prélevé)', st_completed:'Terminée — dépôt prélevé',
-    st_cancelled_void:'Annulée — aucun frais', st_cancelled_charged:'Annulée tardivement — dépôt prélevé',
-    st_expired:'Autorisation expirée — aucun frais',
-    favs:'Favoris', favnone:'Aucun favori pour le moment.', favadd:'Ajouter aux favoris',
-    favremove:'Retirer des favoris', favoff:'Hors ligne — ville et contact masqués',
-    contactlocked:'Coordonnées visibles seulement aux membres connectés, pour les prestataires abonnés.',
-    lbprice:'Tarifs (ex. 80 $/h — estimation gratuite)', lbcmail:'Courriel affiché', lbcphone:'Mobile affiché',
-    lbportfolio:'Photos de vos réalisations (max 6)',
-    boosttitle:'Placement en tête de liste', boostactive:'Placement en tête actif jusqu’au',
-    boostwhy:(n)=>`${n} prestataires abonnés couvrent déjà votre métier près de vous : payez pour apparaître en tête.`,
-    boostfree:(n)=>`Vous êtes encore parmi les ${n} premiers résultats — aucun placement payé nécessaire.`,
-    boostdays:(d)=>`${d} jours`, boostauto:(d)=>`${d} jours — renouvellement automatique`,
-    boostcancel:'Arrêter le renouvellement automatique', taxin:'taxes incluses',
-    boosted:'En tête', foundingbadge:'Fondateur',
-    founding:(n,l)=>`Places de prestataire fondateur : ${n} des ${l} déjà prises.`,
-    foundingfull:'Les 50 places de fondateur sont prises.',
-    contacthint:'Laissez vide pour utiliser le courriel et le mobile de votre compte. Vos coordonnées ne sont montrées qu’aux membres connectés, et seulement si votre abonnement est actif.',
-    claimtitle:'Réclamer votre fiche RBQ', claimsub:"Votre entreprise est peut-être déjà listée (registre RBQ). Cherchez-la et réclamez-la.",
-    claimq:"Nom de l'entreprise", claimsearch:'Chercher', claimbtn:'Réclamer',
-    claimed:'Fiche réclamée ✓ — ajoutez votre position et abonnez-vous pour être visible.', claimnone:'Aucune fiche trouvée.',
-    invite:'Réclamez la fiche de %s : créez votre compte prestataire.',
-    pwhint:'Mot de passe : 10 caractères minimum.',
-    roleseek:'Je cherche', roleoffer:"J'offre un service",
-    phname:'Nom complet', phemail:'Courriel', phphone:'Téléphone', phpass:'Mot de passe',
-    terms:"Conditions d'utilisation", privacy:'Politique de confidentialité', legalback:'← Retour',
-    faq:'Aide', faqtitle:'Foire aux questions', verif:'Vérifier une licence RBQ',
-    faqcontact:'Vous ne trouvez pas votre réponse ? Écrivez-nous à <a href="mailto:contact@mytrouvepro.net">contact@mytrouvepro.net</a>.',
-    accept:`J'ai lu et j'accepte les <a href="/terms" target="_blank">conditions d'utilisation</a> et la <a href="/privacy" target="_blank">politique de confidentialité</a>. Je comprends que TrouvePro met en relation et ne vérifie pas les prestataires.`,
-    acceptreq:"Vous devez accepter les conditions d'utilisation.",
-    cookietxt:'Nous aimerions mesurer la fréquentation du site avec Google Analytics. Aucune mesure sans votre accord.',
-    cookieok:'Accepter', cookieno:'Refuser',
-    foot:'TrouvePro — Près de toi · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC' },
-  en:{ login:'Log in', logout:'Log out', tag:'· Near To You',
-    h1:'The right pro, <em>right nearby</em>.',
-    hsub:"A nurse in your building, a plumber around the corner. TrouvePro shows the trusted providers closest to you — and connects you.",
-    service:'What service?', allsvc:'All services', radius:'Radius', search:'📍 See who’s near me',
-    kw:'What are you looking for?', kwph:'e.g. gardener, trimming, jardinier…', kwhint:'One word is enough — we also look for related trades, in French and in English.',
-    back:'← New search', count:(n)=>`${n} provider(s) near you`, none:'No providers in this radius. Widen the search.',
-    licensed:'RBQ licensed', now:'Available', contact:'Contact', loginto:'Log in to contact',
-    flang:'Language', fnow:'Available now', lbnow:'Available now (ready to take a request)',
-    profile:'My profile', myprofile:'My provider profile',
-    authL:'Log in', authR:'Create account', toReg:"No account? Create one", toLog:'Already registered? Log in',
-    save:'Save my profile', saved:'Profile saved ✓', locset:'Location saved ✓',
-    checkmail:'Account created — check your email to confirm.',
-    messages:'Messages', chatback:'← Back', send:'Send', msgph:'Your message…',
-    noconv:'No conversations yet.', pickconv:'Pick a conversation.',
-    photohint:'Max 3 photos per chat — they are deleted when the chat closes.',
-    photoblocked:'Photo blocked: our filter judged it explicit. It was not sent and a moderator will review it. Repeated violations close the account.',
-    report:'Report', reportsend:'Send report', reportsent:'Report sent ✓',
-    subtitle:'Provider subscription', subbtn:'Subscribe with PayPal — $5.49/mo for the first 3 months, then $10.66/mo + GST/QST',
-    subactive:'Subscription active ✓', subinactive:'No active subscription.', submanage:'Subscription active',
-    subok:'Subscription activated ✓', subcancel:'Payment cancelled.',
-    unclaimed:'Unclaimed RBQ listing — is this you?', notavail:'Not available',
-    openfree:'Free this month', leadcta:'Request this provider',
-    leadtitle:'Request this provider',
-    leadnotice:(name,until)=>`${name} can be reached for free through myTROUVEpro until ${until}. If you continue, ${name} will be told a client found them here and can call you back.`,
-    leadconsent:'I agree that my name and contact details are passed to this provider.',
-    leadsend:'Send my request',
-    leadsent:'Request sent. The provider has been notified and will call you back.',
-    leadneed:'A name and a phone number or email are required.',
-    leadsttl:'Client requests', leadsviews:n=>`${n} view(s) of your listing in the last 30 days.`,
-    leadsnone:'No requests yet.',
-    openbanner:(until,days)=>`Launch month: until ${until} (${days}d) you can reach unclaimed RBQ listings for free.`,
-    offline:'Offline', offlinehint:'This provider has no active subscription: distance hidden, contact unavailable.',
-    hours:'Hours', prices:'Rates', details:'View profile',
-    rvtitle:'Reviews', rvnone:'No reviews yet.', rvwrite:'Write a review',
-    rvrating:'Rating (1–5)', rvph:'Share your experience…', rvsubmit:'Submit', rvsaved:'Review posted ✓',
-    rvreply:'Provider reply', rvreplyph:'Reply to this review…', rvreplysend:'Reply',
-    rvreport:'Report this review', rvreported:'Reported — thank you',
-    notifs:'Notifications', notifnone:'No notifications.', notifread:'Mark all read',
-    notifoff:'Unsubscribe from emails', notifon:'Receive emails',
-    books:'Bookings', booknone:'No bookings.', bookbtn:'📅 Book',
-    bookwhen:'Appointment date and time', bookamount:'Agreed estimated price (CAD)',
-    booknotelbl:'Details (optional)', bookdep:'Deposit to authorize',
-    booksend:'Request this appointment', booksent:'Request sent ✓',
-    bookacc:'Accept', bookdec:'Decline', bookauth:'Authorize the deposit',
-    bookdone:'Mark as completed', bookcancel:'Cancel', booknoshow:'Report a no-show',
-    bookauthlater:(d)=>`Deposit can be authorized from ${d}`,
-    st_requested:'Requested — waiting for the provider',
-    st_declined:'Declined by the provider', st_accepted:'Accepted — deposit to authorize',
-    st_authorized:'Confirmed — deposit authorized (not charged)', st_completed:'Completed — deposit captured',
-    st_cancelled_void:'Cancelled — no charge', st_cancelled_charged:'Cancelled late — deposit captured',
-    st_expired:'Authorization expired — no charge',
-    favs:'Favorites', favnone:'No favorites yet.', favadd:'Add to favorites',
-    favremove:'Remove from favorites', favoff:'Offline — city and contact hidden',
-    contactlocked:'Contact details are shown to logged-in members only, for subscribed providers.',
-    lbprice:'Rates (e.g. $80/h — free estimate)', lbcmail:'Public email', lbcphone:'Public mobile',
-    lbportfolio:'Photos of your work (max 6)',
-    boosttitle:'Top-of-list placement', boostactive:'Top placement active until',
-    boostwhy:(n)=>`${n} subscribed providers already cover your trade nearby — pay to appear at the top.`,
-    boostfree:(n)=>`You are still within the first ${n} results — no paid placement needed.`,
-    boostdays:(d)=>`${d} days`, boostauto:(d)=>`${d} days — auto-renewing`,
-    boostcancel:'Stop auto-renewal', taxin:'taxes included',
-    boosted:'Top', foundingbadge:'Founding',
-    founding:(n,l)=>`Founding provider places: ${n} of ${l} already taken.`,
-    foundingfull:'All 50 founding places are taken.',
-    contacthint:'Leave empty to use your account email and mobile. Your details are only shown to logged-in members, and only while your subscription is active.',
-    claimtitle:'Claim your RBQ listing', claimsub:'Your business may already be listed (RBQ registry). Search for it and claim it.',
-    claimq:'Business name', claimsearch:'Search', claimbtn:'Claim',
-    claimed:'Listing claimed ✓ — set your location and subscribe to go live.', claimnone:'No listing found.',
-    invite:'Claim the listing for %s: create your provider account.',
-    pwhint:'Password: 10 characters minimum.',
-    roleseek:"I'm looking", roleoffer:'I offer a service',
-    phname:'Full name', phemail:'Email', phphone:'Phone', phpass:'Password',
-    terms:'Terms of Use', privacy:'Privacy Policy', legalback:'← Back',
-    faq:'Help', faqtitle:'Frequently asked questions', verif:'Check an RBQ licence',
-    faqcontact:'Can\u2019t find your answer? Write to <a href="mailto:contact@mytrouvepro.net">contact@mytrouvepro.net</a>.',
-    accept:`I have read and accept the <a href="/terms" target="_blank">Terms of Use</a> and the <a href="/privacy" target="_blank">Privacy Policy</a>. I understand TrouvePro connects people and does not verify providers.`,
-    acceptreq:'You must accept the Terms of Use.',
-    cookietxt:'We would like to measure site traffic with Google Analytics. Nothing is measured without your consent.',
-    cookieok:'Accept', cookieno:'Decline',
-    foot:'TrouvePro — Near To You · Performance Cristal Technologies Avancées S.A. (NEQ 2280629637) · Laval, QC' },
-};
-const t = k => T[S.lang][k];
+  function token() { return sessionStorage.getItem(tokenKey) || ''; }
+  function headers() { return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }; }
 
-function api(path, opts={}){
-  opts.headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
-  if(S.token) opts.headers.Authorization = 'Bearer '+S.token;
-  return fetch(path, opts).then(async r=>{ const j=await r.json().catch(()=>({})); if(!r.ok){ const e=new Error(j.error||'Error'); e.code=j.code; throw e; } return j; });
-}
-function go(v){
-  document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
-  document.getElementById('view-'+v).classList.add('on');
-  const onStaticPath = ['/terms','/privacy','/faq'].includes(location.pathname);
-  if(v!=='legal' && v!=='faq' && onStaticPath) history.replaceState(null,'','/');
-  window.scrollTo(0,0);
-}
+  // ---------- auth ----------
+  let mode = 'login';
+  function setMode(m) {
+    mode = m;
+    $('tabLogin').className = m === 'login' ? 'on' : '';
+    $('tabRegister').className = m === 'register' ? 'on' : '';
+    $('authTitle').textContent = m === 'login' ? 'Welcome back' : 'Create your account';
+    $('regExtra').style.display = m === 'register' ? 'block' : 'none';
+    $('authGo').textContent = m === 'login' ? 'Sign in' : 'Create account';
+    $('authMsg').textContent = '';
+  }
+  $('tabLogin').onclick = () => setMode('login');
+  $('tabRegister').onclick = () => setMode('register');
 
-function setLang(l){
-  S.lang=l; document.documentElement.lang=l;
-  // The site opens in French on every visit; a switch to English lasts for this visit only.
-  try{ sessionStorage.setItem('tp_lang',l); localStorage.removeItem('tp_lang'); }catch(e){}
-  document.getElementById('lfr').classList.toggle('on',l==='fr');
-  document.getElementById('len').classList.toggle('on',l==='en');
-  document.getElementById('tag').textContent=t('tag');
-  document.getElementById('h1').innerHTML=t('h1');
-  document.getElementById('hsub').textContent=t('hsub');
-  document.getElementById('lblservice').textContent=t('service');
-  document.getElementById('btnsearch').textContent=t('search');
-  document.getElementById('btnback').textContent=t('back');
-  document.getElementById('rlblservice').textContent=t('service');
-  document.getElementById('pptitle').textContent=t('myprofile');
-  document.getElementById('ppsave').textContent=t('save');
-  document.getElementById('lb_price').textContent=t('lbprice');
-  document.getElementById('lb_cmail').textContent=t('lbcmail');
-  document.getElementById('lb_cphone').textContent=t('lbcphone');
-  document.getElementById('lb_portfolio').textContent=t('lbportfolio');
-  document.getElementById('contacthint').textContent=t('contacthint');
-  document.getElementById('navchatlbl').textContent=t('messages');
-  document.getElementById('navfavlbl').textContent=t('favs');
-  document.getElementById('favtitle').textContent=t('favs');
-  document.getElementById('favback').textContent=t('chatback');
-  document.getElementById('navbooklbl').textContent=t('books');
-  document.getElementById('booktitle').textContent=t('books');
-  document.getElementById('bookback').textContent=t('chatback');
-  document.getElementById('notiftitle').textContent=t('notifs');
-  document.getElementById('notifback').textContent=t('chatback');
-  document.getElementById('notifread').textContent=t('notifread');
-  notifPrefLabel();
-  document.getElementById('chattitle').textContent=t('messages');
-  document.getElementById('chatback').textContent=t('chatback');
-  document.getElementById('btnsend').textContent=t('send');
-  document.getElementById('msgtext').placeholder=t('msgph');
-  document.getElementById('photohint').textContent=t('photohint');
-  document.getElementById('reportlbl').textContent=t('report');
-  document.getElementById('reporttitle').textContent=t('report');
-  document.getElementById('reportsubmit').textContent=t('reportsend');
-  document.getElementById('subtitle').textContent=t('subtitle');
-  document.getElementById('subbtn').textContent=t('subbtn');
-  document.getElementById('boosttitle').textContent=t('boosttitle');
-  if(S.user&&S.user.role==='provider'&&document.getElementById('boostbox').style.display!=='none') loadBoost();
-  document.getElementById('claimtitle').textContent=t('claimtitle');
-  document.getElementById('claimsub').textContent=t('claimsub');
-  document.getElementById('claim_q').placeholder=t('claimq');
-  document.getElementById('claimsearchbtn').textContent=t('claimsearch');
-  document.getElementById('cookietxt').textContent=t('cookietxt');
-  document.getElementById('cookieok').textContent=t('cookieok');
-  document.getElementById('cookieno').textContent=t('cookieno');
-  cookiebarRoom();   // the translated text can be one line longer or shorter
-  document.getElementById('footco').textContent=t('foot');
-  document.getElementById('footterms').textContent=t('terms');
-  document.getElementById('footprivacy').textContent=t('privacy');
-  document.getElementById('tabterms').textContent=t('terms');
-  document.getElementById('tabprivacy').textContent=t('privacy');
-  document.getElementById('legalback').textContent=t('legalback');
-  document.getElementById('footfaq').textContent=t('faq');
-  const fv=document.getElementById('footverif');
-  fv.textContent=t('verif'); fv.href=S.lang==='en'?'/verification?lang=en':'/verification';
-  document.getElementById('faqtitle').textContent=t('faqtitle');
-  document.getElementById('faqback').textContent=t('legalback');
-  document.getElementById('faqcontact').innerHTML=t('faqcontact');
-  document.getElementById('acceptlbl').innerHTML=t('accept');
-  authLabels();
-  if(document.getElementById('view-legal').classList.contains('on')) renderLegal();
-  if(document.getElementById('view-faq').classList.contains('on')) renderFaq();
-  document.getElementById('lblkw').textContent=t('kw');
-  document.getElementById('rlblkw').textContent=t('kw');
-  document.getElementById('kwhint').textContent=t('kwhint');
-  document.getElementById('fq').placeholder=t('kwph');
-  document.getElementById('rq').placeholder=t('kwph');
-  document.getElementById('rlbllang').textContent=t('flang');
-  document.getElementById('rlblnow').textContent=t('fnow');
-  document.getElementById('lb_now').textContent=t('lbnow');
-  if(window.Concierge) Concierge.setLang(l);
-  radlbl(); rradlbl(); refreshNav(); fillServiceSelects();
-  // results already on screen must follow the new language (incl. server-side distance labels)
-  if(document.getElementById('view-results').classList.contains('on')) doSearch();
-}
-/* ---------- analytics consent (Law 25 / GDPR-style) ----------
-   gtag.js is never requested until the visitor accepts; the answer is remembered in
-   localStorage so the bar is asked once, and a refusal keeps the site tracker-free. */
-function analyticsConsent(){ try{ return localStorage.getItem('tp_analytics'); }catch(e){ return null; } }
-function loadAnalytics(){
-  const id=window.TP_GA_ID;
-  if(!id || window.TP_GA_LOADED) return;
-  window.TP_GA_LOADED=true;
-  const s=document.createElement('script');
-  s.async=true; s.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(id);
-  document.head.appendChild(s);
-  window.dataLayer=window.dataLayer||[];
-  window.gtag=function(){ window.dataLayer.push(arguments); };
-  gtag('js', new Date());
-  gtag('config', id, { anonymize_ip:true });
-}
-function setAnalyticsConsent(answer){
-  try{ localStorage.setItem('tp_analytics',answer); }catch(e){}
-  document.getElementById('cookiebar').style.display='none';
-  document.body.classList.remove('cookiebar-open');
-  if(answer==='yes') loadAnalytics();
-}
-// the bar wraps to two or three lines on a phone, so its height is measured rather than assumed
-function cookiebarRoom(){
-  const bar=document.getElementById('cookiebar');
-  if(!document.body.classList.contains('cookiebar-open')) return;
-  document.body.style.setProperty('--cookiebar-h',(bar.offsetHeight+24)+'px');
-}
-function startAnalytics(){
-  if(!window.TP_GA_ID) return;               // no measurement id configured: nothing to consent to
-  const c=analyticsConsent();
-  if(c==='yes') return loadAnalytics();
-  if(c==='no') return;
-  document.getElementById('cookiebar').style.display='flex';
-  document.body.classList.add('cookiebar-open');
-  cookiebarRoom();
-  addEventListener('resize',cookiebarRoom);
-}
-
-// A keyword and a picked service would fight over the same query, so typing one drops the other.
-function clearService(){ ['fservice','rservice'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
-function clearKeyword(){ ['fq','rq'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
-function radlbl(){ const v=document.getElementById('fradius').value; document.getElementById('lblradius').textContent=`${t('radius')} : ${v} km`; }
-function rradlbl(){ const v=document.getElementById('rradius').value; document.getElementById('rlblradius').textContent=`${t('radius')} : ${v} km`; }
-
-function refreshNav(){
-  const b=document.getElementById('navauth'), out=document.getElementById('navout');
-  document.getElementById('navchat').style.display = (S.token&&S.user)?'inline-block':'none';
-  document.getElementById('navfav').style.display = (S.token&&S.user&&S.user.role==='seeker')?'inline-block':'none';
-  document.getElementById('navnotif').style.display = (S.token&&S.user)?'inline-block':'none';
-  document.getElementById('navbook').style.display = (S.token&&S.user)?'inline-block':'none';
-  if(S.token&&S.user) loadUnread();
-  // providers get their profile on the main button, so logout needs its own
-  out.style.display = (S.token&&S.user&&S.user.role==='provider')?'inline-block':'none';
-  out.textContent = t('logout');
-  if(S.token && S.user){
-    b.textContent = S.user.role==='provider' ? t('profile') : t('logout');
-    b.onclick = S.user.role==='provider' ? ()=>{loadProviderForm();go('provider');} : logout;
-  } else { b.textContent=t('login'); b.onclick=()=>openAuth('login'); }
-}
-function logout(){ S.token=null;S.user=null;localStorage.removeItem('tp_token');localStorage.removeItem('tp_user');refreshNav();go('search'); }
-
-async function loadCatalog(){
-  try{ const j=await api('/api/catalog'); S.catalog=j.categories||[]; fillServiceSelects(); fillServiceChecklist(); }catch(e){}
-}
-function fillServiceSelects(){
-  ['fservice','rservice'].forEach(id=>{
-    const el=document.getElementById(id); if(!el)return; const cur=el.value;
-    el.innerHTML=`<option value="">${t('allsvc')}</option>`;
-    S.catalog.forEach(c=>{
-      const og=document.createElement('optgroup'); og.label=S.lang==='fr'?c.name_fr:c.name_en;
-      (c.professions||[]).forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=S.lang==='fr'?p.name_fr:p.name_en; og.appendChild(o); });
-      el.appendChild(og);
-    });
-    el.value=cur;
-  });
-}
-function fillServiceChecklist(){
-  const box=document.getElementById('pp_services'); if(!box)return; box.innerHTML='';
-  S.catalog.forEach(c=> (c.professions||[]).forEach(p=>{
-    const l=document.createElement('label');
-    l.innerHTML=`<input type="checkbox" value="${p.id}" onchange="capServices(this)"> ${S.lang==='fr'?p.name_fr:p.name_en}`;
-    box.appendChild(l);
-  }));
-}
-function capServices(cb){
-  const checked=[...document.querySelectorAll('#pp_services input:checked')];
-  if(checked.length>4){ cb.checked=false; }
-  document.getElementById('svccount').textContent=`${Math.min(checked.length,4)}/4`;
-}
-
-const LAVAL=[45.5717,-73.7551];
-function getLoc(){
-  return new Promise(res=>{
-    if(!navigator.geolocation) return res(LAVAL);
-    navigator.geolocation.getCurrentPosition(p=>res([p.coords.latitude,p.coords.longitude]),()=>res(LAVAL),{timeout:6000});
-  });
-}
-
-async function doSearch(){
-  const onResults=document.getElementById('view-results').classList.contains('on');
-  const svc = onResults?document.getElementById('rservice').value:document.getElementById('fservice').value;
-  const rad = onResults?document.getElementById('rradius').value:document.getElementById('fradius').value;
-  const kw = (onResults?document.getElementById('rq').value:document.getElementById('fq').value).trim();
-  document.getElementById('searcherr').textContent='';
-  const [lat,lng]=await getLoc();
-  try{
-    const qs=new URLSearchParams({lat,lng,radius_km:rad,lang:S.lang});
-    if(svc) qs.set('profession_id',svc);
-    else if(kw) qs.set('q',kw);            // a keyword reaches every related trade, FR and EN
-    if(document.getElementById('ronlynow').checked) qs.set('available_now','true');
-    const spoken=document.getElementById('rlangs').value;
-    if(spoken) qs.set('languages',spoken);
-    const j=await api('/api/search?'+qs.toString());
-    document.getElementById('rservice').value=svc; document.getElementById('rq').value=kw;
-    document.getElementById('rradius').value=rad; rradlbl();
-    renderResults(j.providers||[]);
-    go('results');
-  }catch(e){ document.getElementById('searcherr').textContent=e.message; }
-}
-function renderResults(list){
-  document.getElementById('rcount').textContent = list.length? t('count')(list.length) : t('none');
-  const box=document.getElementById('results'); box.innerHTML='';
-  list.forEach(p=>{
-    const c=document.createElement('div'); c.className='card'; c.style.position='relative';
-    const langs=(p.languages||[]).map(x=>`<span class="pill pill-lang">${esc(x)}</span>`).join('');
-    c.innerHTML=`
-      ${p.featured?`<span class="badge-featured">★</span>`:''}
-      <h3>${esc(p.name||'—')}</h3>
-      <div class="tags">
-        ${p.distance_label
-            ? `<span class="pill pill-dist">📍 ${esc(p.distance_label)}</span>`
-            : `<span class="pill pill-off">○ ${t('offline')}</span>`}
-        ${p.boosted?`<span class="pill pill-boost">★ ${t('boosted')}</span>`:''}
-        ${p.founding?`<span class="pill pill-found">◆ ${t('foundingbadge')}</span>`:''}
-      ${p.is_licensed?`<span class="pill pill-lic">✓ ${t('licensed')}</span>`:''}
-        ${p.available_now?`<span class="pill pill-now">● ${t('now')}</span>`:''}
-      </div>
-      <div class="tags">${langs}</div>
-      ${p.distance_label && p.availability?`<div class="hours">🕑 ${t('hours')} : ${esc(p.availability)}</div>`:''}
-      ${p.distance_label && p.price_note?`<div class="hours">💰 ${t('prices')} : ${esc(p.price_note)}</div>`:''}
-      ${p.claimed!==false?`<button class="btn btn-ghost" style="margin-top:6px" onclick="openPro(${p.id})">${t('details')}</button>`:''}
-      ${ p.claimed===false
-          ? `<div class="locked" style="margin-top:6px">🏷️ ${t('unclaimed')}</div>`
-            + (S.open&&S.open.active
-                ? `<button class="btn btn-teal" style="margin-top:6px" onclick="openLead(${Number(p.id)})">${t('leadcta')} — ${t('openfree')}</button>`
-                : '')
-          : (!S.token
-              ? `<button class="btn btn-ghost" style="margin-top:6px" onclick="openAuth('register')">🔒 ${t('loginto')}</button>`
-              : (p.contactable===false
-                  ? `<div class="locked" style="margin-top:6px">${t('offlinehint')}</div>`
-                  : `<button class="btn btn-teal" style="margin-top:6px" onclick="startChat(${p.id})">${t('contact')}</button>`)) }`;
-    box.appendChild(c);
-  });
-}
-function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
-
-// Founding Month: a seeker can reach an unclaimed listing, and the owner is told about it.
-// Nothing here shows the provider's phone number — he claims his listing to answer.
-async function openLead(providerId){
-  const sheet=document.getElementById('leadsheet');
-  document.getElementById('leaderr').textContent='';
-  document.getElementById('leadok').textContent='';
-  document.getElementById('leadtitle').textContent=t('leadtitle');
-  document.getElementById('leadconsentlbl').textContent=t('leadconsent');
-  document.getElementById('leadsubmit').textContent=t('leadsend');
-  document.getElementById('l_consent').checked=false;
-  S.lead=null;
-  sheet.classList.add('on');
-  try{
-    const j=await api('/api/leads/listing/'+providerId);
-    S.lead={licence:j.licence,name:j.name,city:j.city};
-    document.getElementById('leadnotice').textContent=t('leadnotice')(j.name||'',j.until||'');
-  }catch(e){ document.getElementById('leaderr').textContent=e.message; }
-}
-function closeLead(){ document.getElementById('leadsheet').classList.remove('on'); }
-async function submitLead(){
-  const err=document.getElementById('leaderr'), ok=document.getElementById('leadok');
-  err.textContent=''; ok.textContent='';
-  if(!S.lead) return;
-  const name=document.getElementById('l_name').value.trim();
-  const contact=document.getElementById('l_contact').value.trim();
-  if(name.length<2||contact.length<5){ err.textContent=t('leadneed'); return; }
-  if(!document.getElementById('l_consent').checked){ err.textContent=t('leadconsent'); return; }
-  try{
-    await api('/api/leads',{method:'POST',body:JSON.stringify({licence:S.lead.licence,name,contact,
-      city:S.lead.city,message:document.getElementById('l_msg').value.trim(),consent:true})});
-    ok.textContent=t('leadsent');
-    document.getElementById('l_msg').value='';
-    setTimeout(closeLead,2200);
-  }catch(e){ err.textContent=e.message; }
-}
-// The window is a server-side date; the client only asks what it is.
-async function loadOpenAccess(){
-  try{ const j=await api('/api/open-access'); S.open=j.active?j:null; }catch(e){ S.open=null; }
-}
-// What a contractor gets for claiming: the requests waiting on his listing, and his view count.
-async function loadLeads(){
-  const box=document.getElementById('leadsbox'); if(!box) return;
-  try{
-    const j=await api('/api/leads/mine');
-    const list=j.leads||[];
-    if(!list.length && !j.views){ box.style.display='none'; return; }
-    document.getElementById('leadstitle').textContent=t('leadsttl');
-    document.getElementById('leadsviews').textContent=Number.isFinite(j.views)?t('leadsviews')(j.views):'';
-    const html=list.map(l=>`<div class="card" style="box-shadow:none;padding:10px">
-      <strong>${esc(l.seeker_name)}</strong>${l.seeker_city?` — ${esc(l.seeker_city)}`:''}<br>
-      <a href="${/@/.test(l.seeker_contact)?'mailto:':'tel:'}${esc(l.seeker_contact)}">${esc(l.seeker_contact)}</a>
-      ${l.message?`<div class="muted" style="font-size:13px">${esc(l.message)}</div>`:''}
-      <div class="muted" style="font-size:12px">${new Date(l.created_at).toLocaleString()}</div></div>`).join('');
-    document.getElementById('leadslist').innerHTML=html||`<div class="muted" style="font-size:13px">${t('leadsnone')}</div>`;
-    box.style.display='block';
-  }catch(e){ box.style.display='none'; }
-}
-function openAuth(mode){ S.mode=mode; renderAuth(); document.getElementById('authsheet').classList.add('on'); }
-function closeAuth(){ document.getElementById('authsheet').classList.remove('on'); }
-function claimHint(){
-  const hint=document.getElementById('claimhint');
-  if(hint.style.display==='none') return;
-  const name=(()=>{ try{ return sessionStorage.getItem('tp_claim')||''; }catch(e){ return ''; } })();
-  hint.textContent=name?t('invite').replace('%s',name):'';
-}
-function setRole(r){ S.role=r; document.getElementById('roleSeeker').classList.toggle('on',r==='seeker'); document.getElementById('roleProvider').classList.toggle('on',r==='provider'); }
-// The sign-in sheet keeps its own labels: they must follow a language switch even while it is open.
-function authLabels(){
-  const reg=S.mode==='register';
-  document.getElementById('authtitle').textContent = reg?t('authR'):t('authL');
-  document.getElementById('authsubmit').textContent = reg?t('authR'):t('authL');
-  document.getElementById('authswitch').textContent = reg?t('toLog'):t('toReg');
-  document.getElementById('pwhint').textContent = t('pwhint');
-  document.getElementById('roleSeeker').textContent = t('roleseek');
-  document.getElementById('roleProvider').textContent = t('roleoffer');
-  document.getElementById('a_name').placeholder = t('phname');
-  document.getElementById('a_email').placeholder = t('phemail');
-  document.getElementById('a_phone').placeholder = t('phphone');
-  document.getElementById('a_pass').placeholder = t('phpass');
-  claimHint();
-}
-function renderAuth(){
-  const reg=S.mode==='register';
-  document.getElementById('rolewrap').style.display = reg?'flex':'none';
-  document.getElementById('a_name').style.display = reg?'block':'none';
-  document.getElementById('a_phone').style.display = reg?'block':'none';
-  document.getElementById('pwhint').style.display = reg?'block':'none';
-  authLabels();
-  document.getElementById('acceptwrap').style.display = reg?'flex':'none';
-  document.getElementById('acceptlbl').innerHTML = t('accept');
-  document.getElementById('a_terms').checked = false;
-  document.getElementById('a_pass').autocomplete = reg?'new-password':'current-password';
-  document.getElementById('autherr').textContent=''; document.getElementById('authok').textContent='';
-  const sw=document.getElementById('authswitch');
-  sw.style.cursor='pointer'; sw.onclick=()=>{ S.mode=reg?'login':'register'; renderAuth(); };
-}
-async function submitAuth(){
-  const email=document.getElementById('a_email').value.trim(), pass=document.getElementById('a_pass').value;
-  const er=document.getElementById('autherr'), okEl=document.getElementById('authok'); er.textContent='';okEl.textContent='';
-  try{
-    if(S.mode==='register'){
-      const name=document.getElementById('a_name').value.trim(), phone=document.getElementById('a_phone').value.trim();
-      if(!document.getElementById('a_terms').checked){ er.textContent=t('acceptreq'); return; }
-      await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password:pass,name,phone,role:S.role,acceptTerms:true,source:signupSource()})});
-      okEl.textContent=t('checkmail');
-    }else{
-      const j=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password:pass})});
-      S.token=j.token;S.user=j.user; localStorage.setItem('tp_token',j.token); localStorage.setItem('tp_user',JSON.stringify(j.user));
-      closeAuth(); refreshNav();
-      if(j.user.role==='provider'){ loadProviderForm(); go('provider'); claimInvite(); }
+  async function authGo() {
+    $('authMsg').textContent = '';
+    const email = $('email').value.trim(), password = $('password').value;
+    if (mode === 'register') {
+      if (!$('confirmAge').checked) return $('authMsg').textContent = 'Yalla Falaina is for people 18 and older.';
+      if (!$('acceptTerms').checked) return $('authMsg').textContent = 'Please accept the Terms of Use.';
+      const r = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name: $('name').value.trim(), preferredLanguage: $('prefLang').value,
+          preferredCountry: $('prefCountry').value.trim(), sector: $('sector').value.trim(),
+          confirmAge: true, acceptTerms: true }) });
+      const d = await r.json();
+      $('authMsg').textContent = r.ok ? (d.message || 'Check your email to verify.') : (d.error || 'Registration failed');
+      return;
     }
-  }catch(e){ er.textContent=e.message; }
-}
+    const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }) });
+    const d = await r.json();
+    if (!r.ok) return $('authMsg').textContent = d.error || 'Sign-in failed';
+    sessionStorage.setItem(tokenKey, d.token);
+    enter();
+  }
+  $('authGo').onclick = authGo;
 
-async function loadProviderForm(){
-  if(!S.catalog.length) await loadCatalog();
-  fillServiceChecklist();
-  loadSubscription();
-  loadBoost();
-  loadLeads();
-  try{
-    const j=await api('/api/providers/'+S.user.id); const p=j.provider||{};
-    document.getElementById('pp_name').value=p.display_name||S.user.name||'';
-    document.getElementById('pp_bio').value=p.bio||'';
-    document.getElementById('pp_city').value=p.city||'';
-    document.getElementById('pp_lang').value=(p.languages||[]).join(', ');
-    document.getElementById('pp_avail').value=p.availability||'available';
-    document.getElementById('pp_now').checked=!!p.available_now;
-    document.getElementById('pp_hours').value=p.hours_note||'';
-    document.getElementById('pp_price').value=p.price_note||'';
-    document.getElementById('pp_cmail').value=p.contact_email||'';
-    document.getElementById('pp_cphone').value=p.contact_phone||'';
-    document.getElementById('pp_rbq').value=p.rbq_licence||'';
-    loadPortfolio();
-    if(p.lat&&p.lng){ S._lat=p.lat;S._lng=p.lng; document.getElementById('pplocval').textContent=`✓ ${p.lat.toFixed(3)}, ${p.lng.toFixed(3)}`; }
-    (p.services||[]).forEach(s=>{ const cb=document.querySelector(`#pp_services input[value="${s.profession_id}"]`); if(cb)cb.checked=true; });
-    document.getElementById('svccount').textContent=`${Math.min([...document.querySelectorAll('#pp_services input:checked')].length,4)}/4`;
-  }catch(e){}
-}
-async function setProviderLoc(){
-  const [lat,lng]=await getLoc(); S._lat=lat;S._lng=lng;
-  document.getElementById('pplocval').textContent=`${t('locset')} (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
-}
-async function saveProvider(){
-  const err=document.getElementById('pperr'); err.textContent='';
-  const services=[...document.querySelectorAll('#pp_services input:checked')].map(c=>parseInt(c.value));
-  const languages=document.getElementById('pp_lang').value.split(',').map(x=>x.trim()).filter(Boolean);
-  const body={ display_name:document.getElementById('pp_name').value, bio:document.getElementById('pp_bio').value,
-    city:document.getElementById('pp_city').value, languages, availability:document.getElementById('pp_avail').value,
-    hours_note:document.getElementById('pp_hours').value, rbq_licence:document.getElementById('pp_rbq').value,
-    available_now:document.getElementById('pp_now').checked,
-    price_note:document.getElementById('pp_price').value, contact_email:document.getElementById('pp_cmail').value,
-    contact_phone:document.getElementById('pp_cphone').value, services };
-  if(S._lat){ body.lat=S._lat; body.lng=S._lng; }
-  try{ await api('/api/providers/me',{method:'PUT',body:JSON.stringify(body)}); err.className='ok'; err.textContent=t('saved'); }
-  catch(e){ err.className='err'; err.textContent=e.message; }
-}
+  function enter() {
+    $('authWrap').style.display = 'none';
+    $('appMain').style.display = 'flex';
+    $('logoutBtn').style.display = 'inline-block';
+    refreshSub();
+    if (!history.length)
+      addMessage('system', 'Ask me about real opportunities abroad — jobs, what a posting requires, or whether an offer looks safe. I answer in your language and dialect.');
+  }
+  $('logoutBtn').onclick = () => { sessionStorage.removeItem(tokenKey); location.reload(); };
+  if (token()) enter();
 
-/* ---------- portfolio photos (provider's own work samples) ---------- */
-async function loadPortfolio(){
-  const box=document.getElementById('pp_portfolio'); if(!box) return;
-  try{
-    const j=await api('/api/providers/'+S.user.id+'/portfolio');
-    box.innerHTML=(j.photos||[]).map(ph=>
-      `<span class="shotwrap"><img class="shot" src="${esc(ph.url)}" alt="">`+
-      `<button title="✕" onclick="delPortfolio(${ph.id})">×</button></span>`).join('');
-    document.getElementById('pp_portfile').style.display=(j.photos||[]).length>=6?'none':'';
-  }catch(e){}
-}
-async function uploadPortfolio(input){
-  const err=document.getElementById('pperrphoto'); err.textContent='';
-  const file=input.files&&input.files[0]; input.value='';
-  if(!file) return;
-  try{
-    if(file.size>10*1024*1024){ err.textContent='Max 10 MB'; return; }
-    const b64=await compress(file);
-    await api('/api/providers/me/portfolio',{method:'POST',body:JSON.stringify({image:b64})});
-    loadPortfolio();
-  }catch(e){ err.textContent = e.code==='photo_blocked' ? t('photoblocked') : e.message; }
-}
-async function delPortfolio(id){
-  try{ await api('/api/providers/me/portfolio/'+id,{method:'DELETE'}); loadPortfolio(); }
-  catch(e){ document.getElementById('pperrphoto').textContent=e.message; }
-}
+  // ---------- subscription ----------
+  async function refreshSub() {
+    try {
+      const r = await fetch('/api/subscription/status', { headers: headers() });
+      const d = await r.json();
+      const active = d.status === 'active';
+      $('subBar').textContent = active ? `Basic — active (renews ${d.periodEnd ? d.periodEnd.slice(0,10) : '—'})` : '';
+      $('paywall').style.display = active ? 'none' : 'block';
+    } catch { /* status is advisory only */ }
+  }
+  $('subscribeBtn').onclick = async () => {
+    $('subMsg').textContent = '…';
+    try {
+      const r = await fetch('/api/subscription/checkout', { method: 'POST', headers: headers() });
+      const d = await r.json();
+      if (d.url) location.href = d.url; else $('subMsg').textContent = d.error || 'Checkout unavailable';
+    } catch { $('subMsg').textContent = 'Checkout unavailable'; }
+  };
+  if (new URLSearchParams(location.search).get('sub') === 'success')
+    setTimeout(refreshSub, 1500);
 
-/* ---------- provider details sheet (prices, contact, portfolio) ---------- */
-function closePro(){ document.getElementById('prosheet').classList.remove('on'); }
-async function openPro(id){
-  const box=document.getElementById('probody');
-  box.textContent='…'; document.getElementById('prosheet').classList.add('on');
-  try{
-    const [j,ph]=await Promise.all([api('/api/providers/'+id), api('/api/providers/'+id+'/portfolio')]);
-    const p=j.provider||{};
-    const shots=(ph.photos||[]).map(x=>`<img class="shot" src="${esc(x.url)}" alt="">`).join('');
-    const contact = p.contact_locked
-      ? `<div class="locked">${t('contactlocked')}</div>`
-      : `<p>${p.contact_email?`✉️ <a href="mailto:${esc(p.contact_email)}">${esc(p.contact_email)}</a><br>`:''}`
-        + `${p.contact_phone?`📱 <a href="tel:${esc(p.contact_phone)}">${esc(p.contact_phone)}</a>`:''}</p>`;
-    box.innerHTML = `<h2>${esc(p.display_name||'—')}</h2>`
-      + (p.bio?`<p class="muted">${esc(p.bio)}</p>`:'')
-      + (p.price_note?`<p><b>${t('prices')} :</b> ${esc(p.price_note)}</p>`:'')
-      + (p.hours_note?`<p><b>${t('hours')} :</b> ${esc(p.hours_note)}</p>`:'')
-      + contact
-      + (shots?`<div class="tags" style="margin-top:8px">${shots}</div>`:'')
-      + `<div id="reviews" style="margin-top:14px"></div>`;
-    if(S.token && S.user && S.user.role==='seeker'){
-      box.insertAdjacentHTML('afterbegin',
-        `<button class="btn btn-ghost" id="btnfav" style="float:right;font-size:12px;padding:6px 12px"
-           onclick="toggleFavorite(${Number(id)})">☆ ${t('favadd')}</button>`);
-      loadFavIds().then(()=>favBtn(id));
-      // booking presupposes an agreed price, so it is only offered where contact is
-      if(!p.contact_locked) bookingForm(Number(id));
+  // ---------- chat ----------
+  const messagesEl = $('messages'), jobsListEl = $('jobsList'),
+        inputEl = $('messageInput'), sendBtn = $('sendBtn'),
+        dialectSelect = $('dialectSelect'), countryInput = $('countryInput');
+
+  function addMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function renderJobs(jobs) {
+    if (!jobs || !jobs.length) {
+      jobsListEl.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">No opportunities matched this message.</p>';
+      return;
     }
-    loadReviews(id);
-  }catch(e){ box.textContent=e.message; }
-}
-
-/* ---------- favorites (seekers only; an offline favorite shows no city or contact) ---------- */
-function favBtn(id){
-  const b=document.getElementById('btnfav'); if(!b) return;
-  const on=S.favs.has(Number(id));
-  b.textContent = on ? '★ '+t('favremove') : '☆ '+t('favadd');
-}
-async function loadFavIds(){
-  try{ const j=await api('/api/favorites'); S.favs=new Set((j.favorites||[]).map(f=>Number(f.id))); }
-  catch(e){ S.favs=new Set(); }
-}
-async function toggleFavorite(id){
-  const b=document.getElementById('btnfav'); const on=S.favs.has(Number(id));
-  if(b){ b.disabled=true; b.title=''; }
-  try{
-    if(on){ await api('/api/favorites/'+id,{method:'DELETE'}); S.favs.delete(Number(id)); }
-    else { await api('/api/favorites',{method:'POST',body:JSON.stringify({providerId:Number(id)})}); S.favs.add(Number(id)); }
-    favBtn(id);
-  }catch(e){ favBtn(id); if(b) b.title=e.message; }
-  finally{ if(b) b.disabled=false; }
-}
-async function openFavorites(){
-  go('favorites');
-  const list=document.getElementById('favlist'), empty=document.getElementById('favempty');
-  list.innerHTML='…'; empty.style.display='none';
-  try{
-    const j=await api('/api/favorites');
-    S.favs=new Set((j.favorites||[]).map(f=>Number(f.id)));
-    const favs=j.favorites||[];
-    empty.textContent=t('favnone');
-    empty.style.display=favs.length?'none':'block';
-    list.innerHTML=favs.map(f=>`<article class="card">
-        <h3>${esc(f.name||'—')} ${f.is_licensed?'<span class="badge">RBQ</span>':''}</h3>
-        <p class="muted">${f.contactable?esc(f.city||''):t('favoff')}
-          ${f.review_count?` · ★ ${Number(f.rating).toFixed(1)} (${f.review_count})`:''}</p>
-        <div class="row">
-          ${f.contactable?`<button class="btn btn-teal" onclick="openPro(${Number(f.id)})">${t('details')}</button>`:''}
-          <button class="btn btn-ghost" onclick="unfav(${Number(f.id)})">${t('favremove')}</button>
-        </div>
-      </article>`).join('');
-  }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
-}
-/* ---------- bookings (deposit is authorized on PayPal, not charged) ---------- */
-const bookMoney = c => S.lang==='en' ? `$${(c/100).toFixed(2)}` : `${(c/100).toFixed(2)} $`;
-const bookWhen = d => new Date(d).toLocaleString(S.lang==='en'?'en-CA':'fr-CA',
-  { dateStyle:'medium', timeStyle:'short' });
-
-// the policy and the deposit both come from the server, so the seeker accepts the real rule
-async function bookingForm(providerId){
-  const box=document.getElementById('probody');
-  box.insertAdjacentHTML('beforeend', `<div id="bookbox" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
-      <button class="btn btn-teal" id="bookopen" onclick="showBookingFields(${providerId})">${t('bookbtn')}</button>
-      <div id="bookfields" style="display:none;margin-top:10px">
-        <div class="field"><label>${t('bookwhen')}</label><input type="datetime-local" id="bk_when"></div>
-        <div class="field"><label>${t('bookamount')}</label>
-          <input type="number" id="bk_amount" min="1" step="0.01" oninput="bookingPolicy()"></div>
-        <div class="field"><label>${t('booknotelbl')}</label><input id="bk_note" maxlength="500"></div>
-        <div class="locked" id="bk_policy" style="font-size:12px"></div>
-        <label class="radiuslabel" style="display:flex;align-items:center;gap:6px;margin-top:8px">
-          <input type="checkbox" id="bk_accept" style="width:auto"><span id="bk_acceptlbl"></span>
-        </label>
-        <button class="btn btn-primary btn-block" style="margin-top:8px"
-          onclick="requestBooking(${providerId})">${t('booksend')}</button>
-        <div class="err" id="bk_err"></div>
-      </div>
-    </div>`);
-}
-function showBookingFields(){
-  document.getElementById('bookopen').style.display='none';
-  document.getElementById('bookfields').style.display='block';
-  bookingPolicy();
-}
-async function bookingPolicy(){
-  const amount=Number(document.getElementById('bk_amount').value)||0;
-  try{
-    const j=await api('/api/bookings/policy?amount='+encodeURIComponent(amount));
-    const p=j[S.lang]||j.fr;
-    document.getElementById('bk_policy').innerHTML=
-      `<b>${esc(p.title)}</b><ul style="margin:6px 0 0 16px;padding:0">`
-      + p.lines.map(l=>`<li>${esc(l)}</li>`).join('') + '</ul>';
-    document.getElementById('bk_acceptlbl').textContent=p.accept;
-  }catch(e){ document.getElementById('bk_err').textContent=e.message; }
-}
-async function requestBooking(providerId){
-  const err=document.getElementById('bk_err'); err.className='err'; err.textContent='';
-  const when=document.getElementById('bk_when').value;
-  const amount=Number(document.getElementById('bk_amount').value);
-  if(!when||!amount){ err.textContent=t('bookwhen'); return; }
-  try{
-    await api('/api/bookings',{method:'POST',body:JSON.stringify({
-      providerId:Number(providerId), scheduledAt:new Date(when).toISOString(),
-      amount, note:document.getElementById('bk_note').value,
-      acceptPolicy:document.getElementById('bk_accept').checked })});
-    err.className='ok'; err.textContent=t('booksent');
-    document.getElementById('bookfields').style.display='none';
-  }catch(e){ err.textContent=e.message; }
-}
-
-async function openBookings(){
-  go('bookings');
-  const list=document.getElementById('booklist'), empty=document.getElementById('bookempty');
-  list.innerHTML='…'; empty.style.display='none';
-  try{
-    const j=await api('/api/bookings');
-    const rows=j.bookings||[];
-    empty.textContent=t('booknone');
-    empty.style.display=rows.length?'none':'block';
-    list.innerHTML=rows.map(b=>`<article class="card">
-        <h3 style="font-size:15px">${bookWhen(b.scheduledAt)}</h3>
-        <p class="muted">${t('st_'+b.status)}</p>
-        <p class="muted" style="font-size:12px">${t('bookdep')} : ${bookMoney(Math.round(Number(b.deposit)*100))}
-          ${b.note?' · '+esc(b.note):''}</p>
-        ${b.status==='accepted'&&b.role==='seeker'&&!b.canAuthorize
-          ? `<p class="muted" style="font-size:12px">${esc(t('bookauthlater')(bookWhen(b.authorizeFrom)))}</p>` : ''}
-        <div class="row">${bookActions(b)}</div>
-        <div class="err" id="bkerr${b.id}"></div>
-      </article>`).join('');
-  }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
-}
-function bookActions(b){
-  const btn=(action,label,cls)=>`<button class="btn ${cls||'btn-ghost'}" onclick="bookAction(${b.id},'${action}')">${label}</button>`;
-  const out=[];
-  if(b.role==='provider' && b.status==='requested'){ out.push(btn('accept',t('bookacc'),'btn-teal'), btn('decline',t('bookdec'))); }
-  if(b.role==='seeker' && b.status==='accepted' && b.canAuthorize) out.push(btn('authorize',t('bookauth'),'btn-primary'));
-  if(b.role==='provider' && b.status==='authorized') out.push(btn('complete',t('bookdone'),'btn-teal'));
-  if(b.status==='authorized' && new Date(b.scheduledAt).getTime()<Date.now()) out.push(btn('no-show',t('booknoshow')));
-  if(['requested','accepted','authorized'].includes(b.status)) out.push(btn('cancel',t('bookcancel')));
-  return out.join('');
-}
-async function bookAction(id,action){
-  const err=document.getElementById('bkerr'+id); if(err) err.textContent='';
-  try{
-    const j=await api(`/api/bookings/${id}/${action}`,{method:'POST',body:JSON.stringify({})});
-    // the hold is placed by PayPal, so the seeker approves there and comes back to /?booking=<id>
-    if(action==='authorize' && j.url){ sessionStorage.setItem('tp_book_order', j.orderId||''); location.href=j.url; return; }
-    openBookings(); loadUnread();
-  }catch(e){ if(err) err.textContent=e.message; }
-}
-// back from PayPal: turn the approved order into the actual hold
-async function finishBookingReturn(id){
-  const orderId=sessionStorage.getItem('tp_book_order')||'';
-  sessionStorage.removeItem('tp_book_order');
-  try{ if(orderId) await api(`/api/bookings/${id}/confirm`,{method:'POST',body:JSON.stringify({orderId})}); }
-  catch(e){}
-  openBookings();
-}
-
-/* ---------- notifications ---------- */
-// the toggle offers the opposite of the current setting, so it must follow it
-function notifPrefLabel(){
-  const b=document.getElementById('notifpref'); if(!b) return;
-  b.textContent = S.notifEmail===false ? t('notifon') : t('notifoff');
-}
-function showUnread(n){
-  const b=document.getElementById('notifbadge'); if(!b) return;
-  b.textContent=n>99?'99+':String(n);
-  b.style.display=n>0?'inline-block':'none';
-}
-async function loadUnread(){
-  try{ const j=await api('/api/notifications'); S.notifEmail=j.notify_email; notifPrefLabel(); showUnread(Number(j.unread)||0); }
-  catch(e){ showUnread(0); }
-}
-async function openNotifications(){
-  go('notifications');
-  const list=document.getElementById('notiflist'), empty=document.getElementById('notifempty');
-  list.innerHTML='…'; empty.style.display='none';
-  try{
-    const j=await api('/api/notifications');
-    const rows=j.notifications||[];
-    S.notifEmail=j.notify_email; notifPrefLabel();
-    showUnread(Number(j.unread)||0);
-    empty.textContent=t('notifnone');
-    empty.style.display=rows.length?'none':'block';
-    list.innerHTML=rows.map(n=>`<article class="card"${n.read?'':' style="border-color:var(--teal)"'}>
-        <h3 style="font-size:15px">${esc(n.title||'')}</h3>
-        <p class="muted">${esc(n.body||'')}</p>
-        <p class="muted" style="font-size:12px">${n.created_at?esc(new Date(n.created_at).toLocaleString(S.lang==='en'?'en-CA':'fr-CA')):''}</p>
-      </article>`).join('');
-  }catch(e){ list.innerHTML=''; empty.textContent=e.message; empty.style.display='block'; }
-}
-async function markAllRead(){
-  try{ await api('/api/notifications/read',{method:'POST',body:JSON.stringify({})}); openNotifications(); }
-  catch(e){ const em=document.getElementById('notifempty'); em.textContent=e.message; em.style.display='block'; }
-}
-async function toggleNotifEmail(){
-  const btn=document.getElementById('notifpref'); const enable = S.notifEmail===false;
-  btn.disabled=true; btn.title='';
-  try{
-    const j=await api('/api/notifications/email-pref',{method:'POST',body:JSON.stringify({enabled:enable})});
-    S.notifEmail=j.notify_email;
-  }catch(e){ btn.title=e.message; }
-  finally{ btn.disabled=false; notifPrefLabel(); }
-}
-
-async function unfav(id){
-  try{ await api('/api/favorites/'+id,{method:'DELETE'}); S.favs.delete(Number(id)); openFavorites(); }
-  catch(e){ const em=document.getElementById('favempty'); em.textContent=e.message; em.style.display='block'; }
-}
-
-/* ---------- reviews (a seeker who contacted the provider may rate them once) ---------- */
-async function loadReviews(providerId){
-  const box=document.getElementById('reviews'); if(!box) return;
-  const mine = S.user && S.user.role==='provider' && S.user.id===Number(providerId);
-  try{
-    const j=await api('/api/reviews/'+providerId);
-    const list=(j.reviews||[]).map(r=>{
-      const stars='★'.repeat(r.rating)+'☆'.repeat(5-r.rating);
-      return `<div style="border-top:1px solid #e8e3dc;padding:8px 0">`
-        + `<b>${esc(r.author)}</b> <span style="color:#C58A2E">${stars}</span>`
-        + (r.body?`<p style="margin:4px 0">${esc(r.body)}</p>`:'')
-        + (r.provider_reply
-            ? `<p class="muted" style="margin:4px 0"><b>${t('rvreply')} :</b> ${esc(r.provider_reply)}</p>`
-            : mine ? `<div class="row" style="margin-top:4px"><input id="rvrep${r.id}" placeholder="${t('rvreplyph')}" maxlength="1000">`
-                     + `<button class="btn btn-ghost" onclick="replyReview(${r.id},${providerId})">${t('rvreplysend')}</button></div>` : '')
-        + (S.token && !mine ? `<button class="btn btn-ghost" style="font-size:12px" onclick="reportReview(${r.id})">${t('rvreport')}</button>`:'')
-        + `</div>`;
-    }).join('');
-    const form = (S.token && S.user && S.user.role==='seeker')
-      ? `<div style="border-top:1px solid #e8e3dc;padding-top:8px;margin-top:8px">`
-        + `<b>${t('rvwrite')}</b>`
-        + `<div class="row"><label>${t('rvrating')}<select id="rvrating">`
-        + [5,4,3,2,1].map(n=>`<option value="${n}">${n}</option>`).join('')
-        + `</select></label></div>`
-        + `<textarea id="rvbody" rows="3" placeholder="${t('rvph')}" maxlength="1000"></textarea>`
-        + `<button class="btn btn-primary" onclick="submitReview(${providerId})">${t('rvsubmit')}</button>`
-        + `<p class="muted" id="rverr"></p></div>` : '';
-    box.innerHTML=`<h3>${t('rvtitle')}</h3>`+(list||`<p class="muted">${t('rvnone')}</p>`)+form;
-  }catch(e){ box.innerHTML=`<h3>${t('rvtitle')}</h3><p class="muted">${t('rvnone')}</p>`; }
-}
-async function submitReview(providerId){
-  const err=document.getElementById('rverr'); err.textContent='';
-  try{
-    await api('/api/reviews',{method:'POST',body:JSON.stringify({
-      providerId, rating:Number(document.getElementById('rvrating').value),
-      body:document.getElementById('rvbody').value })});
-    await loadReviews(providerId);
-    const e2=document.getElementById('rverr'); if(e2) e2.textContent=t('rvsaved');
-  }catch(e){ err.textContent=e.message; }
-}
-async function replyReview(id,providerId){
-  const el=document.getElementById('rvrep'+id); if(!el||!el.value.trim()) return;
-  try{ await api('/api/reviews/'+id+'/reply',{method:'POST',body:JSON.stringify({reply:el.value})}); loadReviews(providerId); }
-  catch(e){ alert(e.message); }
-}
-async function reportReview(id){
-  try{ await api('/api/reviews/'+id+'/report',{method:'POST',body:JSON.stringify({reason:'review'})}); alert(t('rvreported')); }
-  catch(e){ alert(e.message); }
-}
-
-/* ---------- Phase 2/3: chat, photos, subscription, reports ---------- */
-async function openChat(convId){
-  if(!S.token) return openAuth('login');
-  go('chat'); await loadConvs(convId);
-}
-async function startChat(providerId){
-  if(!S.token) return openAuth('register');
-  try{
-    const j=await api('/api/chat/start',{method:'POST',body:JSON.stringify({providerId})});
-    await openChat(j.conversation.id);
-  }catch(e){ document.getElementById('searcherr').textContent=e.message; }
-}
-async function loadConvs(select){
-  const box=document.getElementById('convlist'); box.innerHTML='';
-  const j=await api('/api/chat'); S.convs=j.conversations||[];
-  if(!S.convs.length){ box.innerHTML=`<p class="muted" style="font-size:13px;padding:8px">${t('noconv')}</p>`; }
-  S.convs.forEach(c=>{
-    const b=document.createElement('button'); b.className='conv'; b.dataset.id=c.id;
-    b.textContent=(c.other&&c.other.name)||('#'+c.id);
-    b.onclick=()=>openConv(c.id);
-    box.appendChild(b);
-  });
-  const target = select || (S.convs[0] && S.convs[0].id);
-  if(target) openConv(target); else { document.getElementById('threadwith').textContent=t('pickconv'); document.getElementById('msgs').innerHTML=''; }
-}
-async function openConv(id){
-  S.conv=id;
-  document.querySelectorAll('#convlist .conv').forEach(b=>b.classList.toggle('on', b.dataset.id==String(id)));
-  const c=(S.convs||[]).find(x=>x.id==id);
-  document.getElementById('threadwith').textContent=(c&&c.other&&c.other.name)||('#'+id);
-  document.getElementById('btnreport').style.display='inline-block';
-  await Promise.all([loadMsgs(), loadPhotos()]);
-}
-async function loadMsgs(){
-  const box=document.getElementById('msgs'); const err=document.getElementById('chaterr'); err.textContent='';
-  try{
-    const j=await api(`/api/chat/${S.conv}/messages`); box.innerHTML='';
-    (j.messages||[]).forEach(m=>{
-      const d=document.createElement('div'); d.className='msg'+(m.sender_id===S.user.id?' mine':'');
-      d.innerHTML=`${esc(m.body)}<time>${new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</time>`;
-      box.appendChild(d);
+    jobsListEl.innerHTML = '';
+    jobs.forEach(j => {
+      const card = document.createElement('div');
+      card.className = 'job-card';
+      const flags = [];
+      if (j.sourceType === 'informal_unverified') flags.push('<span class="flag unverified">unverified listing — verify independently</span>');
+      (j.honestyFlags || []).forEach(f => flags.push('<span class="flag honesty">' + String(f).replace(/_/g, ' ') + '</span>'));
+      card.innerHTML =
+        '<div class="title"></div>' +
+        '<div class="meta"></div>' +
+        (j.url ? '<div class="meta"><a style="color:var(--accent)" target="_blank" rel="noopener"></a></div>' : '') +
+        flags.join('');
+      card.querySelector('.title').textContent = j.title;
+      card.querySelector('.meta').textContent = [j.city, j.country, j.category].filter(Boolean).join(' · ') + (j.salaryNote ? ' — ' + j.salaryNote : '');
+      const a = card.querySelector('a'); if (a) { a.href = j.url; a.textContent = 'View posting ↗'; }
+      jobsListEl.appendChild(card);
     });
-    box.scrollTop=box.scrollHeight;
-  }catch(e){ err.textContent=e.message; }
-}
-async function sendMsg(){
-  const el=document.getElementById('msgtext'); const text=el.value.trim();
-  if(!text||!S.conv) return;
-  const err=document.getElementById('chaterr'); err.textContent='';
-  try{ await api(`/api/chat/${S.conv}/messages`,{method:'POST',body:JSON.stringify({text})}); el.value=''; await loadMsgs(); }
-  catch(e){ err.textContent=e.message; }
-}
-async function loadPhotos(){
-  const strip=document.getElementById('photostrip'); strip.innerHTML='';
-  try{
-    const j=await api(`/api/chat/${S.conv}/photos`);
-    (j.photos||[]).forEach(p=>{ const i=document.createElement('img'); i.src=p.url; i.alt='photo'; strip.appendChild(i); });
-    document.getElementById('btnphoto').disabled=(j.photos||[]).length>=3;
-  }catch(e){}
-}
-// compress client-side to ~1200px / 80% jpeg before upload
-function compress(file){
-  return new Promise((resolve,reject)=>{
-    const img=new Image(); const fr=new FileReader();
-    fr.onload=()=>{ img.src=fr.result; }; fr.onerror=reject; fr.readAsDataURL(file);
-    img.onerror=reject;
-    img.onload=()=>{
-      const max=1200, sc=Math.min(1, max/Math.max(img.width,img.height));
-      const cv=document.createElement('canvas'); cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
-      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-      resolve(cv.toDataURL('image/jpeg',0.8));
-    };
+  }
+
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    sendBtn.disabled = true;
+    addMessage('user', text);
+    history.push({ role: 'user', content: text });
+    try {
+      const res = await fetch('/api/concierge', { method: 'POST', headers: headers(),
+        body: JSON.stringify({ message: text, history: history.slice(0, -1),
+          conversationId: conversationId || undefined,
+          dialectHint: dialectSelect.value || undefined,
+          preferredCountry: countryInput.value || undefined }) });
+      const data = await res.json();
+      if (res.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
+      if (res.status === 402) { $('paywall').style.display = 'block'; addMessage('system', data.error); return; }
+      if (!res.ok) { addMessage('system', 'Error: ' + (data.error || res.statusText)); return; }
+      conversationId = data.conversationId || conversationId;
+      addMessage('bot', data.reply);
+      history.push({ role: 'assistant', content: data.reply });
+      renderJobs(data.jobs);
+      if (data.llmConfigured === false) addMessage('system', 'Demo mode — the assistant model is not configured yet; showing raw matches.');
+    } catch (err) {
+      addMessage('system', 'Network error — please try again.');
+      console.error(err);
+    } finally { sendBtn.disabled = false; inputEl.focus(); }
+  }
+  sendBtn.onclick = sendMessage;
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+  dialectSelect.addEventListener('change', () => {
+    const val = dialectSelect.value;
+    document.documentElement.setAttribute('dir', val.includes('Arabic') ? 'rtl' : 'ltr');
   });
-}
-async function uploadPhoto(input){
-  const file=input.files&&input.files[0]; input.value='';
-  const err=document.getElementById('chaterr'); err.textContent='';
-  if(!file||!S.conv) return;
-  if(file.size>10*1024*1024){ err.textContent='Max 10 MB'; return; }
-  try{
-    const dataUrl=await compress(file);
-    await api(`/api/chat/${S.conv}/photos`,{method:'POST',body:JSON.stringify({image:dataUrl})});
-    await loadPhotos();
-  }catch(e){ err.textContent = e.code==='photo_blocked' ? t('photoblocked') : e.message; }
-}
-// ephemeral: wipe photos when the chat page is left
-function wipePhotos(){
-  if(!S.conv||!S.token) return;
-  const url=`/api/chat/${S.conv}/photos`;
-  fetch(url,{method:'DELETE',headers:{Authorization:'Bearer '+S.token},keepalive:true}).catch(()=>{});
-}
-window.addEventListener('pagehide', wipePhotos);
-
-function openReport(){ document.getElementById('reportsheet').classList.add('on'); document.getElementById('reporterr').textContent=''; document.getElementById('reportok').textContent=''; }
-function closeReport(){ document.getElementById('reportsheet').classList.remove('on'); }
-async function submitReport(){
-  const c=(S.convs||[]).find(x=>x.id==S.conv);
-  const body={ conversationId:S.conv, targetUserId:c&&c.other?c.other.id:null,
-    kind:document.getElementById('r_kind').value, reason:document.getElementById('r_reason').value };
-  try{ await api('/api/report',{method:'POST',body:JSON.stringify(body)});
-    document.getElementById('reportok').textContent=t('reportsent'); document.getElementById('r_reason').value='';
-  }catch(e){ document.getElementById('reporterr').textContent=e.message; }
-}
-
-async function loadSubscription(){
-  const box=document.getElementById('subbox'), state=document.getElementById('substate'), btn=document.getElementById('subbtn');
-  if(!S.user||S.user.role!=='provider'){ box.style.display='none'; return; }
-  box.style.display='flex';
-  try{
-    const j=await api('/api/subscription/status');
-    const active=j.status==='active';
-    state.textContent = active ? (t('subactive')+(j.periodEnd?` (${new Date(j.periodEnd).toLocaleDateString()})`:'')) : t('subinactive');
-    btn.style.display = active?'none':'inline-block';
-  }catch(e){ state.textContent=e.message; }
-  loadFounding();
-}
-// The counter is only shown while places are left, and it comes from paying accounts.
-async function loadFounding(){
-  const el=document.getElementById('foundingstate'); if(!el) return;
-  try{
-    const j=await api('/api/founding');
-    el.textContent = j.remaining>0 ? t('founding')(j.taken,j.limit) : t('foundingfull');
-  }catch{ el.textContent=''; }
-}
-async function startCheckout(){
-  const err=document.getElementById('suberr'); err.textContent='';
-  try{ const j=await api('/api/subscription/checkout',{method:'POST'}); window.location.href=j.url; }
-  catch(e){ err.textContent=e.message; }
-}
-
-/* ---------- paid top placement (Boost) — providers only ---------- */
-async function loadBoost(){
-  const box=document.getElementById('boostbox');
-  if(!S.user||S.user.role!=='provider'){ box.style.display='none'; return; }
-  const state=document.getElementById('booststate'), plans=document.getElementById('boostplans');
-  const cancel=document.getElementById('boostcancel');
-  document.getElementById('boosttitle').textContent=t('boosttitle');
-  try{
-    const j=await api('/api/boost/plans');
-    if(!j.subscribed){ box.style.display='none'; return; }
-    box.style.display='flex';
-    state.textContent = j.boost.active
-      ? t('boostactive')+' '+new Date(j.boost.until).toLocaleDateString()
-      : (j.eligible ? t('boostwhy')(j.competitors) : t('boostfree')(j.topSlots));
-    plans.innerHTML = j.eligible ? (j.plans||[]).map(p=>
-      `<button class="btn btn-teal" onclick="startBoost('${p.id}')">`
-      + `${p.recurring?t('boostauto')(p.days):t('boostdays')(p.days)} — ${p.total} $ ${t('taxin')}</button>`).join('') : '';
-    cancel.style.display = j.boost.auto?'inline-block':'none';
-    cancel.textContent = t('boostcancel');
-  }catch(e){ box.style.display='none'; }
-}
-async function startBoost(plan){
-  const err=document.getElementById('boosterr'); err.textContent='';
-  try{ const j=await api('/api/boost/checkout',{method:'POST',body:JSON.stringify({plan})}); window.location.href=j.url; }
-  catch(e){ err.textContent=e.message; }
-}
-async function cancelAutoBoost(){
-  const err=document.getElementById('boosterr'); err.textContent='';
-  try{ await api('/api/boost/cancel-auto',{method:'POST'}); loadBoost(); }
-  catch(e){ err.textContent=e.message; }
-}
-// PayPal sends the provider back with ?boost=success&token=<orderId> for one-time plans
-async function finishBoostReturn(){
-  const q=new URLSearchParams(location.search);
-  if(q.get('boost')!=='success' || !S.token) return;
-  const orderId=q.get('token');
-  history.replaceState(null,'','/');
-  if(!orderId) return;
-  try{ await api('/api/boost/capture',{method:'POST',body:JSON.stringify({orderId})}); }catch(e){}
-  loadBoost();
-}
-
-async function claimSearch(){
-  const q=document.getElementById('claim_q').value.trim();
-  const box=document.getElementById('claim_results'), msg=document.getElementById('claim_msg');
-  box.innerHTML=''; msg.className='ok'; msg.textContent=''; if(!q) return;
-  try{
-    const j=await api('/api/claim/search?q='+encodeURIComponent(q));
-    const matches=j.matches||[];
-    if(!matches.length){ msg.textContent=t('claimnone'); return; }
-    matches.forEach(m=>{
-      const row=document.createElement('div');
-      row.style.cssText='display:flex;align-items:center;gap:8px';
-      row.innerHTML=`<span style="flex:1;font-size:14px">${esc(m.display_name)} <span class="muted">${esc(m.city||'')} · RBQ ${esc(m.rbq_licence||'')}</span></span>`;
-      const b=document.createElement('button'); b.className='btn btn-teal'; b.textContent=t('claimbtn');
-      b.onclick=()=>claimListing(m.user_id);
-      row.appendChild(b); box.appendChild(row);
-    });
-  }catch(e){ msg.className='err'; msg.textContent=e.message; }
-}
-async function claimListing(seedUserId){
-  const msg=document.getElementById('claim_msg');
-  try{
-    await api('/api/claim',{method:'POST',body:JSON.stringify({seedUserId})});
-    msg.className='ok'; msg.textContent=t('claimed');
-    document.getElementById('claim_results').innerHTML='';
-    loadProviderForm();
-  }catch(e){ msg.className='err'; msg.textContent=e.message; }
-}
-
-// Two ways in from the campaign: /?claim=<token> (the recipient's own email link) and
-// /?claim_licence=<rbq> (the "this is my business" button on /fiche/<rbq>). Either way the
-// listing is remembered across registration, then claimed for them — the contractor never
-// has to find their own name in a search box.
-async function claimInvite(){
-  const p=new URLSearchParams(location.search);
-  const tok=p.get('claim'), lic=p.get('claim_licence');
-  const remember=(name,id)=>{ try{ sessionStorage.setItem('tp_claim',name); if(id) sessionStorage.setItem('tp_claim_id',String(id)); }catch(e){} };
-  if(/^[a-f0-9]{32}$/.test(tok||'')){
-    history.replaceState(null,'','/');
-    try{
-      const r=await fetch('/api/outreach/invite?token='+tok);
-      const j=await r.json();
-      if(r.ok && j.business_name && !j.claimed){
-        remember(j.business_name);
-        if(j.lang==='en' && !p.get('lang')) setLang('en');
-      }
-    }catch(e){}
-  }else if(/^[0-9][0-9-]{3,19}$/.test(lic||'')){
-    history.replaceState(null,'','/');
-    try{
-      const r=await fetch('/api/claim/listing?licence='+encodeURIComponent(lic));
-      const j=await r.json();
-      if(r.ok && j.seedUserId) remember(j.business_name||'',j.seedUserId);
-    }catch(e){}
-  }
-  const name=(()=>{ try{ return sessionStorage.getItem('tp_claim')||''; }catch(e){ return ''; } })();
-  const seedId=(()=>{ try{ return Number(sessionStorage.getItem('tp_claim_id')||0); }catch(e){ return 0; } })();
-  if(!name && !seedId) return;
-  if(S.token && S.user && S.user.role==='provider'){
-    await loadProviderForm(); go('provider');
-    try{ sessionStorage.removeItem('tp_claim'); sessionStorage.removeItem('tp_claim_id'); }catch(e){}
-    if(seedId){ await claimListing(seedId); const b=document.getElementById('subbox'); if(b) b.scrollIntoView({block:'center'}); return; }
-    document.getElementById('claim_q').value=name; claimSearch();
-  }else if(!S.token){
-    const hint=document.getElementById('claimhint');
-    hint.textContent=t('invite').replace('%s',name); hint.style.display='block';
-    setRole('provider'); openAuth('register');
-  }
-}
-
-// Prospects we invited without a seeded listing arrive on /?join=provider; open registration on the
-// provider side so the first screen is the one they were asked to fill.
-function joinInvite(){
-  const p=new URLSearchParams(location.search);
-  const wants=p.get('join')==='provider'||p.get('subscribe')==='1';
-  if(!wants) return;
-  history.replaceState(null,'','/');
-  if(S.token && S.user && S.user.role==='provider'){
-    if(p.get('subscribe')==='1'){
-      loadProviderForm(); go('provider');
-      setTimeout(()=>{ const b=document.getElementById('subbox'); if(b) b.scrollIntoView({block:'center'}); },600);
-    }
-    return;
-  }
-  if(S.token) return;
-  setRole('provider'); openAuth('register');
-}
-
-let legalTab='terms';
-function openLegal(which){
-  legalTab = which==='privacy'?'privacy':'terms';
-  document.getElementById('tabterms').classList.toggle('on',legalTab==='terms');
-  document.getElementById('tabprivacy').classList.toggle('on',legalTab==='privacy');
-  renderLegal(); go('legal');
-  history.replaceState(null,'', legalTab==='privacy'?'/privacy':'/terms');
-}
-function openFaq(){ renderFaq(); go('faq'); history.replaceState(null,'','/faq'); }
-function renderFaq(){
-  const F=window.FAQ, box=document.getElementById('faqbody');
-  if(!F){ box.textContent='—'; return; }
-  box.innerHTML = F[S.lang].map(([q,a])=>
-    `<details class="faqitem"><summary>${q}</summary><p>${a}</p></details>`).join('');
-}
-function renderLegal(){
-  const L=window.LEGAL, box=document.getElementById('legalbody');
-  if(!L){ box.textContent='—'; return; }
-  const pack=L[S.lang], sections=pack[legalTab];
-  box.innerHTML = `<h2>${legalTab==='privacy'?pack.tabPrivacy:pack.tabTerms}</h2>`
-    + `<div class="updated">${pack.updated}</div>`
-    + sections.map(([h,body])=>`<h3>${h}</h3><p>${body}</p>`).join('');
-}
-
-// First touch wins: the campaign that brought someone here, even if they sign up days later.
-function rememberSource(){
-  try{
-    if(localStorage.getItem('tp_src')) return;
-    const q=new URLSearchParams(location.search);
-    const src=(q.get('utm_source')||'').toLowerCase().replace(/[^a-z0-9_.-]/g,'').slice(0,40);
-    if(src) localStorage.setItem('tp_src',src);
-  }catch(e){}
-}
-function signupSource(){ try{ return localStorage.getItem('tp_src')||''; }catch(e){ return ''; } }
-
-(function(){
-  rememberSource();
-  const asked=new URLSearchParams(location.search).get('lang');
-  const saved=(()=>{ try{ return sessionStorage.getItem('tp_lang'); }catch(e){ return null; } })();
-  setLang([asked,saved].includes('en')?'en':'fr'); refreshNav(); loadCatalog(); loadOpenAccess();
-  if(location.pathname==='/terms') openLegal('terms');
-  if(location.pathname==='/privacy') openLegal('privacy');
-  if(location.pathname==='/faq') openFaq();
-  const sub=new URLSearchParams(location.search).get('sub');
-  if(sub && S.token && S.user){
-    if(S.user.role==='provider'){ loadProviderForm(); go('provider'); }
-    setTimeout(()=>{ const el=document.getElementById('substate'); if(el) el.textContent = sub==='success'?t('subok'):t('subcancel'); }, 600);
-  }
-  const bk=new URLSearchParams(location.search).get('booking');
-  if(bk && S.token && S.user && /^\d+$/.test(bk)) finishBookingReturn(bk);
-  else if(bk && S.token && S.user) openBookings();
-  if(new URLSearchParams(location.search).get('boost') && S.token && S.user && S.user.role==='provider'){
-    loadProviderForm(); go('provider'); finishBoostReturn();
-  }
-  claimInvite(); joinInvite(); startAnalytics();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
-})();
 </script>
 </body>
 </html>

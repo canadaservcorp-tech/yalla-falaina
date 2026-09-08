@@ -1,8 +1,8 @@
 /* Installable-app service worker. Deliberately conservative: only the static shell is cached and
    always network-first, so a deploy is picked up on the next load. API responses are never cached
    (they carry auth-scoped data such as contact details and chat). */
-const CACHE = 'trouvepro-shell-v9';
-const SHELL = ['/', '/legal.js', '/faq.js', '/concierge.js', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'yalla-falaina-shell-v1';
+const SHELL = ['/', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
