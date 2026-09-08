@@ -85,6 +85,7 @@
       postListingMissing: 'Please fill in how to reach you and what you need.',
       postListingSuccess: "Thanks — we'll review this and post it if it looks good.",
       postListingFailed: 'Could not submit right now — please try again.',
+      resendFailedFallback: 'Could not resend right now — try again.',
     },
     fr: {
       signOut: 'Se déconnecter',
@@ -151,6 +152,7 @@
       postListingMissing: 'Veuillez indiquer comment vous joindre et ce dont vous avez besoin.',
       postListingSuccess: 'Merci — nous allons vérifier et publier si tout est en ordre.',
       postListingFailed: 'Impossible de soumettre pour le moment — veuillez réessayer.',
+      resendFailedFallback: 'Impossible de renvoyer pour le moment — réessayez.',
     },
     ar: {
       signOut: 'تسجيل الخروج',
@@ -217,6 +219,95 @@
       postListingMissing: 'يرجى إدخال طريقة التواصل معك وما الذي تحتاجه.',
       postListingSuccess: 'شكرًا — سنراجع هذا وننشره إذا كان مناسبًا.',
       postListingFailed: 'تعذّر الإرسال الآن — يرجى المحاولة مرة أخرى.',
+      resendFailedFallback: 'تعذّر إعادة الإرسال الآن — يرجى المحاولة مرة أخرى.',
+    },
+  };
+
+  // Roadmap Step 1's other half: routes/auth.js, routes/concierge.js and
+  // routes/subscription.js already stamp a stable `code` on every 4xx/5xx
+  // JSON response (test/error-codes.test.js locks that contract in) — this
+  // is the "map codes -> translated strings" step that was never built, so
+  // the client kept showing the raw English `error` text regardless of the
+  // chosen language. Deliberately NOT exhaustive: it only covers codes a
+  // seeker can actually hit through public/index.html; a code with no entry
+  // here falls back to the server's English text, same as before this map
+  // existed (see tErr below and the file-header note on why server text
+  // otherwise stays English pass-through).
+  const ERRORS = {
+    ERR_BAD_INPUT: {
+      en: 'Please check the highlighted fields and try again.',
+      fr: 'Veuillez vérifier les champs indiqués et réessayer.',
+      ar: 'يرجى التحقق من الحقول المطلوبة والمحاولة مرة أخرى.',
+    },
+    ERR_WEAK_PASSWORD: {
+      en: 'Password must be at least 10 characters.',
+      fr: 'Le mot de passe doit contenir au moins 10 caractères.',
+      ar: 'يجب أن تتكون كلمة المرور من 10 أحرف على الأقل.',
+    },
+    ERR_TERMS_REQUIRED: {
+      en: 'Please accept the Terms of Use.',
+      fr: "Veuillez accepter les conditions d'utilisation.",
+      ar: 'يرجى الموافقة على شروط الاستخدام.',
+    },
+    ERR_AGE_GATE: {
+      en: 'Yalla Falaina is for people 18 and older.',
+      fr: 'Yalla Falaina est réservé aux personnes de 18 ans et plus.',
+      ar: 'منصة يلا فلاينة مخصصة للأشخاص البالغين 18 عامًا فما فوق.',
+    },
+    ERR_EMAIL_BLOCKED: {
+      en: 'This email address cannot be used to register.',
+      fr: "Cette adresse courriel ne peut pas être utilisée pour s'inscrire.",
+      ar: 'لا يمكن استخدام هذا البريد الإلكتروني للتسجيل.',
+    },
+    ERR_INVALID_CREDENTIALS: {
+      en: 'Invalid email or password.',
+      fr: 'Courriel ou mot de passe invalide.',
+      ar: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+    },
+    ERR_UNVERIFIED: {
+      en: 'Please verify your email first.',
+      fr: "Veuillez d'abord vérifier votre courriel.",
+      ar: 'يرجى تأكيد بريدك الإلكتروني أولاً.',
+    },
+    ERR_SERVER: {
+      en: 'Something went wrong on our end — please try again.',
+      fr: "Une erreur s'est produite de notre côté — veuillez réessayer.",
+      ar: 'حدث خطأ من جانبنا — يرجى المحاولة مرة أخرى.',
+    },
+    ERR_FORBIDDEN: {
+      en: 'This action is not allowed.',
+      fr: "Cette action n'est pas autorisée.",
+      ar: 'هذا الإجراء غير مسموح به.',
+    },
+    ERR_NOT_FOUND: {
+      en: 'Account not found.',
+      fr: 'Compte introuvable.',
+      ar: 'لم يتم العثور على الحساب.',
+    },
+    ERR_PAYWALL: {
+      en: 'A subscription is required to use the concierge.',
+      fr: "Un abonnement est requis pour utiliser l'assistant.",
+      ar: 'الاشتراك مطلوب لاستخدام المساعد الذكي.',
+    },
+    ERR_QUOTA: {
+      en: 'Daily limit reached — come back tomorrow or upgrade.',
+      fr: 'Limite quotidienne atteinte — revenez demain ou abonnez-vous.',
+      ar: 'تم الوصول إلى الحد اليومي — عد غدًا أو اشترك.',
+    },
+    ERR_UPSTREAM_UNAVAILABLE: {
+      en: 'The assistant is temporarily unavailable — please try again shortly.',
+      fr: "L'assistant est temporairement indisponible — veuillez réessayer sous peu.",
+      ar: 'المساعد الذكي غير متاح مؤقتًا — يرجى المحاولة مرة أخرى بعد قليل.',
+    },
+    ERR_PAYMENT_UNAVAILABLE: {
+      en: 'Payment is temporarily unavailable — please try again shortly.',
+      fr: 'Le paiement est temporairement indisponible — veuillez réessayer sous peu.',
+      ar: 'الدفع غير متاح مؤقتًا — يرجى المحاولة مرة أخرى بعد قليل.',
+    },
+    ERR_NO_ACTIVE_SUBSCRIPTION: {
+      en: 'You have no active subscription to cancel.',
+      fr: "Vous n'avez aucun abonnement actif à annuler.",
+      ar: 'ليس لديك اشتراك نشط لإلغائه.',
     },
   };
 
@@ -232,5 +323,15 @@
     return s;
   }
 
-  return { STRINGS, LANGS, isRTL, t };
+  // Looks up a server error `code` in the ERRORS map for the given language;
+  // returns null (not the code itself) when the code is unknown, so callers
+  // can fall back to the server's own English `error` text — never render a
+  // bare ERR_* constant to a user.
+  function tErr(lang, code) {
+    const entry = code && ERRORS[code];
+    if (!entry) return null;
+    return entry[lang] || entry.en;
+  }
+
+  return { STRINGS, LANGS, isRTL, t, tErr };
 });

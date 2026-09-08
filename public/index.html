@@ -209,6 +209,14 @@
   sessionStorage.setItem('yf_lang', currentLang);
   document.documentElement.lang = currentLang;
   const t = (key, vars) => i18n.t(currentLang, key, vars);
+  // Translates a server error response by its stable `code` (Roadmap Step
+  // 1's "map codes -> translated strings" half — the codes themselves have
+  // existed on every 4xx/5xx JSON response for a while, this is what was
+  // still missing). A code with no translation, or no code at all (a rate
+  // limiter and a few other codeless middleware paths — see
+  // test/error-codes.test.js's own scope note), falls back to the server's
+  // English `error` text, then to the given generic fallback.
+  const apiError = (d, fallback) => (d && i18n.tErr(currentLang, d.code)) || (d && d.error) || fallback;
   function applyLang() {
     document.documentElement.setAttribute('dir', i18n.isRTL(currentLang) ? 'rtl' : 'ltr');
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
@@ -239,13 +247,13 @@
         body: JSON.stringify({ email }) });
       const d = await r.json().catch(() => ({}));
       if (r.ok) {
-        $('authMsg').textContent = d.message || "If that account needs verifying, we just sent a new link.";
+        $('authMsg').textContent = d.message || t('resendGenericFallback');
         $('resendVerify').style.display = 'none';
       } else {
-        $('authMsg').textContent = d.error || 'Could not resend right now — try again.';
+        $('authMsg').textContent = apiError(d, t('resendFailedFallback'));
       }
     } catch {
-      $('authMsg').textContent = 'Network error — try again.';
+      $('authMsg').textContent = t('networkError');
     }
     $('resendVerify').disabled = false;
   };
@@ -262,19 +270,19 @@
           preferredCountry: $('prefCountry').value.trim(), sector: $('sector').value.trim(),
           confirmAge: true, acceptTerms: true }) });
       const d = await r.json();
-      // d.message / d.error come from the API and stay English (see the
-      // language note above) — only the client's own fallback text, used
-      // when the server doesn't supply one, is translated here.
+      // d.message stays English (see the language note above) — but d.error
+      // now goes through apiError() first, which maps the response's `code`
+      // to a translated string before falling back to that English text.
       $('authMsg').textContent = r.ok
         ? (d.emailSent === false ? t('msgAccountCreatedEmailPending') : (d.message || t('msgCheckEmail')))
-        : (d.error || t('errRegistrationFailed'));
+        : apiError(d, t('errRegistrationFailed'));
       return;
     }
     const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }) });
     const d = await r.json();
     if (!r.ok) {
-      $('authMsg').textContent = d.error || t('errSignInFailed');
+      $('authMsg').textContent = apiError(d, t('errSignInFailed'));
       if (r.status === 403) $('resendVerify').style.display = 'inline';
       return;
     }
@@ -313,7 +321,7 @@
         msg.textContent = d.message || t('postListingSuccess');
         ['plContact', 'plTitle', 'plCountry', 'plCategory', 'plDescription'].forEach(id => $(id).value = '');
       } else {
-        msg.textContent = d.error || t('postListingFailed');
+        msg.textContent = apiError(d, t('postListingFailed'));
       }
     } catch {
       msg.textContent = t('postListingFailed');
@@ -352,7 +360,7 @@
     try {
       const r = await fetch('/api/subscription/checkout', { method: 'POST', headers: headers() });
       const d = await r.json();
-      if (d.url) location.href = d.url; else $('subMsg').textContent = d.error || t('checkoutUnavailable');
+      if (d.url) location.href = d.url; else $('subMsg').textContent = apiError(d, t('checkoutUnavailable'));
     } catch { $('subMsg').textContent = t('checkoutUnavailable'); }
   };
   if (new URLSearchParams(location.search).get('sub') === 'success')
@@ -365,7 +373,7 @@
       const r = await fetch('/api/subscription/cancel', { method: 'POST', headers: headers() });
       const d = await r.json();
       $('cancelSubConfirm').style.display = 'none';
-      addMessage('system', r.ok ? t('cancelSubSuccess') : t('cancelSubFailed'));
+      addMessage('system', r.ok ? t('cancelSubSuccess') : apiError(d, t('cancelSubFailed')));
       if (r.ok) refreshSub();
       else $('cancelSubBtn').style.display = 'inline-block';
     } catch {
@@ -467,8 +475,8 @@
           preferredCountry: countryInput.value || undefined }) });
       const data = await res.json();
       if (res.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
-      if (res.status === 402) { $('paywall').style.display = 'block'; addMessage('system', data.error); return; }
-      if (!res.ok) { addMessage('system', t('errorPrefix') + (data.error || res.statusText)); return; }
+      if (res.status === 402) { $('paywall').style.display = 'block'; addMessage('system', apiError(data, data.error)); return; }
+      if (!res.ok) { addMessage('system', t('errorPrefix') + apiError(data, data.error || res.statusText)); return; }
       conversationId = data.conversationId || conversationId;
       addMessage('bot', data.reply);
       history.push({ role: 'assistant', content: data.reply });
