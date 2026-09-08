@@ -111,27 +111,36 @@ router.post('/resend-verification', sec.limits.credentials, async (req, res) => 
     if (!sec.isEmail(email)) return res.json(GENERIC);
 
     const { data: user } = await supabase.from('users')
-      .select('id, email_verified').eq('email', email).maybeSingle();
+      .select('id, email_verified, verify_token').eq('email', email).maybeSingle();
     if (!user) return res.json(GENERIC);
 
-    if (user.email_verified) {
-      try {
-        await sendEmail(email, "You're already verified — Yalla Falaina",
-          '<p>This account is already verified. Sign in below.</p>');
-      } catch (e) { console.error('resend:verified email', e.message); }
-      return res.json(GENERIC);
-    }
+    // Verified accounts get no mail at all — otherwise this endpoint is an
+    // unauthenticated "send an email to any registered address" vector.
+    if (user.email_verified) return res.json(GENERIC);
 
-    // fresh token: an old leaked/expired link should stop working once a new one is issued
+    // fresh token: an old leaked/expired link should stop working once a new
+    // one is issued. Issue compare-and-swap on the current token so two
+    // overlapping resends can't both mint links whose delivery order then
+    // inverts against the stored token — a lost CAS means another resend is
+    // already in flight, and its email is the one that should win.
     const verify_token = crypto.randomBytes(32).toString('hex');
-    const { error } = await supabase.from('users').update({ verify_token }).eq('id', user.id);
+    let upd = supabase.from('users').update({ verify_token }).eq('id', user.id);
+    upd = user.verify_token == null ? upd.is('verify_token', null) : upd.eq('verify_token', user.verify_token);
+    const { data: rotated, error } = await upd.select('id');
     if (error) throw error;
+    if (rotated && rotated.length === 0) return res.json(GENERIC); // another issuance already in flight
 
     const link = `${PUBLIC_URL}/api/auth/verify?token=${verify_token}&id=${user.id}`;
     try {
       await sendEmail(email, 'Confirm your email — Yalla Falaina',
         `<p>Here's your new confirmation link:</p><p><a href="${link}">${link}</a></p>`);
-    } catch (e) { console.error('resend:verify email', e.message); }
+    } catch (e) {
+      console.error('resend:verify email', e.message);
+      // Nothing new was sent — restore the previous token so the earlier
+      // link keeps working instead of leaving the account with a dead end.
+      await supabase.from('users').update({ verify_token: user.verify_token })
+        .eq('id', user.id).eq('verify_token', verify_token);
+    }
     res.json(GENERIC);
   } catch (e) { console.error('resend-verification', e); res.json(GENERIC); }
 });

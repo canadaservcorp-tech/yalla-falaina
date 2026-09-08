@@ -161,12 +161,21 @@
 
   $('resendVerify').onclick = async () => {
     $('resendVerify').disabled = true;
-    const email = $('email').value.trim();
-    const r = await fetch('/api/auth/resend-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }) });
-    const d = await r.json().catch(() => ({}));
-    $('authMsg').textContent = d.message || "If that account needs verifying, we just sent a new link.";
-    $('resendVerify').style.display = 'none';
+    try {
+      const email = $('email').value.trim();
+      const r = await fetch('/api/auth/resend-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('authMsg').textContent = d.message || "If that account needs verifying, we just sent a new link.";
+        $('resendVerify').style.display = 'none';
+      } else {
+        $('authMsg').textContent = d.error || 'Could not resend right now — try again.';
+      }
+    } catch {
+      $('authMsg').textContent = 'Network error — try again.';
+    }
+    $('resendVerify').disabled = false;
   };
 
   async function authGo() {
