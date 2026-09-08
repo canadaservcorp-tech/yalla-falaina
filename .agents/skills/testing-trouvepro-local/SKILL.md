@@ -5,6 +5,36 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
 
 # Local E2E testing of TrouvePro
 
+## Yalla Falaina fork: use the correct target
+- The Yalla Falaina Phase 1 fork is a concierge, not the TrouvePro marketplace.
+  Do not reuse the production URL, database, accounts, or marketplace assertions below
+  when testing the fork. Read its blueprint, `server.js`, and `public/index.html` first.
+- Local boot requires `JWT_SECRET` (at least 32 characters), `SUPABASE_URL`, and
+  `SUPABASE_SERVICE_ROLE_KEY`; use Node 22 and `npm install`. Choose a free `PORT`,
+  set `PUBLIC_URL` to that local origin, and use `JOBS=off` to avoid scheduler writes.
+- If real Supabase credentials are absent, clearly labeled loopback/placeholder values
+  allow public SPA, health, SEO endpoints, consent validation, and unauthenticated
+  401 checks only. They do not provide a database. Shared rate-limit storage may
+  fall back to memory; do not count that as database connectivity.
+- Keyless concierge demo still requires a real authenticated account and database.
+  `JOB_API_PROVIDER=seed npm run jobs:refresh` persists bundled jobs through Supabase.
+  Do not claim demo replies/job cards or authenticated 402/paywall passed from health
+  flags or static markup alone.
+- The header dialect selector switches Arabic to RTL; it does not translate auth labels.
+  Register UI requires both checkboxes independently; backend requires boolean `true`,
+  not string `"true"`, for both `confirmAge` and `acceptTerms`.
+- If Chrome reports a missing X display, check `$DISPLAY` and Xvfb before restarting
+  Chrome. Match the virtual screen dimensions to the full browser window (for example
+  `Xvfb :0 -screen 0 1600x1122x24`), maximize with `wmctrl`, and inspect a recording
+  frame for clipping before sharing evidence.
+
+### Devin Secrets Needed — Yalla Falaina
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for the Yalla Falaina project,
+  with its schema applied, are required for real signup/login, seed jobs and concierge.
+- `ANTHROPIC_API_KEY` is required only for live model replies, not keyless demo testing.
+- Generate a local-only JWT secret for testing; never borrow another app's database
+  credentials or production accounts.
+
 ## Start the app
 ```bash
 source ~/.nvm/nvm.sh && nvm use 22   # Node 20 crashes on @supabase/supabase-js
