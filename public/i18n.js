@@ -64,6 +64,8 @@
       unverifiedFlagLabel: 'unverified listing — verify independently',
       previewUnlockLabel: '🔒 Subscribe to see the details & apply',
       previewRemainingNotice: 'Free preview — {n} free replies left before subscribing.',
+      readTermsLink: '(read)',
+      readPrivacyLink: '(privacy)',
     },
     fr: {
       signOut: 'Se déconnecter',
@@ -109,6 +111,8 @@
       unverifiedFlagLabel: 'annonce non vérifiée — à vérifier vous-même',
       previewUnlockLabel: "🔒 Abonnez-vous pour voir les détails et postuler",
       previewRemainingNotice: 'Aperçu gratuit — {n} réponses gratuites restantes avant l\'abonnement.',
+      readTermsLink: '(lire)',
+      readPrivacyLink: '(confidentialité)',
     },
     ar: {
       signOut: 'تسجيل الخروج',
@@ -154,6 +158,8 @@
       unverifiedFlagLabel: 'إعلان غير موثّق — يُرجى التحقق بنفسك',
       previewUnlockLabel: '🔒 اشترك لرؤية التفاصيل والتقديم',
       previewRemainingNotice: 'معاينة مجانية — تبقّى لك {n} ردود مجانية قبل الاشتراك.',
+      readTermsLink: '(اقرأ)',
+      readPrivacyLink: '(الخصوصية)',
     },
   };
 
