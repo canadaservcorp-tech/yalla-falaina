@@ -119,6 +119,7 @@
     </div>
     <div class="row"><button id="authGo" data-i18n="tabSignIn">Sign in</button></div>
     <div id="authMsg"></div>
+    <button id="resendVerify" style="display:none;background:none;border:none;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13px">Resend verification email</button>
   </div>
 </div>
 
@@ -183,12 +184,33 @@
     $('regExtra').style.display = m === 'register' ? 'block' : 'none';
     $('authGo').textContent = m === 'login' ? t('tabSignIn') : t('tabCreateAccount');
     $('authMsg').textContent = '';
+    $('resendVerify').style.display = 'none';
   }
   $('tabLogin').onclick = () => setMode('login');
   $('tabRegister').onclick = () => setMode('register');
 
+  $('resendVerify').onclick = async () => {
+    $('resendVerify').disabled = true;
+    try {
+      const email = $('email').value.trim();
+      const r = await fetch('/api/auth/resend-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('authMsg').textContent = d.message || "If that account needs verifying, we just sent a new link.";
+        $('resendVerify').style.display = 'none';
+      } else {
+        $('authMsg').textContent = d.error || 'Could not resend right now — try again.';
+      }
+    } catch {
+      $('authMsg').textContent = 'Network error — try again.';
+    }
+    $('resendVerify').disabled = false;
+  };
+
   async function authGo() {
     $('authMsg').textContent = '';
+    $('resendVerify').style.display = 'none';
     const email = $('email').value.trim(), password = $('password').value;
     if (mode === 'register') {
       if (!$('confirmAge').checked) return $('authMsg').textContent = t('errAgeGate');
@@ -209,7 +231,11 @@
     const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }) });
     const d = await r.json();
-    if (!r.ok) return $('authMsg').textContent = d.error || t('errSignInFailed');
+    if (!r.ok) {
+      $('authMsg').textContent = d.error || t('errSignInFailed');
+      if (r.status === 403) $('resendVerify').style.display = 'inline';
+      return;
+    }
     sessionStorage.setItem(tokenKey, d.token);
     enter();
   }

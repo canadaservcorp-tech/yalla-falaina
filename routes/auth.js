@@ -94,6 +94,57 @@ router.get('/verify', sec.limits.verify, async (req, res) => {
   res.redirect(`${PUBLIC_URL}/?verified=1`);
 });
 
+// Covers the two real gaps register's resilience fix left open: the domain
+// verification issue that makes Resend reject a send in the first place needs
+// a dashboard/DNS fix, not code, but a seeker whose email genuinely never
+// arrived (that failure, a stale link, or the message landing in spam) had no
+// way back in except re-registering into an email-already-exists dead end.
+// Same anti-enumeration shape as /register's exists-check: one generic
+// response whatever the account's real state, so this endpoint can't be used
+// to test which addresses are registered — only the email content sent
+// behind the scenes differs, and every failure path (bad input, no such user,
+// a DB error, a send failure) still resolves to that same 200.
+router.post('/resend-verification', sec.limits.credentials, async (req, res) => {
+  const GENERIC = { success: true, message: 'If that account needs verifying, we just sent a new link.' };
+  try {
+    const email = sec.normalizeEmail(req.body.email);
+    if (!sec.isEmail(email)) return res.json(GENERIC);
+
+    const { data: user } = await supabase.from('users')
+      .select('id, email_verified, verify_token').eq('email', email).maybeSingle();
+    if (!user) return res.json(GENERIC);
+
+    // Verified accounts get no mail at all — otherwise this endpoint is an
+    // unauthenticated "send an email to any registered address" vector.
+    if (user.email_verified) return res.json(GENERIC);
+
+    // fresh token: an old leaked/expired link should stop working once a new
+    // one is issued. Issue compare-and-swap on the current token so two
+    // overlapping resends can't both mint links whose delivery order then
+    // inverts against the stored token — a lost CAS means another resend is
+    // already in flight, and its email is the one that should win.
+    const verify_token = crypto.randomBytes(32).toString('hex');
+    let upd = supabase.from('users').update({ verify_token }).eq('id', user.id);
+    upd = user.verify_token == null ? upd.is('verify_token', null) : upd.eq('verify_token', user.verify_token);
+    const { data: rotated, error } = await upd.select('id');
+    if (error) throw error;
+    if (rotated && rotated.length === 0) return res.json(GENERIC); // another issuance already in flight
+
+    const link = `${PUBLIC_URL}/api/auth/verify?token=${verify_token}&id=${user.id}`;
+    try {
+      await sendEmail(email, 'Confirm your email — Yalla Falaina',
+        `<p>Here's your new confirmation link:</p><p><a href="${link}">${link}</a></p>`);
+    } catch (e) {
+      console.error('resend:verify email', e.message);
+      // Nothing new was sent — restore the previous token so the earlier
+      // link keeps working instead of leaving the account with a dead end.
+      await supabase.from('users').update({ verify_token: user.verify_token })
+        .eq('id', user.id).eq('verify_token', verify_token);
+    }
+    res.json(GENERIC);
+  } catch (e) { console.error('resend-verification', e); res.json(GENERIC); }
+});
+
 router.post('/login', sec.limits.credentials, async (req, res) => {
   try {
     const email = sec.normalizeEmail(req.body.email);
