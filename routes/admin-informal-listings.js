@@ -13,6 +13,11 @@ const router = express.Router();
 const STATUSES = ['pending', 'approved', 'rejected'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i;
 const JOB_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // same freshness window as the licensed feed (lib/jobsIngest.js)
+// Postgres SQLSTATE for a unique-constraint violation — jobs' only unique
+// constraint (schema.sql) is (external_source, external_id), so seeing this
+// code on the insert below can only mean "a jobs row for this submission
+// already exists," never some unrelated clash.
+const PG_UNIQUE_VIOLATION = '23505';
 
 router.get('/', authenticate, sec.requireActiveUser, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only', code: 'ERR_FORBIDDEN' });
@@ -73,7 +78,19 @@ router.post('/:id/review', authenticate, sec.requireActiveUser, async (req, res)
         source_url: null,
         raw: sub,
       });
-      if (jErr) throw jErr;
+      // This insert and the review_status update below are two separate
+      // writes, not one transaction — if the process died or the DB dropped
+      // the connection between them on a PRIOR attempt at approving this
+      // submission, the jobs row exists but review_status never got past
+      // 'pending', so an admin retrying the approval lands here again. That
+      // retry's insert fails on the unique(external_source, external_id)
+      // constraint — not a real failure, since the job already exists
+      // exactly as it should. Treating ONLY that specific error as "already
+      // done" and continuing to the update is what makes the retry succeed;
+      // treating it as a hard failure (the old behavior) would strand the
+      // submission at 'pending' forever, since every future retry would hit
+      // the same constraint before ever reaching the update that clears it.
+      if (jErr && jErr.code !== PG_UNIQUE_VIOLATION) throw jErr;
     }
 
     const patch = { review_status: decision, reviewed_by: String(req.user.id), reviewed_at: new Date().toISOString() };

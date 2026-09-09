@@ -101,6 +101,48 @@ test('approving a pending submission creates a job row with source_type informal
   assert.equal(subWrites[0].payload.review_status, 'approved');
 });
 
+test('a retry after the review_status update failed succeeds instead of stranding the submission at pending forever', async () => {
+  const sub = { id: 'a1b2c3d4-0000-4000-8000-000000000010', title: 'Shawarma master needed', country: 'Lebanon', category: 'food service', description: 'Urgent', review_status: 'pending' };
+  h.mock.__set('informal_listing_submissions', { data: sub, error: null });
+
+  // First attempt: the jobs insert succeeds but the connection drops before
+  // review_status can be updated — the submission is left stuck at 'pending'
+  // even though a jobs row for it already exists.
+  h.mock.__setOp('informal_listing_submissions', 'update', { data: null, error: { message: 'connection reset' } });
+  const first = await fetch(h.base + `/api/admin/informal-listings/${sub.id}/review`, {
+    method: 'POST', headers: admin(), body: JSON.stringify({ decision: 'approved' }),
+  });
+  assert.equal(first.status, 500);
+  assert.equal(h.mock.__writes('jobs', 'insert').length, 1);
+  assert.equal(h.mock.__writes('informal_listing_submissions', 'update').length, 1); // attempted, but failed
+
+  // Retry: the submission is still 'pending' (its own update never landed),
+  // so the admin retries the same approval. This time the jobs insert hits
+  // jobs' unique(external_source, external_id) constraint — the row from
+  // the first attempt is already there — which must be treated as "already
+  // done," not a fresh failure, so the update this time actually lands.
+  h.mock.__setOp('jobs', 'insert', { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "jobs_external_source_external_id_key"' } });
+  h.mock.__setOp('informal_listing_submissions', 'update', { data: null, error: null });
+  const retry = await fetch(h.base + `/api/admin/informal-listings/${sub.id}/review`, {
+    method: 'POST', headers: admin(), body: JSON.stringify({ decision: 'approved' }),
+  });
+  assert.equal(retry.status, 200);
+  const subWrites = h.mock.__writes('informal_listing_submissions', 'update');
+  assert.equal(subWrites.length, 2); // the failed attempt, then this successful retry
+  assert.equal(subWrites[1].payload.review_status, 'approved');
+});
+
+test('a jobs insert failing for any OTHER reason still fails the review — only the duplicate-key case is treated as already-done', async () => {
+  const sub = { id: 'a1b2c3d4-0000-4000-8000-000000000011', title: 'x', country: 'Lebanon', review_status: 'pending' };
+  h.mock.__set('informal_listing_submissions', { data: sub, error: null });
+  h.mock.__setOp('jobs', 'insert', { data: null, error: { code: '23502', message: 'null value in column "title" violates not-null constraint' } });
+  const r = await fetch(h.base + `/api/admin/informal-listings/${sub.id}/review`, {
+    method: 'POST', headers: admin(), body: JSON.stringify({ decision: 'approved' }),
+  });
+  assert.equal(r.status, 500);
+  assert.equal(h.mock.__writes('informal_listing_submissions', 'update').length, 0);
+});
+
 test('rejecting a submission requires a reason and never touches jobs', async () => {
   const sub = { id: 'a1b2c3d4-0000-4000-8000-000000000002', title: 'x', country: null, review_status: 'pending' };
   h.mock.__set('informal_listing_submissions', { data: sub, error: null });
