@@ -29,13 +29,23 @@ You are working on **Yalla Nsafer** — "Your Assistant to Travel" — a triling
 
 ## Known gaps / next tasks (pick the one I name, or ask)
 
-1. Email delivery: verify `MAIL_FROM` domain in Resend, add a "resend verification" endpoint.
-2. PayPal checkout E2E: needs `PAYPAL_CLIENT_ID`/`PAYPAL_SECRET`/`PAYPAL_PLAN_ID`/`PAYPAL_WEBHOOK_ID`.
-3. Trilingual UI: Arabic selector currently flips RTL but doesn't translate auth labels — build the i18n pass.
-4. Render assistant Markdown in the chat pane (currently literal).
-5. Hide the subscription banner when `PAYWALL_ENFORCED=false`.
-6. Wire a licensed job API (Adzuna recommended: `JOB_API_ID`/`JOB_API_KEY`).
-7. Deployment: point a Railway/other service at this repo's `main` with the env vars from `.env.example`.
+This list drifted badly out of date (items 3–5 were done long ago but stayed
+listed as open, which risks a future session redoing finished work) —
+corrected as of 2026-09-09:
+
+1. ⛔ Email delivery: the `/api/auth/resend-verification` endpoint is built and
+   tested. What's left is purely operational, not code — verify the
+   `MAIL_FROM` domain in Resend and confirm a real email actually arrives.
+2. ⛔ PayPal checkout E2E: needs `PAYPAL_CLIENT_ID`/`PAYPAL_SECRET`/`PAYPAL_PLAN_ID`/`PAYPAL_WEBHOOK_ID`.
+3. ~~Trilingual UI~~ — done. Full i18n pass shipped (`public/i18n.js`, `data-i18n`/`data-i18n-ph`), drift-tested by `test/i18n-usage.test.js` and `test/error-i18n-wiring.test.js`.
+4. ~~Render assistant Markdown~~ — done (`renderMarkdown()` in `public/index.html`, escapes first, then a minimal safe subset).
+5. ~~Hide the subscription banner when `PAYWALL_ENFORCED=false`~~ — done, and hardened further (a race where the banner could flash before `/api/health` resolved, and a non-boolean payload silently reading as "not enforced," both fixed).
+6. ⛔ Wire a licensed job API (Adzuna recommended: `JOB_API_ID`/`JOB_API_KEY`).
+7. Deployment: `DEPLOY.md` is written and current (Stripe env vars included). Actually deploying to a host is the remaining human step.
+
+Payments now run PayPal **and** Stripe side by side (see the Payments line
+above) — this superseded an earlier repo-wide "PayPal only, never Stripe"
+rule; see git history on `routes/subscription.js` if that surprises you.
 
 ## How to work with me
 
