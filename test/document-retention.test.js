@@ -12,8 +12,11 @@ const mock = createMockDb();
 const dbPath = require.resolve('../db');
 require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: mock };
 const { run } = require('../scripts/document-retention');
+const paginate = require('../lib/paginate');
 
 test.beforeEach(() => mock.__reset());
+const originalPageSize = paginate.PAGE_SIZE;
+test.afterEach(() => { paginate.PAGE_SIZE = originalPageSize; });
 
 test('an expired upload is removed from storage and its row deleted', async () => {
   mock.__set('document_uploads', { data: [{ id: 'd1', storage_path: 'cv/7.pdf' }], error: null });
@@ -91,4 +94,18 @@ test('one failing row does not block the rest of the batch', async () => {
 test('a DB error listing expired candidates propagates instead of being swallowed', async () => {
   mock.__set('document_uploads', { data: null, error: { message: 'connection refused' } });
   await assert.rejects(run(), err => err.message === 'connection refused');
+});
+
+test('more expired uploads than one page — every row across every page is still removed, not just the first page', async () => {
+  // Proves lib/paginate.js is actually wired in here, not just imported: with
+  // a real PAGE_SIZE (500) this would need 501+ fixture rows to exercise: a
+  // silent-truncation regression here would only ever surface in production
+  // once retention had that many uploads expire between runs.
+  paginate.PAGE_SIZE = 2;
+  mock.__queue('document_uploads',
+    { data: [{ id: 'd1', storage_path: 'cv/1.pdf' }, { id: 'd2', storage_path: 'cv/2.pdf' }], error: null },
+    { data: [{ id: 'd3', storage_path: 'cv/3.pdf' }], error: null });
+  const removed = await run();
+  assert.equal(removed, 3);
+  assert.equal(mock.__writes('document_uploads', 'delete').length, 3);
 });
