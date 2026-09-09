@@ -43,7 +43,7 @@ router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, 
       custom_id: String(u.id),
       subscriber: { email_address: u.email },
       application_context: {
-        brand_name: 'Yalla Falaina',
+        brand_name: 'Yalla Nsafer',
         user_action: 'SUBSCRIBE_NOW',
         return_url: `${PUBLIC_URL}/?sub=success`,
         cancel_url: `${PUBLIC_URL}/?sub=cancel`,
@@ -129,7 +129,7 @@ router.post('/cancel', authenticate, sec.requireActiveUser, sec.limits.write, as
       if (!u.paypal_subscription_id) return res.status(400).json({ error: 'No active subscription to cancel', code: 'ERR_NO_ACTIVE_SUBSCRIPTION' });
       if (!paypal.configured()) return res.status(500).json({ error: 'PayPal not configured', code: 'ERR_PAYMENT_UNAVAILABLE' });
       await paypal.pp('POST', `/v1/billing/subscriptions/${encodeURIComponent(u.paypal_subscription_id)}/cancel`, {
-        reason: 'Canceled by subscriber from the Yalla Falaina app',
+        reason: 'Canceled by subscriber from the Yalla Nsafer app',
       });
     }
     res.json({ success: true, message: 'Cancellation requested — you keep access until the end of the paid period.' });

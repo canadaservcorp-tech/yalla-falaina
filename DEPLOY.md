@@ -1,4 +1,4 @@
-# Deploying Yalla Falaina (Roadmap Step 7)
+# Deploying Yalla Nsafer (Roadmap Step 7)
 
 This is a single Express process (`server.js`) with the recurring jobs run
 in-process by `lib/scheduler.js` — one service is enough on Railway, Render,
@@ -12,7 +12,7 @@ this doc is what to hand whoever does that.
 
 ## 1. Build a fresh Supabase project
 
-Never point this at trouvepro's Supabase project — Yalla Falaina's `users`
+Never point this at trouvepro's Supabase project — Yalla Nsafer's `users`
 table and RLS posture are its own. Create a new project, then run `schema.sql`
 once in its SQL editor.
 
@@ -24,7 +24,7 @@ invented — copy the file and fill it in on the host's env-var UI.
 | Variable | Required | Notes |
 |---|---|---|
 | `PORT` | no | Most hosts inject this themselves; the app reads it and falls back to 3000. |
-| `PUBLIC_URL` | **yes** | The service's real public URL (e.g. `https://yallafalaina.com`), no trailing slash. Drives `robots.txt`, `sitemap.xml`, and every canonical/hreflang link `lib/seo.js` emits — wrong here means wrong SEO tags and a sitemap pointing at the wrong host. |
+| `PUBLIC_URL` | **yes** | The service's real public URL (e.g. `https://yallansafer.com`), no trailing slash. Drives `robots.txt`, `sitemap.xml`, and every canonical/hreflang link `lib/seo.js` emits — wrong here means wrong SEO tags and a sitemap pointing at the wrong host. |
 | `JWT_SECRET` | **yes** | 32+ chars; the app refuses to boot below that. Generate with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`. Rotating it invalidates every issued session. |
 | `SUPABASE_URL` | **yes** | The new project's URL. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **yes** | Service-role key — this app manages its own `users` table/auth, it does not use Supabase Auth. Treat as a secret; it bypasses RLS. |

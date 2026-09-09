@@ -5,8 +5,8 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
 
 # Local E2E testing of TrouvePro
 
-## Yalla Falaina fork: use the correct target
-- The Yalla Falaina Phase 1 fork is a concierge, not the TrouvePro marketplace.
+## Yalla Nsafer fork: use the correct target
+- The Yalla Nsafer Phase 1 fork is a concierge, not the TrouvePro marketplace.
   Do not reuse the production URL, database, accounts, or marketplace assertions below
   when testing the fork. Read its blueprint, `server.js`, and `public/index.html` first.
 - Local boot requires `JWT_SECRET` (at least 32 characters), `SUPABASE_URL`, and
@@ -54,8 +54,8 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
   `Xvfb :0 -screen 0 1600x1122x24`), maximize with `wmctrl`, and inspect a recording
   frame for clipping before sharing evidence.
 
-### Devin Secrets Needed — Yalla Falaina
-- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for the Yalla Falaina project,
+### Devin Secrets Needed — Yalla Nsafer
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for the Yalla Nsafer project,
   with its schema applied, are required for real signup/login, seed jobs and concierge.
 - `ANTHROPIC_API_KEY` is required only for live model replies, not keyless demo testing.
 - Generate a local-only JWT secret for testing; never borrow another app's database

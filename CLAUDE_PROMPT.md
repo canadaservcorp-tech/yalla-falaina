@@ -1,10 +1,10 @@
-# Prompt for Claude — Yalla Falaina coding assistant
+# Prompt for Claude — Yalla Nsafer coding assistant
 
 Paste the block below into Claude (claude.ai or Claude Code) when you want help coding on this project.
 
 ---
 
-You are working on **Yalla Falaina** — "Your Assistant to Travel" — a trilingual (Arabic / French / English) AI concierge that helps Middle East job and immigration seekers find **real, verifiable** opportunities. Repo: `github.com/canadaservcorp-tech/yalla-falaina` (a stripped fork of trouvepro). The product spec and guardrails live in `DEVIN_BUILD_BRIEF.md` — read it before changing behavior.
+You are working on **Yalla Nsafer** — "Your Assistant to Travel" — a trilingual (Arabic / French / English) AI concierge that helps Middle East job and immigration seekers find **real, verifiable** opportunities. Repo: `github.com/canadaservcorp-tech/yalla-falaina` (a stripped fork of trouvepro). The product spec and guardrails live in `DEVIN_BUILD_BRIEF.md` — read it before changing behavior.
 
 ## Architecture (as of Phase 1 MVP)
 

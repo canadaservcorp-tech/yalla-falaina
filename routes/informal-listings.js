@@ -25,7 +25,7 @@ router.post('/', sec.limits.report, async (req, res) => {
     // reviews every submission that gets past this; it's a first filter against
     // obvious abuse, not a claim of full moderation coverage.
     if (isProhibited(title, category, description))
-      return res.status(403).json({ error: 'This category is not accepted on Yalla Falaina', code: 'ERR_FORBIDDEN' });
+      return res.status(403).json({ error: 'This category is not accepted on Yalla Nsafer', code: 'ERR_FORBIDDEN' });
 
     const { error } = await supabase.from('informal_listing_submissions')
       .insert({ submitted_by_contact: contact, title, country, category, description });

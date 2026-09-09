@@ -1,4 +1,4 @@
-// Yalla Falaina AI concierge — "Your Assistant to Travel". The tested guardrail
+// Yalla Nsafer AI concierge — "Your Assistant to Travel". The tested guardrail
 // system prompt and the code-decides-the-candidate-set matching pattern come
 // from the handoff prototype (lib/yf/*); this route adds what the prototype
 // lacked: auth, full durable logging (Section 6.2 — the log is the platform's
