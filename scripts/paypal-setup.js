@@ -55,6 +55,24 @@ async function main() {
   console.log('PAYPAL_PLAN_ID=' + plan.id);
   if (process.argv.includes('--plan-only')) return;
 
+  // PUBLIC_URL defaults to the localhost placeholder (.env.example) when
+  // unset — an easy mistake on a one-off manual script, and a dangerous one
+  // here specifically: registering that as a LIVE PayPal webhook silently
+  // breaks every subscription activation from that point on. Checkout would
+  // still redirect the seeker to PayPal and PayPal would still charge them,
+  // but BILLING.SUBSCRIPTION.ACTIVATED would have nowhere real to land, so
+  // subscription_status would never flip to 'active' and the concierge
+  // would stay paywalled for someone who already paid. --plan-only (above)
+  // is the correct way to skip webhook registration on purpose; this guards
+  // the case where it was skipped only because PUBLIC_URL was forgotten.
+  if (!/^https:\/\//.test(PUBLIC_URL)) {
+    throw new Error(
+      `Refusing to register a live PayPal webhook at "${PUBLIC_URL}/api/subscription/webhook" — ` +
+      `PUBLIC_URL must be the real https:// deployed URL, not ${PUBLIC_URL === 'http://localhost:3000' ? 'the .env.example default' : 'this value'}. ` +
+      'Set PUBLIC_URL to the live deployment and re-run, or pass --plan-only if you only meant to (re)create the plan.'
+    );
+  }
+
   const url = `${PUBLIC_URL}/api/subscription/webhook`;
   const existing = await pp('GET', '/v1/notifications/webhooks');
   const hook = (existing.webhooks || []).find(w => w.url === url)
@@ -62,4 +80,14 @@ async function main() {
   console.log('PAYPAL_WEBHOOK_ID=' + hook.id, '→', url);
 }
 
-main().catch(e => { console.error(e.message); process.exit(1); });
+// Guarded like every other scripts/*.js (document-retention.js,
+// subscription-lapse.js, profile-retention.js): running this file directly
+// still executes main() and exits 1 on failure exactly as before, but
+// `require()`-ing it (e.g. from a test, with lib/paypal mocked) no longer
+// fires a real — or even mocked-but-process.exit-killing — run as a side
+// effect of just loading the module.
+if (require.main === module) {
+  main().catch(e => { console.error(e.message); process.exit(1); });
+}
+
+module.exports = { main, findProduct };
