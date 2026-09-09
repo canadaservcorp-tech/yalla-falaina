@@ -8,7 +8,7 @@ You are developing **Yalla Nsafer** ("Your Assistant to Travel") — a trilingua
 
 **Repo:** `github.com/canadaservcorp-tech/yalla-falaina` — a stripped trouvepro fork. Spec + guardrails: `DEVIN_BUILD_BRIEF.md`. Companion context file: `CLAUDE_PROMPT.md` (architecture + hard rules — treat it as binding).
 
-**Current state (as of 2026-09-08):** Phase 1 MVP merged — concierge live on real Supabase + Anthropic, seeded jobs feed, age/terms-gated signup, $25 PayPal tier wired, trilingual UI chrome, resend-verification endpoint. 46/46 tests pass.
+**Current state (as of 2026-09-09):** Phase 1 MVP merged and Steps 1, 5, 6, 7 below are all done — concierge live on real Supabase + Anthropic, seeded jobs feed, age/terms-gated signup, error-code contract wired end-to-end, informal-listing moderation UI shipped, the Section 10 profile-completeness intake gate shipped, DEPLOY.md written. Payments now run on two rails: PayPal (original) **and** Stripe (added Sept 2026 — see Step 8). Brand rename in flight: `devin/1788914730-rebrand-yalla-nsafer` (Latin-script "Yalla Falaina" → "Yalla Nsafer", Arabic already fixed to يلا نسافر in a merged PR) is open but not yet merged into `main` as of this update — check its status before assuming either name is current everywhere. 220/220 tests pass.
 
 ## Working protocol — follow every step
 
@@ -46,7 +46,9 @@ Before matching, a seeker should fill required intake fields. Implement the conv
 Write `DEPLOY.md` + verify the app boots with the real env set on a clean port. Produce the exact env-var list for the host (Railway/Render/Fly), confirm `PUBLIC_URL` drives SEO/robots/links, and add a `/api/health` field showing which integrations are live (`anthropic`, `paypal`, `jobsFeed`, `email`). Deployment itself needs the human to create the service.
 
 ### Step 8 — Phase 2 gate review
-Do NOT start Phase 2 features (voice, CV parsing, B2B marketplace, travel booking, extra payment rails for Lebanon/Iraq/Jordan/Syria). These are blocked on external answers: Whish Money merchant eligibility for a Canadian business, Syria sanctions-compliance sign-off, Iraq/Jordan rail research. If asked to build them anyway, stop and ask for the compliance/merchant confirmations first.
+**Payment-rail expansion is DONE, ahead of the rest of Phase 2** — this is a deliberate exception to "don't start Phase 2 without confirmation," made directly by Hicham (Sept 2026), not an agent decision: Stripe shipped as a second rail specifically for Iraq and Lebanon (`lib/stripe.js`, `lib/stripe-events.js`, `routes/subscription.js`'s `/stripe/*` routes), superseding the earlier "research Whish Money" plan — PayPal's own supported-country list excludes both countries outright, while neither is under comprehensive sanctions nor on Stripe's own restricted list, so Stripe's existing Visa/Mastercard support (Qi Card in Iraq; cash-funded Fresh/OMT/ViaCard prepaid cards in Lebanon) reaches them without a bespoke local-gateway integration. Syria stays explicitly out of scope per Hicham's own call ("the situation is difficult") — do not build Syria payment support without him raising it again.
+
+Everything else in Phase 2 (voice, CV parsing, B2B marketplace, travel booking) is still correctly gated and has NOT been started. If asked to build any of those, confirm the request is explicit (not inferred from "let's keep going") before starting — this doc's "don't invent new scope" rule still applies to them.
 
 ## Definition of done per step
 PR open, tests green, no secrets in diff, guardrails intact, and a report naming blockers. If everything above is done, stop and report — do not invent new scope.
