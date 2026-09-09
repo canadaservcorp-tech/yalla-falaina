@@ -120,6 +120,38 @@ test('a subscription is required when the paywall is enforced and the free previ
   assert.equal(upstream, null);
 });
 
+// Launch-readiness review: PAYWALL_ENFORCED=true is still `false` in
+// production pending go-live, and every existing PAYWALL_ENFORCED test above
+// this one uses an inactive subscription — the one combination never
+// exercised anywhere in the suite is an ACTIVE subscriber once the flag is
+// actually flipped on, which is the single path that matters most at
+// go-live. Both tests below close that gap.
+test('an active subscriber under an enforced paywall gets full, non-teased access -- not gated by the free-preview counter at all', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-active-paywall' }, error: null });
+  h.mock.__set('jobs', { data: [
+    { id: 5, title: 'Electrician', employer: 'Acme', country: 'Canada', city: 'Laval', category: 'trades', track: 'western', source_type: 'licensed_api', external_source: 'seed', source_url: 'https://example.test/5', raw: {} },
+  ], error: null });
+  // free_preview_used is already past FREE_PREVIEW_LIMIT -- proves access
+  // here comes from subscription_status, not from preview turns remaining.
+  const r = await ask({ message: 'electrician canada' }, caller({ subscription_status: 'active', subscription_tier: 'basic', free_preview_used: 3 }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.ok(!j.preview);
+  assert.equal(j.jobs[0].url, 'https://example.test/5');       // real url, not teased/redacted
+  assert.notEqual(j.jobs[0].requirements, '[subscribe to see the full requirements]');
+  assert.doesNotMatch(upstream.body.system, /FREE PREVIEW MODE/);
+  assert.equal(h.mock.__rpcCalls('usage_charge').length, 1);
+});
+
+test('an active subscriber under an enforced paywall never hits the 402, even on their very first message', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-active-paywall2' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({ subscription_status: 'active', subscription_tier: 'basic', free_preview_used: 0 }));
+  assert.equal(r.status, 200);
+  assert.equal(h.mock.__rpcCalls('increment_free_preview').length, 0);   // never enters preview bookkeeping at all
+});
+
 // ---------- free preview (first 3 messages) ----------
 
 test('the first free-preview turn reaches the model with redacted jobs, not a 402', async () => {
@@ -274,6 +306,42 @@ test('a ---PROFILE--- block placed FIRST (as the intake contract now asks for) s
   const writes = h.mock.__writes('seeker_profiles', 'upsert');
   assert.equal(writes.length, 1);
   assert.equal(writes[0].payload.has_passport, true);
+});
+
+test('a truncated ---PROFILE--- block (cut off before ---END---, e.g. hitting the token budget) persists nothing and never leaks raw fencing to the seeker', async () => {
+  // Launch-readiness review: PROFILE_BLOCK_RE requires a closing ---END---,
+  // so an unclosed block already can't be extracted or half-persisted -- this
+  // proves the other half, that the dangling "---PROFILE---{...partial" text
+  // itself never reaches the seeker's chat.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-truncated' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"preferred_country":"canada","has_passp' }] } }); // cut mid-value, no ---END---
+  const r = await ask({ message: 'I want Canada' }, caller({}, { id: 'sp-prior', is_complete: false, confirmed_by_user: false }, { preferred_language: 'en', preferred_country: null, sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /---PROFILE---/);
+  assert.ok(j.reply.length > 0);           // a fallback line, not an empty reply
+  assert.equal(j.isComplete, false);       // unchanged -- nothing was extracted
+  assert.equal(h.mock.__writes('seeker_profiles', 'upsert').length, 0);
+  // a `profiles` row is upserted on every new conversation regardless of
+  // intake (the FK-ensure at conversation-create time, see routes/
+  // concierge.js) -- what must NOT appear is an upsert carrying extracted
+  // intake fields like preferred_country.
+  for (const w of h.mock.__writes('profiles', 'upsert'))
+    assert.ok(!('preferred_country' in w.payload), 'no intake fields should have been persisted from a truncated block');
+});
+
+test('a ---PROFILE--- block truncated with nothing before it (block-first + cut immediately) falls back to a plain reply instead of an empty one', async () => {
+  // The contract now puts the block FIRST -- so a cutoff this early can leave
+  // literally nothing ahead of the marker, unlike the case above.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-truncated-empty' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text: '---PROFILE---\n{"pref' }] } });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /---PROFILE---/);
+  assert.ok(j.reply.length > 0);
+  assert.equal(h.mock.__writes('seeker_profiles', 'upsert').length, 0);
 });
 
 test('a malformed field in a ---PROFILE--- block is dropped and logged, not allowed to sink the valid fields', async () => {
