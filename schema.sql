@@ -21,6 +21,12 @@
 --   delete from public.seeker_profiles a using public.seeker_profiles b
 --     where a.profile_id = b.profile_id and a.updated_at < b.updated_at;
 --   alter table public.seeker_profiles add constraint seeker_profiles_profile_id_key unique (profile_id);
+--
+-- Migrating an ALREADY-DEPLOYED project onto the new usage_charge()/
+-- increment_free_preview() functions (see their own comments, near
+-- daily_usage and rate_hit() below, for why): no dedupe needed here, unlike
+-- the constraint above — just run the two `create or replace function`
+-- statements once by hand; they don't touch existing table data.
 
 create extension if not exists "uuid-ossp";
 
@@ -218,6 +224,46 @@ create table if not exists public.daily_usage (
   units_used numeric not null default 0,
   primary key (profile_id, usage_date)
 );
+
+-- Atomic increment for daily_usage — same shape as rate_hit() above, and the
+-- same bug class as the seeker_profiles TOCTOU race (see that table's own
+-- comment): lib/usage.js used to read units_used, add `units` to it in JS,
+-- then write the sum back with a plain upsert. Two concurrent concierge turns
+-- for the same seeker on the same day both read the same units_used, both
+-- compute the same next value, and the second write clobbers the first —
+-- usage goes undercounted and Section 4.3's daily cap can be bypassed.
+-- ON CONFLICT DO UPDATE ... = d.units_used + excluded.units_used makes the
+-- increment atomic in Postgres no matter how many callers race here.
+create or replace function public.usage_charge(p_profile_id bigint, p_units numeric)
+returns numeric
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_units numeric;
+begin
+  insert into public.daily_usage as d (profile_id, usage_date, units_used)
+  values (p_profile_id, current_date, greatest(p_units, 0))
+  on conflict (profile_id, usage_date) do update
+    set units_used = d.units_used + greatest(p_units, 0)
+  returning d.units_used into v_units;
+  return v_units;
+end;
+$$;
+
+-- Same fix, same reason, for users.free_preview_used (routes/concierge.js):
+-- markPreviewUsed() used to write `previewUsed + 1`, a value computed from a
+-- read taken at the top of the request handler. Two concurrent turns landing
+-- on a seeker's last free reply could both persist that same incremented
+-- value, silently losing a count and letting the free-preview funnel run
+-- longer than Section 4.3's 3-turn limit.
+create or replace function public.increment_free_preview(p_user_id bigint)
+returns integer
+language sql security definer set search_path = public
+as $$
+  update public.users set free_preview_used = free_preview_used + 1
+  where id = p_user_id
+  returning free_preview_used;
+$$;
 
 -- B2B marketplace partners (Section 4.4) — Phase 2, included now so the
 -- schema doesn't need a breaking migration when that phase starts.

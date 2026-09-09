@@ -228,9 +228,16 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // Best-effort, never fails the seeker's turn: the counter existing at all
     // is what makes preview mode self-limiting, but a write hiccup shouldn't
     // block someone who's genuinely on their last free reply.
+    //
+    // schema.sql's increment_free_preview() does the increment atomically in
+    // Postgres, not `previewUsed + 1` computed from the read taken at the top
+    // of this handler — two concurrent turns on a seeker's last free reply
+    // used to be able to both persist that same stale incremented value,
+    // silently losing a count (same TOCTOU class as lib/usage.js's charge()
+    // and the seeker_profiles fix; see those for the full story).
     const markPreviewUsed = () => {
       if (!inPreview) return;
-      supabase.from('users').update({ free_preview_used: previewUsed + 1 }).eq('id', user.id)
+      supabase.rpc('increment_free_preview', { p_user_id: user.id })
         .then(({ error }) => { if (error) console.error('preview counter', error.message); },
           e => console.error('preview counter', e.message));
     };
