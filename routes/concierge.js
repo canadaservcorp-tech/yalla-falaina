@@ -98,23 +98,72 @@ const previewInstructions = (remaining) => [
   `Free preview replies left after this one: ${remaining}.`,
 ].join('\n');
 
+// Rewritten after live testing found two contract failures: the model
+// sometimes never emitted a ---PROFILE--- block at all (even on explicit
+// confirmation, so intake could never complete), and it named job
+// roles/sectors during intake despite the no-jobs rule. Two changes address
+// each, plus a third (the block-first ordering) hardens against a failure
+// mode neither report described but that the old contract was exposed to:
+//
+// 1. The block is now REQUIRED on every single intake reply, unconditionally
+//    — not "after a turn where you learned something new," which asked the
+//    model to make a judgment call about its own reply, and a live run
+//    apparently judged wrong on the one turn (the confirmation) that
+//    mattered most. There's no such judgment call left to get wrong.
+// 2. It must always restate every field known so far (from SEEKER PROFILE
+//    context above plus this conversation), not just fields "learned" this
+//    turn — belt-and-suspenders against the model under- or over-scoping
+//    what counts as new, and harmless to repeat since applyIntake's upsert
+//    only touches columns actually present in the payload either way.
+// 3. The block now goes FIRST, with the conversational reply after it —
+//    the opposite of before. PROFILE_BLOCK_RE matches anywhere in the text,
+//    so this doesn't change extraction, but it changes what a truncated
+//    reply loses: at max_tokens (bumped below, but never unbounded), a cut
+//    reply now loses trailing prose, not trailing profile data. Under the
+//    old order, a verbose summary-then-confirm turn running past the token
+//    budget could truncate the JSON block itself — malformed JSON (or a
+//    missing ---END---) fails PROFILE_BLOCK_RE silently, which looks
+//    identical from the outside to the model never emitting a block at all.
 const intakeInstructions = (missing) => [
   'INTAKE MODE — the seeker\'s profile is incomplete (Section 10 required fields).',
-  'Do NOT mention, list, or recommend any jobs or opportunities in this conversation.',
-  'Your only task: conversationally collect the missing fields, in the seeker\'s language, a few questions at a time:',
+  'Your only task: conversationally collect the missing fields below, in the seeker\'s language, a few questions at a time:',
   `  Missing: ${missing.join(', ')}`,
   'Field meanings: work_history = array of {employer, title, start_date, end_date, description};',
   'languages = array of {language, level}; preferred_language must be one of ar-LB, ar-SY, ar-EG, ar, fr, en;',
   'sector or role_type = what kind of work they seek; has_passport/has_visa/',
   'has_legal_residency_current_country/has_family_or_host_abroad = booleans (a "no" answer is still an answer);',
   'preferred_country = where they hope to work.',
-  'After each turn where you learned something new, end your reply with exactly:',
+  '',
+  'NO JOBS DURING INTAKE, with no exceptions: do not mention, list, hint at, or recommend any job, employer,',
+  'opportunity, or feed content, and do not name specific sectors/roles as examples or options either — e.g. never',
+  '"are you looking for something like construction or hospitality?". Ask sector/role_type as a fully open question',
+  '("what kind of work are you hoping to find?") and let the seeker\'s own words be the entire answer — an example',
+  'you supply is a suggestion, not an open question, and this is intake, not matching.',
+  '',
+  'REQUIRED ON EVERY REPLY, no exceptions, even if this turn taught you nothing new: start your reply with a',
+  '---PROFILE--- block, then continue with your conversational reply to the seeker below it, like this:',
   '---PROFILE---',
-  '{"<field>": <value>, ...}   // only the fields learned so far, strict JSON',
+  '{"<field>": <value>, ...}',
   '---END---',
-  'When every field above is collected, summarize what you heard and ask the seeker to confirm;',
-  'only when they explicitly confirm, include "confirmed_by_user": true in the final ---PROFILE--- block.',
+  'Your conversational reply to the seeker goes here, after the block.',
+  'The JSON must be strict (no comments, no trailing commas) and must restate EVERY field you know so far — from',
+  'whatever the platform already told you this seeker answered, plus anything said in this conversation — not only',
+  'what changed this turn.',
+  'Omit a field entirely if you don\'t have a value for it yet; never guess or invent one.',
+  'When every field above is collected, summarize what you heard and ask the seeker to confirm. Do not include',
+  '"confirmed_by_user" at all until they explicitly confirm — omit it, rather than sending false, so a later reply',
+  'can never accidentally undo a real confirmation. Only once they explicitly confirm, add "confirmed_by_user": true',
+  'to that reply\'s block.',
 ].join('\n');
+
+// max_tokens raised from 1024: a verbose intake summary-then-confirm turn
+// (restating every collected field, per intakeInstructions above, plus a
+// friendly summary and confirmation ask) can plausibly need more than 1024
+// tokens, and a cut-off reply fails PROFILE_BLOCK_RE the same way a missing
+// block does — indistinguishable from the outside. Doesn't force longer
+// replies, just removes headroom as a suspect. Shared by both modes since a
+// matching-mode reply discussing several jobs can run long too.
+const MAX_REPLY_TOKENS = 2048;
 
 async function ask(system, messages) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -124,7 +173,7 @@ async function ask(system, messages) {
       'x-api-key': process.env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 1024, system, messages }),
+    body: JSON.stringify({ model: MODEL, max_tokens: MAX_REPLY_TOKENS, system, messages }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   return { status: r.status, body: r.ok ? await r.json() : (await r.text()).slice(0, 300) };
