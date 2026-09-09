@@ -162,7 +162,7 @@
       tabCreateAccount: 'إنشاء حساب',
       authTitleWelcome: 'مرحبًا بعودتك',
       authTitleCreate: 'أنشئ حسابك',
-      authHint: 'منصة يلا فلاينة مخصصة للباحثين عن عمل والهجرة الذين تبلغ أعمارهم 18 عامًا فما فوق. يساعدك المساعد الذكي على إيجاد فرص حقيقية — ولا يحل أبدًا محل مختص مرخّص.',
+      authHint: 'منصة يلا نسافر مخصصة للباحثين عن عمل والهجرة الذين تبلغ أعمارهم 18 عامًا فما فوق. يساعدك المساعد الذكي على إيجاد فرص حقيقية — ولا يحل أبدًا محل مختص مرخّص.',
       labelEmail: 'البريد الإلكتروني',
       labelPassword: 'كلمة المرور',
       labelFullName: 'الاسم الكامل',
@@ -174,7 +174,7 @@
       confirmAgeLabel: 'أؤكد أن عمري 18 عامًا أو أكثر',
       acceptTermsLabel: 'أوافق على شروط الاستخدام',
       countryInputPlaceholder: 'الدولة المفضلة (اختياري)',
-      errAgeGate: 'منصة يلا فلاينة مخصصة للأشخاص البالغين 18 عامًا فما فوق.',
+      errAgeGate: 'منصة يلا نسافر مخصصة للأشخاص البالغين 18 عامًا فما فوق.',
       errAcceptTerms: 'يرجى الموافقة على شروط الاستخدام.',
       msgAccountCreatedEmailPending: 'تم إنشاء الحساب — لم نتمكن من إرسال بريد التحقق حتى الآن؛ حاول تسجيل الدخول مرة أخرى بعد قليل.',
       msgCheckEmail: 'تحقّق من بريدك الإلكتروني لتأكيد حسابك.',
@@ -257,7 +257,7 @@
     ERR_AGE_GATE: {
       en: 'Yalla Falaina is for people 18 and older.',
       fr: 'Yalla Falaina est réservé aux personnes de 18 ans et plus.',
-      ar: 'منصة يلا فلاينة مخصصة للأشخاص البالغين 18 عامًا فما فوق.',
+      ar: 'منصة يلا نسافر مخصصة للأشخاص البالغين 18 عامًا فما فوق.',
     },
     ERR_EMAIL_BLOCKED: {
       en: 'This email address cannot be used to register.',
