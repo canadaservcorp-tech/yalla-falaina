@@ -85,7 +85,9 @@ test('a normal turn reaches the model, logs both sides and charges the quota', a
   assert.equal(writes[0].payload.role, 'user');
   assert.equal(writes[1].payload.role, 'assistant');
   assert.ok('matched_job_ids' in writes[1].payload);
-  assert.equal(h.mock.__writes('daily_usage', 'upsert').length, 1);
+  // lib/usage.js charges atomically via schema.sql's usage_charge() RPC, not
+  // a plain daily_usage upsert (see lib/usage.js's charge() for why).
+  assert.equal(h.mock.__rpcCalls('usage_charge').length, 1);
 });
 
 test('an echoed conversation id is only honored when it belongs to the caller', async () => {
@@ -137,10 +139,10 @@ test('the first free-preview turn reaches the model with redacted jobs, not a 40
   assert.match(upstream.body.system, /subscribe to see the full requirements/);
   assert.doesNotMatch(upstream.body.system, /url: https/);
   // preview turns still go through matching/logging/quota exactly like a paid turn
-  assert.equal(h.mock.__writes('daily_usage', 'upsert').length, 1);
+  assert.equal(h.mock.__rpcCalls('usage_charge').length, 1);
 });
 
-test('the free-preview counter increments so the 4th matching turn hits the paywall', async () => {
+test('the free-preview counter increments atomically so the 4th matching turn hits the paywall', async () => {
   process.env.PAYWALL_ENFORCED = 'true';
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-preview2' }, error: null });
   const r = await ask({ message: 'hi' }, caller({ free_preview_used: 2 }));   // last free reply
@@ -148,9 +150,17 @@ test('the free-preview counter increments so the 4th matching turn hits the payw
   const j = await r.json();
   assert.equal(j.preview, true);
   assert.equal(j.previewRemaining, 0);
-  const writes = h.mock.__writes('users', 'update');
-  assert.equal(writes.length, 1);
-  assert.equal(writes[0].payload.free_preview_used, 3);
+  // markPreviewUsed() calls schema.sql's increment_free_preview() RPC, not a
+  // plain `update ... set free_preview_used = previewUsed + 1` — that old
+  // form computed the new value from a value read earlier in the request,
+  // the exact TOCTOU shape fixed across this whole sweep (see routes/
+  // concierge.js's markPreviewUsed for the full story). Asserting no bare
+  // `users` update happened, alongside the RPC call, is what would catch a
+  // regression back to that pattern.
+  assert.equal(h.mock.__writes('users', 'update').length, 0);
+  const calls = h.mock.__rpcCalls('increment_free_preview');
+  assert.equal(calls.length, 1);
+  assert.equal(typeof calls[0].args.p_user_id, 'number');
 });
 
 test('intake mode never touches the preview counter, even with PAYWALL_ENFORCED on', async () => {
@@ -163,6 +173,7 @@ test('intake mode never touches the preview counter, even with PAYWALL_ENFORCED 
   assert.equal(j.intake, true);
   assert.ok(!j.preview);
   assert.equal(h.mock.__writes('users', 'update').length, 0);
+  assert.equal(h.mock.__rpcCalls('increment_free_preview').length, 0);
 });
 
 test('an incomplete profile enters intake mode instead of being refused, with no job retrieval', async () => {
@@ -184,7 +195,7 @@ test('an incomplete profile enters intake mode instead of being refused, with no
   assert.match(upstream.body.system, /Do NOT mention, list, or recommend any jobs/);
   // intake turns are free — the daily quota is neither checked nor charged,
   // and the logged turn records 0 units rather than the matching cost
-  assert.equal(h.mock.__writes('daily_usage', 'upsert').length, 0);
+  assert.equal(h.mock.__rpcCalls('usage_charge').length, 0);
   assert.equal(h.mock.__writes('concierge_messages', 'insert')[0].payload.units_charged, 0);
 });
 
