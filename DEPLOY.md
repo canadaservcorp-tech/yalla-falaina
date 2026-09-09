@@ -89,7 +89,11 @@ per-message API call, so the prompt's claim stays accurate as-is.
 `https://<PUBLIC_URL>/api/subscription/webhook` and copy the resulting
 webhook ID into `PAYPAL_WEBHOOK_ID`. This has to happen after `PUBLIC_URL` is
 live and stable — a preview/staging URL that later changes needs the webhook
-re-pointed.
+re-pointed. `npm run paypal:setup` does this step for you (see the env-var
+table above) and now refuses to run if `PUBLIC_URL` isn't a real `https://`
+address — it won't silently register a webhook pointed at
+`http://localhost:3000` if that env var was forgotten, which would leave
+every future subscription activation with nowhere real to land.
 
 **6b. Stripe** (only if `STRIPE_SECRET_KEY` is set). In the Stripe Dashboard,
 add a webhook endpoint at `https://<PUBLIC_URL>/api/subscription/stripe/webhook`
