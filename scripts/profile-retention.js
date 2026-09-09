@@ -13,9 +13,9 @@ const { sendEmail } = require('../lib/email');
 const BUCKET = process.env.DOCUMENTS_BUCKET || 'documents';
 const WARN_BEFORE_MS = 7 * 24 * 60 * 60 * 1000; // warn a week out — "never a surprise"
 
-const WARN_SUBJECT = 'Your Yalla Falaina profile will be deleted soon';
+const WARN_SUBJECT = 'Your Yalla Nsafer profile will be deleted soon';
 const warnHtml = deadline => `
-  <p>Your Yalla Falaina subscription ended, and the 30-day window to reactivate
+  <p>Your Yalla Nsafer subscription ended, and the 30-day window to reactivate
   closes on <b>${new Date(deadline).toDateString()}</b>.</p>
   <p>If you resubscribe before then, everything stays exactly as you left it.
   Otherwise your profile and the intake information you shared with the

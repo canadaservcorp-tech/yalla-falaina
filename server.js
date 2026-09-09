@@ -1,4 +1,4 @@
-// Yalla Falaina — Phase 1 server. Forked from the trouvepro codebase: same
+// Yalla Nsafer — Phase 1 server. Forked from the trouvepro codebase: same
 // Express + Supabase + Railway skeleton, security stack and auth; the
 // marketplace surface (listings, GPS search, bookings, RBQ) is gone and the
 // product surface is the AI concierge.
@@ -77,7 +77,7 @@ app.use((err, _req, res, _next) => {
 
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`Yalla Falaina on ${PORT} — concierge live`));
+  app.listen(PORT, () => console.log(`Yalla Nsafer on ${PORT} — concierge live`));
   require('./lib/scheduler').start();
 }
 module.exports = app;

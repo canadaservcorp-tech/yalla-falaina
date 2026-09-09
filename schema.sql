@@ -1,4 +1,4 @@
--- Yalla Falaina — Phase 1 schema. Run once in the Supabase SQL editor of the
+-- Yalla Nsafer — Phase 1 schema. Run once in the Supabase SQL editor of the
 -- NEW project (never the live trouvepro one — separate deployment, separate DB).
 -- Auth is the fork's own Express JWT flow (bcrypt + `users`), so every personal
 -- table references public.users, not auth.users.

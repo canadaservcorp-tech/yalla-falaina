@@ -28,9 +28,9 @@ async function main() {
   if (!configured()) throw new Error('PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET required');
   console.log('PayPal API:', BASE);
 
-  const product = await findProduct('Yalla Falaina Basic') || await pp('POST', '/v1/catalogs/products', {
-    name: 'Yalla Falaina Basic',
-    description: 'Concierge access for job seekers on Yalla Falaina',
+  const product = await findProduct('Yalla Nsafer Basic') || await pp('POST', '/v1/catalogs/products', {
+    name: 'Yalla Nsafer Basic',
+    description: 'Concierge access for job seekers on Yalla Nsafer',
     type: 'SERVICE',
     category: 'SOFTWARE',
   });

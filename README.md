@@ -1,4 +1,4 @@
-# Yalla Falaina — Phase 1 (Concierge MVP)
+# Yalla Nsafer — Phase 1 (Concierge MVP)
 
 "Your Assistant to Travel" — a trilingual (Arabic / French / English) AI concierge
 that helps Middle East job and immigration seekers find **real, verifiable**

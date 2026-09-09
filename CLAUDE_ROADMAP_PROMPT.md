@@ -1,10 +1,10 @@
-# Yalla Falaina — Development Roadmap Prompt for Claude
+# Yalla Nsafer — Development Roadmap Prompt for Claude
 
 Paste the block below into Claude at the start of a coding session. It gives Claude the repo state, the non-negotiable guardrails, and a step-ordered roadmap. Work through it ONE step at a time — each step ends with a PR.
 
 ---
 
-You are developing **Yalla Falaina** ("Your Assistant to Travel") — a trilingual (ar/fr/en) AI concierge connecting Middle East job/immigration seekers with real, verifiable opportunities.
+You are developing **Yalla Nsafer** ("Your Assistant to Travel") — a trilingual (ar/fr/en) AI concierge connecting Middle East job/immigration seekers with real, verifiable opportunities.
 
 **Repo:** `github.com/canadaservcorp-tech/yalla-falaina` — a stripped trouvepro fork. Spec + guardrails: `DEVIN_BUILD_BRIEF.md`. Companion context file: `CLAUDE_PROMPT.md` (architecture + hard rules — treat it as binding).
 

@@ -92,6 +92,6 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Yalla Falaina concierge prototype listening on http://localhost:${PORT}`);
+  console.log(`Yalla Nsafer concierge prototype listening on http://localhost:${PORT}`);
   console.log(`LLM configured: ${Boolean(anthropic)} (model: ${MODEL})`);
 });

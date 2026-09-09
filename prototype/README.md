@@ -1,4 +1,4 @@
-# Yalla Falaina — Concierge Prototype
+# Yalla Nsafer — Concierge Prototype
 
 A working demo of the AI concierge chat ("Your Assistant to Travel") described in the idea-configuration doc, Section 4.3. Trilingual, dialect-aware, matched against a small mock job dataset. **This is a prototype, not the product**: no accounts, no payments, no real job feed, no live legal-fact retrieval, no database.
 
@@ -19,7 +19,7 @@ Doesn't do (by design, for this prototype):
 ## Setup
 
 ```bash
-cd yalla-falaina-prototype
+cd yalla-nsafer-prototype
 npm install
 cp .env.example .env
 # edit .env and paste your own Anthropic API key into ANTHROPIC_API_KEY

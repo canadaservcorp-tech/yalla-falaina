@@ -1,8 +1,8 @@
 {
-  "name": "yalla-falaina-concierge-prototype",
+  "name": "yalla-nsafer-concierge-prototype",
   "version": "0.1.0",
   "private": true,
-  "description": "Prototype: trilingual AI concierge chat demo for Yalla Falaina, with mock job data and no payments/backend beyond the demo.",
+  "description": "Prototype: trilingual AI concierge chat demo for Yalla Nsafer, with mock job data and no payments/backend beyond the demo.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

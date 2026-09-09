@@ -13,7 +13,7 @@ test('GET /admin.html serves the moderation console', async () => {
   const r = await fetch(h.base + '/admin.html');
   assert.equal(r.status, 200);
   const body = await r.text();
-  assert.match(body, /<title>Yalla Falaina — Admin/);
+  assert.match(body, /<title>Yalla Nsafer — Admin/);
   assert.match(body, /noindex/);
 });
 

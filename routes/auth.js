@@ -32,7 +32,7 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     if (pwProblem) return res.status(400).json({ error: pwProblem, code: 'ERR_WEAK_PASSWORD' });
     if (req.body.acceptTerms !== true) return res.status(400).json({ error: 'You must accept the Terms of Use', code: 'ERR_TERMS_REQUIRED' });
     // Hard 18+ gate (Sections 4.3/10) — the platform does not serve minors.
-    if (req.body.confirmAge !== true) return res.status(400).json({ error: 'You must be 18 or older to use Yalla Falaina', code: 'ERR_AGE_GATE' });
+    if (req.body.confirmAge !== true) return res.status(400).json({ error: 'You must be 18 or older to use Yalla Nsafer', code: 'ERR_AGE_GATE' });
 
     const { data: banned } = await supabase.from('banned_emails').select('email').eq('email', email).maybeSingle();
     if (banned) return res.status(403).json({ error: 'This email is blocked', code: 'ERR_EMAIL_BLOCKED' });
@@ -40,7 +40,7 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     // don't confirm which addresses are registered — same reply either way
     if (exists) {
       try {
-        await sendEmail(email, 'Sign in to Yalla Falaina',
+        await sendEmail(email, 'Sign in to Yalla Nsafer',
           '<p>An account already exists with this email. Sign in, or reset your password.</p>');
       } catch (e) { console.error('register:exists email', e.message); }
       return res.json({ success: true, message: 'Registered — check your email to verify.' });
@@ -77,8 +77,8 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     // can say "we couldn't send the email yet" instead of a fake success.
     let emailSent = true;
     try {
-      await sendEmail(email, 'Confirm your email — Yalla Falaina',
-        `<p>Welcome to Yalla Falaina. Confirm your email:</p><p><a href="${link}">${link}</a></p>`);
+      await sendEmail(email, 'Confirm your email — Yalla Nsafer',
+        `<p>Welcome to Yalla Nsafer. Confirm your email:</p><p><a href="${link}">${link}</a></p>`);
     } catch (e) { emailSent = false; console.error('register:verify email', e.message); }
     res.json({ success: true, message: 'Registered — check your email to verify.', userId: user.id, emailSent });
   } catch (e) { console.error('register', e); res.status(500).json({ error: 'Registration failed', code: 'ERR_SERVER' }); }
@@ -132,7 +132,7 @@ router.post('/resend-verification', sec.limits.credentials, async (req, res) => 
 
     const link = `${PUBLIC_URL}/api/auth/verify?token=${verify_token}&id=${user.id}`;
     try {
-      await sendEmail(email, 'Confirm your email — Yalla Falaina',
+      await sendEmail(email, 'Confirm your email — Yalla Nsafer',
         `<p>Here's your new confirmation link:</p><p><a href="${link}">${link}</a></p>`);
     } catch (e) {
       console.error('resend:verify email', e.message);

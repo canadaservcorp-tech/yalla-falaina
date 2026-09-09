@@ -23,7 +23,7 @@ test('each indexable page gets its own title and description', async () => {
 
 test('unknown paths fall back to the home metadata', async () => {
   const body = await html('/nope');
-  assert.match(body, /<title>Yalla Falaina — Your Assistant to Travel<\/title>/);
+  assert.match(body, /<title>Yalla Nsafer — Your Assistant to Travel<\/title>/);
 });
 
 test('the page is indexable in all three product languages', async () => {
