@@ -191,7 +191,17 @@
   // Conservative default (true) until it resolves: better a beat of an
   // unnecessary banner than a hidden one while enforcement is actually on.
   let paywallEnforced = true;
-  fetch('/api/health').then(r => r.json()).then(d => { paywallEnforced = Boolean(d.paywall); }).catch(() => {});
+  let subActive = null;
+  function renderPaywall() {
+    if (subActive === null) return;
+    $('paywall').style.display = (paywallEnforced && !subActive) ? 'block' : 'none';
+  }
+  fetch('/api/health').then(r => r.json()).then(d => {
+    // Only a real boolean flips the flag — an error/rate-limit body lacks the
+    // field and must not silently read as "not enforced" while it is.
+    if (typeof d.paywall === 'boolean') paywallEnforced = d.paywall;
+    renderPaywall();
+  }).catch(() => {});
 
   // ---------- language ----------
   // The server already picked and stamped the language on <html lang> (and
@@ -348,7 +358,8 @@
       $('subBar').textContent = active ? t('subActiveRenews', { date: d.periodEnd ? d.periodEnd.slice(0,10) : '—' }) : '';
       // Known gap (CLAUDE_PROMPT.md item 5): don't show the $25/month pitch to
       // an unsubscribed visitor when the server isn't actually enforcing it.
-      $('paywall').style.display = (paywallEnforced && !active) ? 'block' : 'none';
+      subActive = active;
+      renderPaywall();
       // The only place a subscriber could cancel used to be PayPal's own
       // site — the paywall panel (the only button that existed) disappears
       // the moment someone becomes active, so there was nothing to click here.
