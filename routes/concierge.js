@@ -368,6 +368,20 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
         } catch (e) {
           console.error('concierge intake persist', e.message);
         }
+      } else if (reply.includes('---PROFILE---')) {
+        // Launch-readiness review: PROFILE_BLOCK_RE correctly refuses to match
+        // (and therefore extract/persist) an unclosed block — e.g. the reply
+        // hit MAX_REPLY_TOKENS mid-object, with no ---END--- ever arriving.
+        // Nothing is written, so this can't half-persist a partial answer;
+        // the field simply stays missing and the next turn re-requests it
+        // per intakeInstructions above. But with nothing here, the seeker
+        // would see the raw dangling "---PROFILE---{...partial json" fencing
+        // in their chat, since only a successful match strips it. Since the
+        // contract now puts the block FIRST, a cut this early can leave
+        // nothing before the marker at all, so a fallback line covers that.
+        console.error('concierge intake truncated block', reply.length, 'chars');
+        reply = reply.slice(0, reply.indexOf('---PROFILE---')).trim()
+          || "One moment, let's continue — could you say that again?";
       }
     }
 
