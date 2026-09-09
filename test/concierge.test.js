@@ -192,11 +192,45 @@ test('an incomplete profile enters intake mode instead of being refused, with no
   assert.ok(j.missing.includes('certifications'));
   assert.ok(j.missing.includes('has_passport'));
   assert.match(upstream.body.system, /INTAKE MODE/);
-  assert.match(upstream.body.system, /Do NOT mention, list, or recommend any jobs/);
+  assert.match(upstream.body.system, /NO JOBS DURING INTAKE/);
   // intake turns are free — the daily quota is neither checked nor charged,
   // and the logged turn records 0 units rather than the matching cost
   assert.equal(h.mock.__rpcCalls('usage_charge').length, 0);
   assert.equal(h.mock.__writes('concierge_messages', 'insert')[0].payload.units_charged, 0);
+});
+
+test('the intake contract requires the ---PROFILE--- block on every reply, not only when something new was learned', async () => {
+  // Regression for a live-testing failure: the old wording ("after each turn
+  // where you learned something new") asked the model to judge whether a
+  // turn counted as "new" -- and on at least one real run it judged the
+  // explicit-confirmation turn as not new, so the block (and the
+  // confirmation) never came. The instruction is now unconditional.
+  process.env.PAYWALL_ENFORCED = 'true';
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake-every-turn' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /REQUIRED ON EVERY REPLY, no exceptions, even if this turn taught you nothing new/);
+  assert.match(upstream.body.system, /restate EVERY field you know so far/);
+});
+
+test('the intake contract forbids naming sectors or roles as examples, not just refusing to "recommend" outright', async () => {
+  // Regression for the other live-testing failure: the model named specific
+  // roles/sectors during intake. The old wording only banned recommending
+  // jobs; it never said an example sector/role is itself off-limits, which
+  // is the gap a model can walk through while still technically not
+  // "recommending" anything.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake-no-examples' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /do not name specific sectors\/roles as examples or options either/);
+  assert.match(upstream.body.system, /let the seeker's own words be the entire answer/);
+});
+
+test('the model is given more output headroom than before, so a verbose intake summary cannot silently truncate the profile block', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake-tokens' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  assert.equal(upstream.body.max_tokens, 2048);
 });
 
 test('no seeker_profiles row at all is intake mode, not a crash', async () => {
@@ -222,6 +256,24 @@ test('intake mode persists a ---PROFILE--- extraction block through the shared w
   assert.equal(writes.length, 1);
   assert.equal(writes[0].payload.has_passport, true);
   assert.equal(writes[0].payload.intake_method, 'conversational');
+});
+
+test('a ---PROFILE--- block placed FIRST (as the intake contract now asks for) still extracts and strips correctly', async () => {
+  // intakeInstructions now tells the model to lead with the block, so a
+  // token-budget cutoff truncates trailing prose instead of the JSON data —
+  // PROFILE_BLOCK_RE has no position anchor, so extraction must work exactly
+  // the same regardless of where the block actually lands in the reply.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake-first' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"preferred_country":"canada","has_passport":true}\n---END---\nThanks! Saved that.' }] } });
+  const r = await ask({ message: 'I want Canada and I have a passport' }, caller({}, { id: 'sp-prior', is_complete: false, confirmed_by_user: false }, { preferred_language: 'en', preferred_country: null, sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /PROFILE---/);
+  assert.match(j.reply, /Thanks! Saved that/);
+  const writes = h.mock.__writes('seeker_profiles', 'upsert');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].payload.has_passport, true);
 });
 
 test('a malformed field in a ---PROFILE--- block is dropped and logged, not allowed to sink the valid fields', async () => {
