@@ -14,10 +14,13 @@ const dbPath = require.resolve('../db');
 require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: mock };
 const { run } = require('../scripts/subscription-lapse');
 const sec = require('../lib/security'); // same module instance the script holds
+const paginate = require('../lib/paginate');
 
 const inDays = n => new Date(Date.now() + n * 86400000).toISOString();
 
 test.beforeEach(() => mock.__reset());
+const originalPageSize = paginate.PAGE_SIZE;
+test.afterEach(() => { paginate.PAGE_SIZE = originalPageSize; });
 
 test('an active subscription past its cancel_at date lapses: status/tier cleared, retention deadline started, cache dropped', async () => {
   mock.__set('users', { data: [{ id: 7, role: 'seeker', subscription_status: 'active' }], error: null });
@@ -87,4 +90,14 @@ test('a DB error while lapsing a due subscription propagates rather than under-r
   mock.__set('users', { data: [{ id: 5, role: 'seeker', subscription_status: 'active' }], error: null });
   mock.__setOp('users', 'update', { data: null, error: { message: 'write failed' } });
   await assert.rejects(run(), err => err.message === 'write failed');
+});
+
+test('more due subscriptions than one page — every row across every page lapses, not just the first page', async () => {
+  paginate.PAGE_SIZE = 2;
+  mock.__queue('users',
+    { data: [{ id: 1, role: 'seeker', subscription_status: 'active' }, { id: 2, role: 'seeker', subscription_status: 'active' }], error: null },
+    { data: [{ id: 3, role: 'seeker', subscription_status: 'active' }], error: null });
+  const due = await run();
+  assert.equal(due, 3);
+  assert.equal(mock.__writes('users', 'update').length, 3);
 });

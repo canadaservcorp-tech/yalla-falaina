@@ -8,13 +8,19 @@
 require('dotenv').config();
 const supabase = require('../db');
 const sec = require('../lib/security');
+const paginate = require('../lib/paginate');
 
 async function run() {
   const now = new Date().toISOString();
-  const { data: rows, error } = await supabase.from('users')
-    .select('id, role, subscription_status')
-    .not('subscription_cancel_at', 'is', null)
-    .lte('subscription_cancel_at', now);
+  // Paged (see lib/paginate.js): an unbounded .select() here would silently
+  // drop rows past Supabase's per-request cap once more subscriptions are
+  // due to lapse at once than that cap allows.
+  const { data: rows, error } = await paginate.fetchAllPages((from, to) =>
+    supabase.from('users')
+      .select('id, role, subscription_status')
+      .not('subscription_cancel_at', 'is', null)
+      .lte('subscription_cancel_at', now)
+      .range(from, to));
   if (error) throw error;
 
   // Anything already ended only needs the spent date cleared, so a later

@@ -5,13 +5,19 @@
 //   node scripts/document-retention.js
 require('dotenv').config();
 const supabase = require('../db');
+const paginate = require('../lib/paginate');
 const BUCKET = process.env.DOCUMENTS_BUCKET || 'documents';
 
 async function run() {
   const now = new Date().toISOString();
-  const { data: rows, error } = await supabase.from('document_uploads')
-    .select('id, storage_path')
-    .lte('retention_expires_at', now);
+  // Paged (see lib/paginate.js): an unbounded .select() here would silently
+  // drop rows past Supabase's per-request cap once more uploads are expired
+  // at once than that cap allows.
+  const { data: rows, error } = await paginate.fetchAllPages((from, to) =>
+    supabase.from('document_uploads')
+      .select('id, storage_path')
+      .lte('retention_expires_at', now)
+      .range(from, to));
   if (error) throw error;
 
   let removed = 0;

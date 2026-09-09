@@ -9,6 +9,7 @@
 require('dotenv').config();
 const supabase = require('../db');
 const { sendEmail } = require('../lib/email');
+const paginate = require('../lib/paginate');
 
 const BUCKET = process.env.DOCUMENTS_BUCKET || 'documents';
 const WARN_BEFORE_MS = 7 * 24 * 60 * 60 * 1000; // warn a week out — "never a surprise"
@@ -48,10 +49,15 @@ async function deleteProfileData(userId) {
 
 async function run() {
   const now = Date.now();
-  const { data: due, error } = await supabase.from('users')
-    .select('id, email, data_retention_deadline, retention_warned_at')
-    .eq('subscription_status', 'canceled')
-    .not('data_retention_deadline', 'is', null);
+  // Paged (see lib/paginate.js): an unbounded .select() here would silently
+  // drop rows past Supabase's per-request cap once more canceled accounts
+  // have a retention deadline set at once than that cap allows.
+  const { data: due, error } = await paginate.fetchAllPages((from, to) =>
+    supabase.from('users')
+      .select('id, email, data_retention_deadline, retention_warned_at')
+      .eq('subscription_status', 'canceled')
+      .not('data_retention_deadline', 'is', null)
+      .range(from, to));
   if (error) throw error;
 
   let warned = 0, deleted = 0;

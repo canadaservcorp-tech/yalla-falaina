@@ -11,10 +11,13 @@ const mock = createMockDb();
 const dbPath = require.resolve('../db');
 require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: mock };
 const { run } = require('../scripts/profile-retention');
+const paginate = require('../lib/paginate');
 
 const inDays = n => new Date(Date.now() + n * 86400000).toISOString();
 
 test.beforeEach(() => mock.__reset());
+const originalPageSize = paginate.PAGE_SIZE;
+test.afterEach(() => { paginate.PAGE_SIZE = originalPageSize; });
 
 test('a user past the deadline loses profile + intake data but keeps the account', async () => {
   mock.__set('users', { data: [{ id: 7, email: 'gone@example.com', data_retention_deadline: inDays(-1), retention_warned_at: inDays(-20) }], error: null });
@@ -76,4 +79,25 @@ test('already-warned and far-out deadlines are left alone', async () => {
   assert.equal(r.warned, 0);
   assert.equal(r.deleted, 0);
   assert.equal(mock.__writes().length, 0);
+});
+
+test('more retention-due accounts than one page — every row across every page is processed, not just the first page', async () => {
+  paginate.PAGE_SIZE = 2;
+  mock.__queue('users',
+    { data: [
+        { id: 1, email: 'a@example.com', data_retention_deadline: inDays(-1), retention_warned_at: null },
+        { id: 2, email: 'b@example.com', data_retention_deadline: inDays(-1), retention_warned_at: null },
+      ], error: null },
+    { data: [
+        { id: 3, email: 'c@example.com', data_retention_deadline: inDays(-1), retention_warned_at: null },
+      ], error: null });
+  // After the two queued pages are consumed, every per-row revalidation
+  // .maybeSingle() re-check also reads this same 'users' fixture (the mock
+  // can't distinguish queries by shape, only by table) — a generic truthy
+  // fallback lets each one confirm "still overdue" so this test stays about
+  // pagination, not about the revalidation logic (already covered above).
+  mock.__set('users', { data: { id: 0 }, error: null });
+  const r = await run();
+  assert.equal(r.deleted, 3);
+  assert.equal(mock.__writes('profiles', 'delete').length, 3);
 });
