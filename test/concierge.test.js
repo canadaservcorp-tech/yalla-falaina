@@ -206,8 +206,8 @@ test('intake mode persists a ---PROFILE--- extraction block through the shared w
   assert.equal(j.intake, true);
   assert.doesNotMatch(j.reply, /PROFILE---/);
   assert.match(j.reply, /Thanks! Saved that/);
-  // an existing seeker_profiles row is updated by id, not duplicated
-  const writes = h.mock.__writes('seeker_profiles', 'update');
+  // an existing seeker_profiles row is upserted by profile_id, not duplicated
+  const writes = h.mock.__writes('seeker_profiles', 'upsert');
   assert.equal(writes.length, 1);
   assert.equal(writes[0].payload.has_passport, true);
   assert.equal(writes[0].payload.intake_method, 'conversational');
@@ -232,7 +232,7 @@ test('a malformed field in a ---PROFILE--- block is dropped and logged, not allo
   assert.equal(intakeWrite.city, 'Tripoli');
   assert.equal(intakeWrite.sector, 'construction');
   assert.ok(!('preferred_language' in intakeWrite));
-  const seekerWrites = h.mock.__writes('seeker_profiles', 'update');
+  const seekerWrites = h.mock.__writes('seeker_profiles', 'upsert');
   assert.equal(seekerWrites.length, 1);
   assert.equal(seekerWrites[0].payload.has_passport, false);
   assert.deepEqual(seekerWrites[0].payload.work_history, []);

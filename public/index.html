@@ -356,8 +356,8 @@
       const d = await r.json();
       const active = d.status === 'active';
       $('subBar').textContent = active ? t('subActiveRenews', { date: d.periodEnd ? d.periodEnd.slice(0,10) : '—' }) : '';
-      // Known gap (CLAUDE_PROMPT.md item 5): don't show the $25/month pitch to
-      // an unsubscribed visitor when the server isn't actually enforcing it.
+      // Don't show the $25/month pitch to an unsubscribed visitor when the
+      // server isn't actually enforcing it (fixed; see renderPaywall() above).
       subActive = active;
       renderPaywall();
       // The only place a subscriber could cancel used to be PayPal's own

@@ -11,6 +11,16 @@
 --     add column if not exists stripe_customer_id text,
 --     add column if not exists stripe_subscription_id text,
 --     add column if not exists payment_provider text;
+--
+-- Migrating an ALREADY-DEPLOYED project onto the new unique(profile_id) on
+-- seeker_profiles (see that table's own comment for why): `add constraint`
+-- fails outright if any duplicate rows already exist, so dedupe first, keeping
+-- only the most-recently-updated row per profile — the same row every
+-- existing read already picked via `order by updated_at desc limit 1`, so
+-- this throws away nothing a live read could still see:
+--   delete from public.seeker_profiles a using public.seeker_profiles b
+--     where a.profile_id = b.profile_id and a.updated_at < b.updated_at;
+--   alter table public.seeker_profiles add constraint seeker_profiles_profile_id_key unique (profile_id);
 
 create extension if not exists "uuid-ossp";
 
@@ -96,9 +106,20 @@ create table if not exists public.profiles (
 -- Structured CV/profile data — the output of any of the four intake paths
 -- (upload, free text, conversational Q&A, voice — Section 10). Raw uploaded
 -- files are NOT stored here; see document_uploads.
+--
+-- unique(profile_id): exactly one row per seeker. Without this, lib/profileWrite.js
+-- had no way to do a real upsert-by-profile_id — it had to read the most recent
+-- row by hand and then decide insert-vs-update itself, which is a TOCTOU race
+-- under concurrent writes (the profile PUT endpoint and the concierge's
+-- conversational intake both call the same write path, and can genuinely
+-- overlap: a seeker with the profile form open while also chatting). Two
+-- concurrent calls that both read "no row yet" both insert, leaving two rows
+-- for one profile — whichever one loses `order by updated_at desc limit 1`
+-- becomes permanently invisible to every downstream read, so answers a seeker
+-- already gave silently vanish and completeness can flip unpredictably.
 create table if not exists public.seeker_profiles (
   id uuid primary key default uuid_generate_v4(),
-  profile_id bigint not null references public.profiles(id) on delete cascade,
+  profile_id bigint not null references public.profiles(id) on delete cascade unique,
   intake_method text not null, -- 'upload' | 'free_text' | 'conversational' | 'voice'
   work_history jsonb, -- [{employer, title, start_date, end_date, description}]
   education jsonb,

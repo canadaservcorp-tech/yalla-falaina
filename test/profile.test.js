@@ -44,16 +44,15 @@ test('confirmed_by_user must be a strict boolean, same as confirmAge/acceptTerms
     assert.equal(r.status, 400);
     assert.equal((await r.json()).code, 'ERR_BAD_INPUT');
   }
-  assert.equal(h.mock.__writes('seeker_profiles', 'insert').length, 0);
-  assert.equal(h.mock.__writes('seeker_profiles', 'update').length, 0);
+  assert.equal(h.mock.__writes('seeker_profiles', 'upsert').length, 0);
 });
 
 // ---------- PUT writes + completeness ----------
 
-test('PUT with no existing seeker_profiles row inserts one as conversational intake', async () => {
+test('PUT with no existing seeker_profiles row upserts one as conversational intake', async () => {
   h.mock.__set('profiles', { data: { id: 200, preferred_language: 'en', preferred_country: null, sector: null, role_type: null }, error: null });
   h.mock.__set('seeker_profiles', { data: null, error: null }); // no prior row
-  h.mock.__setOp('seeker_profiles', 'insert', { data: { id: 'sp1', is_complete: false, confirmed_by_user: false }, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp1', is_complete: false, confirmed_by_user: false }, error: null });
 
   const r = await put({ preferred_language: 'en', has_passport: true }, user());
   assert.equal(r.status, 200);
@@ -61,12 +60,11 @@ test('PUT with no existing seeker_profiles row inserts one as conversational int
   assert.equal(j.isComplete, false);
   assert.ok(j.missing.includes('confirmed_by_user'));
 
-  const writes = h.mock.__writes('seeker_profiles', 'insert');
+  const writes = h.mock.__writes('seeker_profiles', 'upsert');
   assert.equal(writes.length, 1);
   assert.equal(writes[0].payload.intake_method, 'conversational');
   assert.equal(writes[0].payload.has_passport, true);
   assert.equal(writes[0].payload.is_complete, false);
-  assert.equal(h.mock.__writes('seeker_profiles', 'update').length, 0);
 });
 
 // The full Section-10 intake fixture minus confirmation — everything else answered
@@ -76,10 +74,10 @@ const NEARLY_DONE_SEEKER = { id: 'sp-existing', confirmed_by_user: false, is_com
   has_passport: true, has_visa: false, has_legal_residency_current_country: true, has_family_or_host_abroad: false };
 const FULL_PROFILE = { id: 200, preferred_language: 'en', preferred_country: 'Canada', sector: 'construction', role_type: null };
 
-test('PUT with an existing seeker_profiles row updates it by id instead of inserting a second one', async () => {
+test('PUT with an existing seeker_profiles row upserts by profile_id — never a second row for the same profile', async () => {
   h.mock.__set('profiles', { data: FULL_PROFILE, error: null });
   h.mock.__set('seeker_profiles', { data: NEARLY_DONE_SEEKER, error: null });
-  h.mock.__setOp('seeker_profiles', 'update', { data: { id: 'sp-existing', is_complete: true, confirmed_by_user: true }, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp-existing', is_complete: true, confirmed_by_user: true }, error: null });
 
   const r = await put({ confirmed_by_user: true }, user());
   assert.equal(r.status, 200);
@@ -87,17 +85,17 @@ test('PUT with an existing seeker_profiles row updates it by id instead of inser
   assert.equal(j.isComplete, true);
   assert.deepEqual(j.missing, []);
 
-  const writes = h.mock.__writes('seeker_profiles', 'update');
+  const writes = h.mock.__writes('seeker_profiles', 'upsert');
   assert.equal(writes.length, 1);
   assert.equal(writes[0].payload.confirmed_by_user, true);
   assert.equal(writes[0].payload.is_complete, true);
-  assert.equal(h.mock.__writes('seeker_profiles', 'insert').length, 0);
+  assert.equal(writes[0].payload.profile_id, 200);
 });
 
 test('completeness flips back off when confirmed_by_user is revoked, even if the rest is unchanged', async () => {
   h.mock.__set('profiles', { data: FULL_PROFILE, error: null });
   h.mock.__set('seeker_profiles', { data: { ...NEARLY_DONE_SEEKER, confirmed_by_user: true, is_complete: true }, error: null });
-  h.mock.__setOp('seeker_profiles', 'update', { data: { id: 'sp-existing', is_complete: false, confirmed_by_user: false }, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp-existing', is_complete: false, confirmed_by_user: false }, error: null });
 
   const r = await put({ confirmed_by_user: false }, user());
   const j = await r.json();
@@ -105,10 +103,28 @@ test('completeness flips back off when confirmed_by_user is revoked, even if the
   assert.deepEqual(j.missing, ['confirmed_by_user']);
 });
 
+test('the seeker_profiles write is a real upsert(onConflict: profile_id) — the concurrency fix this whole write path exists for', async () => {
+  // schema.sql's unique(profile_id) is only useful if the write path actually
+  // targets that column on conflict. A regression back to a bare .upsert()
+  // (which defaults to the primary key `id` — always different per row,
+  // since it's uuid_generate_v4()) would silently reopen the exact
+  // duplicate-row race this fix closes, while still passing every other
+  // test in this file (they only check the payload, not the conflict target).
+  h.mock.__set('profiles', { data: { id: 200, preferred_language: 'en', preferred_country: null, sector: null, role_type: null }, error: null });
+  h.mock.__set('seeker_profiles', { data: null, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp1', is_complete: false }, error: null });
+
+  const r = await put({ has_passport: true }, user());
+  assert.equal(r.status, 200);
+  const writes = h.mock.__writes('seeker_profiles', 'upsert');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].opts && writes[0].opts.onConflict, 'profile_id');
+});
+
 test('a missing profiles row is self-healed by the upsert rather than 500ing', async () => {
   h.mock.__set('profiles', { data: { id: 200, preferred_language: 'fr', preferred_country: null, sector: null, role_type: null }, error: null });
   h.mock.__set('seeker_profiles', { data: null, error: null });
-  h.mock.__setOp('seeker_profiles', 'insert', { data: { id: 'sp1', is_complete: false }, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp1', is_complete: false }, error: null });
 
   const r = await put({ preferred_language: 'fr' }, user());
   assert.equal(r.status, 200);

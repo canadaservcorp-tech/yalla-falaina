@@ -19,7 +19,9 @@ function createMockDb() {
     ['select', 'eq', 'neq', 'not', 'is', 'or', 'ilike', 'in', 'gte', 'lte', 'gt', 'lt',
       'contains', 'match', 'order', 'limit', 'range'].forEach(m => { b[m] = () => b; });
     ['insert', 'update', 'upsert', 'delete'].forEach(m => {
-      b[m] = payload => { op = m; writes.push({ table, op: m, payload }); return b; };
+      // opts captures a real client's second arg (e.g. upsert(row, { onConflict: 'x' }))
+      // so a test can assert which column an upsert actually targets, not just the payload.
+      b[m] = (payload, opts) => { op = m; writes.push({ table, op: m, payload, opts }); return b; };
     });
     const result = () => opResults[table + '.' + op] || readFor(table);
     b.maybeSingle = () => Promise.resolve(result());        // terminal
