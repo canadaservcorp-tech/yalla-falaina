@@ -145,6 +145,7 @@
     </select>
     <input type="text" id="countryInput" data-i18n-ph="countryInputPlaceholder" placeholder="Preferred country (optional)">
     <span id="subBar"></span>
+    <button class="ghost" id="resumeSubBtn" style="display:none;font-size:12px;padding:4px 8px;color:var(--accent);border-color:var(--accent)" data-i18n="resumeSubBtn">Resume subscription</button>
     <button class="ghost" id="cancelSubBtn" style="display:none;font-size:12px;padding:4px 8px" data-i18n="cancelSubBtn">Cancel subscription</button>
     <span id="cancelSubConfirm" style="display:none;font-size:12px;color:var(--text-dim)">
       <span data-i18n="cancelSubConfirmText">Cancel? You'll keep access until the paid period ends.</span>
@@ -170,6 +171,10 @@
     <div class="hint" data-i18n="authHint">Yalla Nsafer is for job and immigration seekers 18 and older. The concierge connects you with real opportunities — it never replaces a licensed professional.</div>
     <label data-i18n="labelEmail">Email</label><input type="email" id="email">
     <label data-i18n="labelPassword">Password</label><input type="password" id="password">
+    <div id="totpRow" style="display:none">
+      <label data-i18n="labelTotp">Authentication code</label>
+      <input type="text" id="totpToken" inputmode="numeric" maxlength="6" autocomplete="one-time-code" data-i18n-ph="totpCodePlaceholder" placeholder="6-digit code">
+    </div>
     <div id="regExtra" style="display:none">
       <label data-i18n="labelFullName">Full name</label><input type="text" id="name">
       <label data-i18n="labelPreferredLanguage">Preferred language</label>
@@ -219,6 +224,23 @@
         <button id="cvDownloadDocx" class="ghost" data-i18n="cvDownloadWord">Download Word</button>
       </div>
       <button id="cvSubscribePrompt" class="ghost" style="display:none" data-i18n="cvSubscribeToDownload">🔒 Subscribe to download</button>
+    </div>
+    <div id="securityPane" style="margin-top:16px">
+      <h2 data-i18n="securityHeading">Account security</h2>
+      <p id="totpStatus" style="color:var(--text-dim);font-size:13px;"></p>
+      <div id="totpSetup" style="display:none">
+        <p class="hint" data-i18n="totpSetupHint">Scan this into an authenticator app (Google Authenticator, Authy, 1Password…), or enter it manually, then type the 6-digit code it shows to confirm.</p>
+        <div id="totpSecretBox" style="font-family:monospace;font-size:13px;word-break:break-all;background:var(--panel);padding:6px;border-radius:6px;margin:6px 0"></div>
+        <input type="text" id="totpConfirmCode" inputmode="numeric" maxlength="6" data-i18n-ph="totpCodePlaceholder" placeholder="6-digit code">
+        <div class="row"><button id="totpConfirmBtn" data-i18n="totpConfirmBtn">Confirm &amp; enable</button></div>
+      </div>
+      <div id="totpDisableBox" style="display:none">
+        <input type="text" id="totpDisableCode" inputmode="numeric" maxlength="6" data-i18n-ph="totpCodePlaceholder" placeholder="6-digit code">
+        <input type="password" id="totpDisablePassword" data-i18n-ph="totpPasswordPlaceholder" placeholder="Your password">
+        <div class="row"><button class="ghost" id="totpDisableBtn" style="color:var(--danger);border-color:var(--danger)" data-i18n="totpDisableBtn">Disable two-factor</button></div>
+      </div>
+      <button id="totpEnableBtn" class="ghost" data-i18n="totpEnableBtn">Enable two-factor authentication</button>
+      <div id="totpMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
     </div>
   </div>
 </main>
@@ -275,6 +297,7 @@
   // asynchronously (health, then subscription status), hence one render
   // function called from both — and it stays hidden until subscription state
   // is actually known rather than flashing a mic the seeker can't use.
+  let subProvider = 'paypal';
   let voiceServerReady = false;
   function renderMic() {
     $('micBtn').style.display = (voiceServerReady && subActive === true) ? '' : 'none';
@@ -337,6 +360,8 @@
     $('authGo').textContent = m === 'login' ? t('tabSignIn') : t('tabCreateAccount');
     $('authMsg').textContent = '';
     $('resendVerify').style.display = 'none';
+    $('totpRow').style.display = 'none';
+    $('totpToken').value = '';
   }
   $('tabLogin').onclick = () => setMode('login');
   $('tabRegister').onclick = () => setMode('register');
@@ -378,14 +403,26 @@
       $('authMsg').textContent = r.ok
         ? (d.emailSent === false ? t('msgAccountCreatedEmailPending') : (d.message || t('msgCheckEmail')))
         : apiError(d, t('errRegistrationFailed'));
+      // Devin's plan item 4: previously the "resend" link only ever appeared
+      // AFTER a failed sign-in attempt against an unverified account — a
+      // seeker on a slow inbox had to try (and fail) to log in first before
+      // discovering resend was even an option. Surfacing it right here,
+      // the moment the verification email was supposedly just sent, means
+      // they don't have to go looking for it.
+      if (r.ok && d.emailSent !== false) $('resendVerify').style.display = 'inline';
       return;
     }
+    const totpToken = $('totpToken').value.trim();
     const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }) });
+      body: JSON.stringify({ email, password, ...(totpToken ? { totpToken } : {}) }) });
     const d = await r.json();
     if (!r.ok) {
       $('authMsg').textContent = apiError(d, t('errSignInFailed'));
       if (r.status === 403) $('resendVerify').style.display = 'inline';
+      // Backend has full TOTP support (routes/auth.js) but the login form
+      // never had anywhere to type the code -- without this, anyone who
+      // enabled 2FA below could never sign back in once their token expired.
+      if (d.code === 'ERR_TOTP_REQUIRED' || d.code === 'ERR_INVALID_TOTP') $('totpRow').style.display = 'block';
       return;
     }
     localStorage.setItem(tokenKey, d.token);
@@ -462,6 +499,7 @@
     $('logoutBtn').style.display = 'inline-block';
     refreshSub();
     refreshCv();
+    refreshTotpStatus();
     const resumed = await resumeConversation();
     if (!resumed) addMessage('system', t('welcomeSystemMessage'));
   }
@@ -485,6 +523,7 @@
       // Don't show the $25/month pitch to an unsubscribed visitor when the
       // server isn't actually enforcing it (fixed; see renderPaywall() above).
       subActive = active;
+      subProvider = d.provider === 'stripe' ? 'stripe' : 'paypal';
       renderPaywall();
       renderMic();
       // The only place a subscriber could cancel used to be PayPal's own
@@ -494,6 +533,10 @@
       // and showing it invited a confusing repeat click during the grace period.
       $('cancelSubBtn').style.display = (active && !canceled) ? 'inline-block' : 'none';
       if (!active || canceled) $('cancelSubConfirm').style.display = 'none';
+      // Devin's review on PR #56: before this, a canceling subscriber saw
+      // "ends {date}" with no way back short of leaving the app to start a
+      // whole new subscription from scratch.
+      $('resumeSubBtn').style.display = canceled ? 'inline-block' : 'none';
     } catch { /* status is advisory only */ }
   }
 
@@ -536,6 +579,75 @@
   $('cvDownloadPdf').onclick = () => downloadCv('pdf');
   $('cvDownloadDocx').onclick = () => downloadCv('docx');
   $('cvSubscribePrompt').onclick = () => { $('paywall').style.display = 'block'; };
+
+  // ---------- two-factor authentication (queued item 4) ----------
+  // Every endpoint here (GET /totp/status, POST /totp/setup|confirm|disable)
+  // already existed server-side (routes/auth.js) — TOTP was live, but with
+  // no UI a seeker had no way to actually turn it on, and the login form
+  // (above) had nowhere to type the code even if they somehow had.
+  async function refreshTotpStatus() {
+    try {
+      const r = await fetch('/api/auth/totp/status', { headers: headers() });
+      if (!r.ok) return;
+      const d = await r.json();
+      const enabled = Boolean(d.totpEnabled);
+      $('totpStatus').textContent = enabled ? t('totpStatusOn') : t('totpStatusOff');
+      $('totpEnableBtn').style.display = enabled ? 'none' : 'inline-block';
+      $('totpDisableBox').style.display = enabled ? 'block' : 'none';
+      if (enabled) $('totpSetup').style.display = 'none';
+    } catch { /* advisory only, same as refreshSub/refreshCv */ }
+  }
+  $('totpEnableBtn').onclick = async () => {
+    $('totpMsg').textContent = '';
+    $('totpEnableBtn').disabled = true;
+    try {
+      const r = await fetch('/api/auth/totp/setup', { method: 'POST', headers: headers() });
+      const d = await r.json();
+      if (!r.ok) { $('totpMsg').textContent = apiError(d, t('totpSetupFailed')); return; }
+      // Stored but not enforced until /totp/confirm below proves the app
+      // actually has this secret loaded — same "never lock yourself out on a
+      // mistyped scan" guarantee the server side already documents.
+      $('totpSecretBox').textContent = d.secret;
+      $('totpSetup').style.display = 'block';
+      $('totpEnableBtn').style.display = 'none';
+    } catch { $('totpMsg').textContent = t('totpSetupFailed'); }
+    finally { $('totpEnableBtn').disabled = false; }
+  };
+  $('totpConfirmBtn').onclick = async () => {
+    const code = $('totpConfirmCode').value.trim();
+    $('totpMsg').textContent = '';
+    $('totpConfirmBtn').disabled = true;
+    try {
+      const r = await fetch('/api/auth/totp/confirm', { method: 'POST', headers: headers(), body: JSON.stringify({ token: code }) });
+      const d = await r.json();
+      if (r.ok) {
+        $('totpMsg').style.color = 'var(--accent)'; $('totpMsg').textContent = t('totpEnabledSuccess');
+        $('totpConfirmCode').value = '';
+        refreshTotpStatus();
+      } else {
+        $('totpMsg').style.color = 'var(--warn)'; $('totpMsg').textContent = apiError(d, t('totpConfirmFailed'));
+      }
+    } catch { $('totpMsg').textContent = t('totpConfirmFailed'); }
+    finally { $('totpConfirmBtn').disabled = false; }
+  };
+  $('totpDisableBtn').onclick = async () => {
+    const code = $('totpDisableCode').value.trim(), password = $('totpDisablePassword').value;
+    $('totpMsg').textContent = '';
+    $('totpDisableBtn').disabled = true;
+    try {
+      const r = await fetch('/api/auth/totp/disable', { method: 'POST', headers: headers(), body: JSON.stringify({ token: code, password }) });
+      const d = await r.json();
+      if (r.ok) {
+        $('totpMsg').style.color = 'var(--accent)'; $('totpMsg').textContent = t('totpDisabledSuccess');
+        $('totpDisableCode').value = ''; $('totpDisablePassword').value = '';
+        refreshTotpStatus();
+      } else {
+        $('totpMsg').style.color = 'var(--warn)'; $('totpMsg').textContent = apiError(d, t('totpDisableFailed'));
+      }
+    } catch { $('totpMsg').textContent = t('totpDisableFailed'); }
+    finally { $('totpDisableBtn').disabled = false; }
+  };
+
   // Same handler for both providers — PayPal and Stripe differ only in which
   // endpoint starts the checkout, not in how the client waits for or reports it.
   async function startCheckout(path) {
@@ -548,8 +660,25 @@
   }
   $('subscribeBtn').onclick = () => startCheckout('/api/subscription/checkout');
   $('subscribeStripeBtn').onclick = () => startCheckout('/api/subscription/stripe/checkout');
-  if (new URLSearchParams(location.search).get('sub') === 'success')
-    setTimeout(refreshSub, 1500);
+  // Devin's review on PR #56: a single refreshSub() 1.5s after the checkout
+  // redirect can still fire before the provider's webhook has actually
+  // landed and flipped subscription_status to 'active' -- the mic/paywall
+  // then look stale until the seeker reloads by hand. Poll a few times with
+  // backoff instead of once, and stop the moment an active status shows up.
+  async function pollSubAfterCheckout() {
+    for (const delay of [1500, 3000, 5000, 8000, 8000]) {
+      await new Promise(r => setTimeout(r, delay));
+      await refreshSub();
+      if (subActive === true) return;
+    }
+  }
+  if (new URLSearchParams(location.search).get('sub') === 'success') pollSubAfterCheckout();
+  // Covers the case none of the timers above do: a tab backgrounded during
+  // the PayPal/Stripe redirect (phone locked, app-switched) that only comes
+  // back to life well after polling would have given up.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && token()) refreshSub();
+  });
   $('cancelSubBtn').onclick = () => { $('cancelSubBtn').style.display = 'none'; $('cancelSubConfirm').style.display = 'inline'; };
   $('cancelSubNo').onclick = () => { $('cancelSubConfirm').style.display = 'none'; $('cancelSubBtn').style.display = 'inline-block'; };
   $('cancelSubYes').onclick = async () => {
@@ -566,6 +695,27 @@
       $('cancelSubConfirm').style.display = 'none';
       $('cancelSubBtn').style.display = 'inline-block';
     } finally { $('cancelSubYes').disabled = false; }
+  };
+  // ---------- resume a canceling subscription (Devin's review on PR #56) ----------
+  // Stripe can genuinely undo a pending cancel_at_period_end on the SAME
+  // subscription (POST /api/subscription/resume below) -- no gap in access,
+  // no new billing event. PayPal cannot: its own POST .../cancel (already
+  // called) is an immediate, terminal cancellation on PayPal's side, so
+  // there is no PayPal "un-cancel" to call. The only real option there is a
+  // brand-new subscription, which is exactly what the existing checkout flow
+  // already does -- reusing it here is simpler and safer than inventing a
+  // second code path for the same outcome.
+  $('resumeSubBtn').onclick = async () => {
+    if (subProvider !== 'stripe') { startCheckout('/api/subscription/checkout'); return; }
+    $('resumeSubBtn').disabled = true;
+    try {
+      const r = await fetch('/api/subscription/resume', { method: 'POST', headers: headers() });
+      const d = await r.json();
+      addMessage('system', r.ok ? t('resumeSubSuccess') : apiError(d, t('resumeSubFailed')));
+      if (r.ok) refreshSub();
+    } catch {
+      addMessage('system', t('resumeSubFailed'));
+    } finally { $('resumeSubBtn').disabled = false; }
   };
 
   // ---------- chat ----------

@@ -29,6 +29,8 @@ afterEach(() => {
   delete process.env.JOB_API_KEY;
   delete process.env.JOB_API_COUNTRY;
   delete process.env.JOB_API_LOCATION;
+  delete process.env.JOB_API_COUNTRIES;
+  delete process.env.JOB_API_LOCATIONS;
 });
 
 // ---------- trackFor ----------
@@ -210,6 +212,74 @@ test('fetchAdzuna still throws (fetches nothing) when the very FIRST page fails 
   await assert.rejects(() => fetchAdzuna(), /adzuna 429/);
 });
 
+// ---------- fetchAdzuna: multi-country (queued item 3) ----------
+
+test('fetchAdzuna with JOB_API_COUNTRIES pulls every listed country in one run and merges their jobs', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  process.env.JOB_API_COUNTRIES = 'ca, fr , de';   // stray whitespace must not break parsing
+  const { fetchAdzuna } = freshModule();
+  const requestedUrls = [];
+  globalThis.fetch = async (url) => {
+    requestedUrls.push(String(url));
+    const code = String(url).match(/\/jobs\/([a-z]{2})\/search\//)[1];
+    return new Response(JSON.stringify({
+      results: [{ id: `${code}-1`, title: `Job in ${code}`, company: {}, location: {}, redirect_url: `https://example.test/${code}` }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const rows = await fetchAdzuna();
+  assert.equal(rows.length, 3, 'one job per country');
+  assert.deepEqual(rows.map(r => r.country).sort(), ['Canada', 'France', 'Germany']);
+  assert.ok(rows.every(r => r.track === 'western'));
+  assert.equal(requestedUrls.filter(u => /\/jobs\/ca\//.test(u)).length, 1);
+  assert.equal(requestedUrls.filter(u => /\/jobs\/fr\//.test(u)).length, 1);
+  assert.equal(requestedUrls.filter(u => /\/jobs\/de\//.test(u)).length, 1);
+});
+
+test('JOB_API_COUNTRIES takes priority over the singular JOB_API_COUNTRY when both are set', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  process.env.JOB_API_COUNTRY = 'ca';
+  process.env.JOB_API_COUNTRIES = 'ae,sa';
+  const { fetchAdzuna } = freshModule();
+  globalThis.fetch = async (url) => new Response(JSON.stringify({
+    results: [{ id: '1', title: 'Job', company: {}, location: {}, redirect_url: null }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const rows = await fetchAdzuna();
+  assert.equal(rows.length, 2);
+  assert.ok(!rows.some(r => r.country === 'Canada'), 'the plural var must win, not merge with the singular one');
+});
+
+test('fetchAdzuna multi-country: one country failing entirely is logged and skipped, the others\' real jobs survive', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  process.env.JOB_API_COUNTRIES = 'ca,fr';
+  const { fetchAdzuna } = freshModule();
+  globalThis.fetch = async (url) => {
+    if (/\/jobs\/fr\//.test(String(url))) return new Response('rate limited', { status: 429 });
+    return new Response(JSON.stringify({
+      results: [{ id: 'ca-1', title: 'Job', company: {}, location: {}, redirect_url: null }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const errors = [];
+  const origError = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  let rows;
+  try { rows = await fetchAdzuna(); } finally { console.error = origError; }
+  assert.equal(rows.length, 1, 'Canada\'s real job must survive France\'s total failure');
+  assert.equal(rows[0].country, 'Canada');
+  assert.ok(errors.some(e => /adzuna country 'fr' failed entirely/.test(e)));
+});
+
+test('fetchAdzuna with a single country in JOB_API_COUNTRIES still throws on a page-1 failure, same as the singular-var contract', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  process.env.JOB_API_COUNTRIES = 'ca';
+  const { fetchAdzuna } = freshModule();
+  globalThis.fetch = async () => new Response('rate limited', { status: 429 });
+  await assert.rejects(() => fetchAdzuna(), /adzuna 429/);
+});
+
 // ---------- fetchAdzuna / fetchJooble: dedupe across runs (Devin's plan item 2) ----------
 
 test('fetchAdzuna falls back to a STABLE derived id (not null) when a result has no native id, so re-runs update the same row instead of duplicating it', async () => {
@@ -342,6 +412,59 @@ test('fetchJooble logs (does not throw) when a location resolves to nothing at a
     assert.equal(rows[0].country, 'Nowhereville');
     assert.ok(errors.some(e => /no country-name mapping for Jooble location/.test(e)));
   } finally { console.error = origError; }
+});
+
+// ---------- fetchJooble: multi-location (queued item 3) ----------
+
+test('fetchJooble with JOB_API_LOCATIONS queries every listed location in one run and merges their jobs', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  process.env.JOB_API_LOCATIONS = 'United Arab Emirates, Saudi Arabia , France';
+  const { fetchJooble } = freshModule();
+  const sentLocations = [];
+  globalThis.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    sentLocations.push(body.location);
+    return new Response(JSON.stringify({
+      jobs: [{ id: `${body.location}-1`, title: `Job in ${body.location}`, company: 'Acme', location: body.location, link: 'https://example.test/1' }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const rows = await fetchJooble();
+  assert.equal(rows.length, 3);
+  assert.deepEqual(sentLocations, ['United Arab Emirates', 'Saudi Arabia', 'France']);
+  assert.deepEqual(rows.map(r => r.track).sort(), ['gcc', 'gcc', 'western']);
+});
+
+test('JOB_API_LOCATIONS takes priority over the singular JOB_API_LOCATION when both are set', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  process.env.JOB_API_LOCATION = 'Canada';
+  process.env.JOB_API_LOCATIONS = 'Qatar,Kuwait';
+  const { fetchJooble } = freshModule();
+  globalThis.fetch = async (url, opts) => new Response(JSON.stringify({
+    jobs: [{ id: '1', title: 'Job', company: 'Acme', location: 'Remote', link: null }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const rows = await fetchJooble();
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every(r => r.track === 'gcc'), 'the plural var must win, not merge with the singular one');
+});
+
+test('fetchJooble multi-location: one location failing entirely is logged and skipped, the others\' real jobs survive', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  process.env.JOB_API_LOCATIONS = 'Qatar,Kuwait';
+  const { fetchJooble } = freshModule();
+  globalThis.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.location === 'Kuwait') return new Response('rate limited', { status: 429 });
+    return new Response(JSON.stringify({
+      jobs: [{ id: '1', title: 'Job', company: 'Acme', location: 'Qatar', link: null }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const errors = [];
+  const origError = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  let rows;
+  try { rows = await fetchJooble(); } finally { console.error = origError; }
+  assert.equal(rows.length, 1, 'Qatar\'s real job must survive Kuwait\'s total failure');
+  assert.ok(errors.some(e => /jooble location 'Kuwait' failed entirely/.test(e)));
 });
 
 // ---------- fetchSeed ----------

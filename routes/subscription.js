@@ -87,7 +87,7 @@ router.post('/stripe/checkout', authenticate, sec.requireActiveUser, sec.limits.
 
 router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
   const { data } = await supabase.from('users')
-    .select('subscription_status, subscription_tier, subscription_period_end, subscription_cancel_at')
+    .select('subscription_status, subscription_tier, subscription_period_end, subscription_cancel_at, payment_provider')
     .eq('id', req.user.id).maybeSingle();
   res.json({
     success: true,
@@ -101,6 +101,11 @@ router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
     // alone reads the same for both, and a canceled subscriber sees a banner
     // that falsely says it will auto-renew.
     cancelAt: data?.subscription_cancel_at || null,
+    // Which rail this subscription is on — POST /resume below needs to know
+    // client-side whether "Resume" can flip cancel_at_period_end back off on
+    // this same Stripe subscription, or must start a brand-new PayPal one
+    // instead (see /resume's own comment for why those aren't symmetric).
+    provider: data?.payment_provider === 'stripe' ? 'stripe' : 'paypal',
   });
 });
 
@@ -142,6 +147,43 @@ router.post('/cancel', authenticate, sec.requireActiveUser, sec.limits.write, as
     }
     res.json({ success: true, message: 'Cancellation requested — you keep access until the end of the paid period.' });
   } catch (e) { console.error(`${provider} cancel`, e); res.status(500).json({ error: 'Could not cancel the subscription', code: 'ERR_PAYMENT_UNAVAILABLE' }); }
+});
+
+// Resume a subscription that's mid-grace-period (canceled but the paid
+// period hasn't ended yet) — Devin's review on PR #56: "a canceling
+// subscriber sees 'ends {date}' but has no way to reactivate in-app."
+//
+// Stripe genuinely supports undoing a pending cancellation on the SAME
+// subscription (cancel_at_period_end back to false) — no gap in access, no
+// new billing event, and the existing customer.subscription.updated webhook
+// above picks the change up and clears subscription_cancel_at exactly like
+// any other subscription-state change.
+//
+// PayPal does not support this. The /cancel route above calls PayPal's own
+// POST .../cancel, which is an immediate, terminal cancellation on PayPal's
+// side — there is no PayPal "un-cancel"/"reactivate a cancelled agreement"
+// endpoint (PayPal's /activate only works on a SUSPENDED subscription, a
+// different state). So a PayPal subscriber's only real path back is a brand
+// new subscription, which is exactly what POST /checkout above already
+// does — the client calls that directly instead of this route for a PayPal
+// account (see public/index.html's resumeSubBtn handler), and this route
+// refuses the PayPal case explicitly rather than pretending to support it.
+router.post('/resume', authenticate, sec.requireActiveUser, sec.limits.write, async (req, res) => {
+  const { data: u } = await supabase.from('users')
+    .select('id, subscription_status, subscription_cancel_at, payment_provider, stripe_subscription_id')
+    .eq('id', req.user.id).maybeSingle();
+  if (!u || u.subscription_status !== 'active' || !u.subscription_cancel_at) {
+    return res.status(400).json({ error: 'No pending cancellation to resume', code: 'ERR_NOT_CANCELING' });
+  }
+  if (u.payment_provider !== 'stripe') {
+    return res.status(400).json({ error: 'Start a new PayPal subscription to resume', code: 'ERR_RESUME_NEEDS_NEW_PAYPAL_SUB' });
+  }
+  if (!u.stripe_subscription_id) return res.status(400).json({ error: 'No active subscription to resume', code: 'ERR_NO_ACTIVE_SUBSCRIPTION' });
+  if (!stripe.configured()) return res.status(500).json({ error: 'Stripe not configured', code: 'ERR_PAYMENT_UNAVAILABLE' });
+  try {
+    await stripe.stripeApi('POST', `/subscriptions/${encodeURIComponent(u.stripe_subscription_id)}`, { cancel_at_period_end: 'false' });
+    res.json({ success: true, message: 'Resumed — your subscription will keep renewing.' });
+  } catch (e) { console.error('stripe resume', e); res.status(500).json({ error: 'Could not resume the subscription', code: 'ERR_PAYMENT_UNAVAILABLE' }); }
 });
 
 // PayPal webhook — raw body is kept (see server.js) so the signature is checked
