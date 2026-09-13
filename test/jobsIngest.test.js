@@ -126,6 +126,123 @@ test('fetchAdzuna throws on a non-2xx upstream response', async () => {
   await assert.rejects(() => fetchAdzuna(), /adzuna 500/);
 });
 
+// ---------- fetchAdzuna: pagination (Devin's plan item 2) ----------
+
+function adzunaPage(ids, count) {
+  return new Response(JSON.stringify({
+    count,
+    results: ids.map(id => ({
+      id, title: `Job ${id}`, company: { display_name: 'Acme' }, location: { display_name: 'Laval, QC' },
+      category: { label: 'Trades' }, description: 'desc', created: '2026-08-01', redirect_url: `https://example.test/${id}`,
+    })),
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+}
+
+test('fetchAdzuna follows pagination past page 1 when a page comes back full, and stops once a page comes back short', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  const { fetchAdzuna } = freshModule();
+  const requestedUrls = [];
+  const full50 = Array.from({ length: 50 }, (_, i) => `p1-${i}`);
+  const full50b = Array.from({ length: 50 }, (_, i) => `p2-${i}`);
+  const short10 = Array.from({ length: 10 }, (_, i) => `p3-${i}`);
+  const pages = [adzunaPage(full50), adzunaPage(full50b), adzunaPage(short10)];
+  globalThis.fetch = async (url) => { requestedUrls.push(String(url)); return pages.shift(); };
+  const rows = await fetchAdzuna();
+  assert.equal(requestedUrls.length, 3, 'should stop after the first short page, not keep going to a 4th empty one');
+  assert.match(requestedUrls[0], /\/search\/1\?/);
+  assert.match(requestedUrls[1], /\/search\/2\?/);
+  assert.match(requestedUrls[2], /\/search\/3\?/);
+  assert.equal(rows.length, 110); // 50 + 50 + 10, every page's results kept
+});
+
+test('fetchAdzuna stops once the response\'s own `count` says everything has been gathered, without an extra request', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  const { fetchAdzuna } = freshModule();
+  let calls = 0;
+  const full50 = Array.from({ length: 50 }, (_, i) => `p1-${i}`);
+  const full50b = Array.from({ length: 50 }, (_, i) => `p2-${i}`);
+  const pages = [adzunaPage(full50, 100), adzunaPage(full50b, 100)]; // count says exactly 100 exist
+  globalThis.fetch = async () => { calls++; return pages.shift(); };
+  const rows = await fetchAdzuna();
+  assert.equal(calls, 2, 'must not fire a 3rd request once `count` is already satisfied');
+  assert.equal(rows.length, 100);
+});
+
+test('fetchAdzuna never exceeds its page-count safety cap, even against an API that always returns a full page', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  const { fetchAdzuna } = freshModule();
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return adzunaPage(Array.from({ length: 50 }, (_, i) => `p${calls}-${i}`)); }; // no `count`, always full -- would loop forever without a cap
+  const rows = await fetchAdzuna();
+  assert.equal(calls, 20, 'the safety cap, not an accident of the mock');
+  assert.equal(rows.length, 1000);
+});
+
+test('fetchAdzuna keeps the jobs already fetched from earlier pages when a LATER page fails (e.g. mid-run rate limit), instead of discarding them', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  const { fetchAdzuna } = freshModule();
+  const full50 = Array.from({ length: 50 }, (_, i) => `p1-${i}`);
+  let call = 0;
+  globalThis.fetch = async () => {
+    call++;
+    if (call === 1) return adzunaPage(full50); // page 1 succeeds, full page -- pagination continues
+    return new Response('rate limited', { status: 429 }); // page 2 hits a rate limit
+  };
+  const errors = [];
+  const origErr = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  let rows;
+  try { rows = await fetchAdzuna(); } finally { console.error = origErr; }
+  assert.equal(rows.length, 50, 'page 1\'s 50 real jobs must survive page 2\'s failure, not be thrown away with it');
+  assert.ok(errors.some(e => /adzuna page 2 failed/.test(e)));
+});
+
+test('fetchAdzuna still throws (fetches nothing) when the very FIRST page fails -- there is nothing yet to preserve', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  const { fetchAdzuna } = freshModule();
+  globalThis.fetch = async () => new Response('rate limited', { status: 429 });
+  await assert.rejects(() => fetchAdzuna(), /adzuna 429/);
+});
+
+// ---------- fetchAdzuna / fetchJooble: dedupe across runs (Devin's plan item 2) ----------
+
+test('fetchAdzuna falls back to a STABLE derived id (not null) when a result has no native id, so re-runs update the same row instead of duplicating it', async () => {
+  process.env.JOB_API_ID = 'id1';
+  process.env.JOB_API_KEY = 'key1';
+  const { fetchAdzuna } = freshModule();
+  const noIdResult = () => new Response(JSON.stringify({
+    results: [{ title: 'Warehouse Associate', company: { display_name: 'Acme' }, location: {}, redirect_url: 'https://example.test/w1' }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  globalThis.fetch = noIdResult;
+  const run1 = await fetchAdzuna();
+  globalThis.fetch = noIdResult; // a second, independent "run" of the same live listing
+  const run2 = await fetchAdzuna();
+  assert.ok(run1[0].external_id, 'must never fall through to null -- that defeats the unique constraint entirely');
+  assert.equal(run1[0].external_id, run2[0].external_id, 'the SAME real listing must hash to the SAME id every run');
+});
+
+test('fetchJooble falls back to a STABLE derived id when a result has no native id, independent of its position in the results array', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  const { fetchJooble } = freshModule();
+  const twoJobs = (order) => new Response(JSON.stringify({
+    jobs: order === 'first'
+      ? [{ title: 'Line Cook', company: 'Acme Diner', link: 'https://example.test/cook' }, { title: 'Driver', company: 'Acme Logistics', link: 'https://example.test/driver' }]
+      : [{ title: 'Driver', company: 'Acme Logistics', link: 'https://example.test/driver' }, { title: 'Line Cook', company: 'Acme Diner', link: 'https://example.test/cook' }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  globalThis.fetch = async () => twoJobs('first');
+  const run1 = await fetchJooble();
+  globalThis.fetch = async () => twoJobs('second'); // the API returns the SAME two real listings, reordered
+  const run2 = await fetchJooble();
+  const cookId1 = run1.find(r => r.title === 'Line Cook').external_id;
+  const cookId2 = run2.find(r => r.title === 'Line Cook').external_id;
+  assert.equal(cookId1, cookId2, 'the same real listing must get the same id regardless of array position -- the old `j${i}-title` fallback broke exactly this');
+});
+
 // ---------- fetchJooble ----------
 
 test('fetchJooble returns nothing when the key is missing', async () => {

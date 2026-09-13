@@ -59,6 +59,35 @@ test('scoreJob() is stopword-blind on both sides — shared function words never
   assert.equal(scoreJob(job, tokenize('a job to relocate')), 0); // only "to" overlaps, and it's filtered
 });
 
+// Devin's plan item 2: a live Adzuna/Jooble job never has a `keywords` array
+// (that only ever existed for the hand-curated seed bundle) -- a terse
+// real-world title alone previously meant scoreJob had nothing else to go
+// on, since `requirements` (the actual description) was never included.
+test('scoreJob() also matches against `requirements` (the description) -- real feeds have no `keywords` array to fall back on the way seed data did', () => {
+  const job = { title: 'CDL-A Driver, sign-on bonus', category: 'Transport', country: 'Canada', city: 'Laval',
+    requirements: 'Must have 3 years warehouse forklift experience and a valid class 1 license.' };
+  assert.equal(scoreJob(job, tokenize('warehouse forklift')), 2); // present only in the description, not the title
+  assert.equal(scoreJob(job, tokenize('nursing')), 0);
+});
+
+test('scoreJob() strips HTML tags out of `requirements` before tokenizing, so tag names never masquerade as content words', () => {
+  const job = { title: 'Cook', category: '', country: '', city: '', requirements: '<p>Needs <b>kitchen</b> experience</p>' };
+  assert.equal(scoreJob(job, tokenize('kitchen')), 1);
+  assert.equal(scoreJob(job, tokenize('p b')), 0, 'tag names themselves must never score as if they were real words');
+});
+
+test('scoreJob() still works (and does not crash) when `requirements` is missing entirely, same as before this field was added', () => {
+  const job = { title: 'Line cook', category: 'restaurant', country: 'Lebanon', city: 'Beirut', keywords: ['kitchen', 'urgent'] };
+  assert.equal(scoreJob(job, tokenize('urgent kitchen cook needed')), 3);
+});
+
+test('scoreJob() truncates a very long `requirements` text rather than scanning it unbounded', () => {
+  const padding = 'lorem '.repeat(1000); // well past MAX_DESCRIPTION_CHARS
+  const job = { title: 'Cook', category: '', country: '', city: '', requirements: padding + 'uniquewordattheveryend' };
+  assert.equal(scoreJob(job, tokenize('uniquewordattheveryend')), 0, 'a word only reachable past the truncation point must not score');
+  assert.equal(scoreJob(job, tokenize('lorem')), 1, 'content within the kept portion still scores normally');
+});
+
 // ---------- toPromptJob() ----------
 
 test('toPromptJob() maps a jobs row to the prompt/UI shape, falling back into raw for provider-supplied fields', () => {
