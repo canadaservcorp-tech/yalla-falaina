@@ -30,6 +30,9 @@ const sameToken = (a, b) => {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 };
 
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 // Best-effort: a hiccup here must never be why a correct login fails, or why
 // a wrong one silently escapes being counted — either way this only logs.
 async function recordLoginResult(userId, success) {
@@ -100,6 +103,20 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
       await sendEmail(email, 'Confirm your email — Yalla Nsafer',
         `<p>Welcome to Yalla Nsafer. Confirm your email:</p><p><a href="${link}">${link}</a></p>`);
     } catch (e) { emailSent = false; console.error('register:verify email', e.message); }
+
+    // Operator notification: every new signup pings NOTIFY_EMAIL (falling
+    // back to the contact inbox). Best-effort — a notification failure must
+    // never fail or delay the seeker's own registration reply.
+    const notifyTo = sec.normalizeEmail(process.env.NOTIFY_EMAIL || '') || sec.normalizeEmail(process.env.CONTACT_EMAIL || '');
+    if (notifyTo) {
+      try {
+        await sendEmail(notifyTo, 'New signup — Yalla Nsafer',
+          '<p>A new seeker registered:</p><ul>' +
+          `<li>Name: ${escapeHtml(name)}</li><li>Email: ${escapeHtml(email)}</li>` +
+          (signup_source ? `<li>Source: ${escapeHtml(signup_source)}</li>` : '') +
+          `<li>User ID: ${user.id}</li><li>Verification email sent: ${emailSent}</li></ul>`);
+      } catch (e) { console.error('register:notify email', e.message); }
+    }
     res.json({ success: true, message: 'Registered — check your email to verify.', userId: user.id, emailSent });
   } catch (e) { console.error('register', e); res.status(500).json({ error: 'Registration failed', code: 'ERR_SERVER' }); }
 });
