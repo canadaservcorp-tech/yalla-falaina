@@ -35,7 +35,11 @@ test('the SPA shell’s own inline <script> tags carry the SAME nonce as that re
 test('Permissions-Policy locks down device APIs this app never uses', async () => {
   const r = await fetch(h.base + '/api/health');
   const pp = r.headers.get('permissions-policy');
-  for (const feature of ['camera=()', 'microphone=()', 'geolocation=()', 'payment=()']) assert.ok(pp.includes(feature), pp);
+  for (const feature of ['camera=()', 'geolocation=()', 'payment=()']) assert.ok(pp.includes(feature), pp);
+  // the mic is the one device API the app does use (chat voice notes), and only
+  // same-origin — an embedded third-party frame still must not reach it
+  assert.ok(pp.includes('microphone=(self)'), pp);
+  assert.ok(!/microphone=\*/.test(pp), pp);
 });
 
 test('one IP cannot mint accounts with fresh addresses forever', async () => {

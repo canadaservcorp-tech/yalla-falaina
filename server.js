@@ -11,6 +11,7 @@ const seo = require('./lib/seo');
 const analytics = require('./lib/analytics');
 const paypal = require('./lib/paypal');
 const stripeLib = require('./lib/stripe');
+const transcribeLib = require('./lib/transcribe');
 
 const need = ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const k of need) if (!process.env[k]) { console.error(`FATAL: missing env ${k}`); process.exit(1); }
@@ -41,6 +42,10 @@ app.use((req, res, next) => {
   // raw body for both webhooks, verified downstream (PayPal's own signature
   // check; Stripe's local HMAC check) against the exact bytes received
   if (req.originalUrl === '/api/subscription/webhook' || req.originalUrl === '/api/subscription/stripe/webhook') return next();
+  // a voice note is audio bytes, not JSON, and needs a far bigger ceiling than
+  // the 128kb one below (lib/transcribe.js enforces the same limit again)
+  if (req.originalUrl === '/api/voice/transcribe')
+    return express.raw({ type: () => true, limit: transcribeLib.MAX_BYTES })(req, res, next);
   express.json({ limit: '128kb' })(req, res, next);
 });
 app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonical home URL
@@ -62,6 +67,7 @@ app.use('/api/concierge', require('./routes/concierge')); // the AI concierge â€
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/informal-listings', require('./routes/informal-listings'));
 app.use('/api/contact', require('./routes/contact'));
+app.use('/api/voice', require('./routes/voice'));    // chat voice notes -> transcript -> /api/concierge
 app.use('/api/admin/informal-listings', require('./routes/admin-informal-listings'));
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either.
@@ -76,6 +82,7 @@ app.get('/api/health', (_req, res) => res.json({
   paypal: paypal.configured(),
   stripe: stripeLib.configured(),
   email: Boolean(process.env.RESEND_API_KEY),
+  voice: transcribeLib.configured(),
 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 // the SPA is a single file, so give crawlers per-route <head> metadata on the way out
@@ -95,6 +102,10 @@ app.use((err, _req, res, _next) => {
   console.error('unhandled', err);
   if (res.headersSent) return;
   const bodyProblem = err.type === 'entity.too.large' || err.type === 'entity.parse.failed';
+  // Oversized audio is the one over-limit body a seeker can hit deliberately
+  // (a long voice note), so it gets a real status + code, not a generic 400.
+  if (err.type === 'entity.too.large' && _req.originalUrl === '/api/voice/transcribe')
+    return res.status(413).json({ error: 'That recording is too long', code: 'ERR_TOO_LARGE' });
   res.status(bodyProblem ? 400 : 500).json({ error: bodyProblem ? 'Invalid request body' : 'Internal error' });
 });
 
