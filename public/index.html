@@ -95,6 +95,12 @@
   #contactForm label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
   #contactForm input { width: 100%; }
   #contactForm .row { display: flex; gap: 8px; margin: 12px 0 4px; }
+  /* Social link: a small icon chip beside the Contact/Promote buttons, not a
+     full-width button — it's a way to reach our Instagram, not a form. */
+  #ctaAside a.ig { display: inline-flex; align-items: center; justify-content: center;
+                   width: 34px; height: 34px; border-radius: 6px; margin-top: 8px;
+                   border: 1px solid var(--border); background: var(--panel); color: var(--accent); }
+  #ctaAside a.ig:hover { border-color: var(--accent); }
   #authMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-top: 8px; }
   .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
   .tabs button { flex: 1; background: var(--bg); color: var(--text-dim); }
@@ -121,6 +127,7 @@
                         inset-inline-start: 8px; width: min(340px, calc(100vw - 16px)); }
     #ctaAside > button { order: 2; flex: 1; font-size: 12px; padding: 8px 6px;
                                  white-space: normal; }
+    #ctaAside a.ig { order: 2; flex: 0 0 auto; width: 32px; height: 32px; margin-top: 0; align-self: center; }
     #contactForm { order: 1; flex: 1 1 100%; }
     /* let a tall card scroll clear of the fixed controls instead of hiding
        its bottom (and its submit button) underneath them */
@@ -259,6 +266,14 @@
   </div>
   <button id="showContact" data-i18n="contactLink">Contact us</button>
   <button id="showPromote" class="ghost" style="border-color:var(--accent);color:var(--accent)" data-i18n="promoteLink">📣 Promote your company with us</button>
+  <a class="ig" href="https://instagram.com/yalla.nsafir" target="_blank" rel="noopener"
+     data-i18n-title="instagramTitle" title="Follow us on Instagram" aria-label="Instagram">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/>
+      <circle cx="12" cy="12" r="4.5"/>
+      <circle cx="17.6" cy="6.4" r="1.3" fill="currentColor" stroke="none"/>
+    </svg>
+  </a>
 </div>
 
 <script>
