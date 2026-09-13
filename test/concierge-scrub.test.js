@@ -17,7 +17,7 @@ const assert = require('node:assert');
 require('dotenv').config();
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost';
 process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role';
-const { splitSentences, scrubFalseClaims, demoJob } = require('../routes/concierge');
+const { splitSentences, scrubFalseClaims, demoJob, scrubFalseCvClaims } = require('../routes/concierge');
 
 // ---------- splitSentences: no character may ever be lost ----------
 
@@ -94,4 +94,45 @@ test('demoJob() redacts every field that would let a fixture listing be acted on
   assert.equal(redacted.city, 'Laval');
   assert.equal(redacted.country, 'Canada');
   assert.equal(redacted.sourceType, 'seed_demo');
+});
+
+// ---------- scrubFalseCvClaims: routes/cv.js exists, but the model can't
+// attach/send/generate the file from inside a chat reply ----------
+
+test('scrubFalseCvClaims() strips a claim of having created/attached/sent the CV', () => {
+  const cases = [
+    "I've created your CV, take a look!",
+    "I have attached your CV to this message.",
+    'I generated your resume for you.',
+    'I built your résumé already.',
+  ];
+  for (const reply of cases) {
+    const cleaned = scrubFalseCvClaims(reply);
+    assert.doesNotMatch(cleaned, /(created|attached|sent|generated|built) your (cv|resum)/i,
+      `should have stripped: ${JSON.stringify(reply)}`);
+  }
+});
+
+test('scrubFalseCvClaims() strips a bare "your CV is ready/attached/done" claim', () => {
+  for (const reply of ['Your CV is ready!', 'Your CV is attached above.', 'Your resume is done.']) {
+    const cleaned = scrubFalseCvClaims(reply);
+    assert.doesNotMatch(cleaned, /is (ready|attached|done)/i, `should have stripped: ${JSON.stringify(reply)}`);
+  }
+});
+
+test('scrubFalseCvClaims() lets the honest "ready to download" phrasing through untouched -- the CV genuinely is downloadable via routes/cv.js for a subscriber', () => {
+  const reply = 'Good news — your CV is ready to download from the CV tab once you subscribe.';
+  assert.equal(scrubFalseCvClaims(reply), reply);
+});
+
+test('scrubFalseCvClaims() returns the exact same string, unchanged, when there is no CV claim at all', () => {
+  const reply = 'Tell me about your most recent job — where did you work, and for how long?';
+  assert.equal(scrubFalseCvClaims(reply), reply);
+});
+
+test('scrubFalseCvClaims() falls back to a plain continuation line only when the WHOLE reply was a false CV claim', () => {
+  const reply = 'Your CV is ready!';
+  const cleaned = scrubFalseCvClaims(reply);
+  assert.doesNotMatch(cleaned, /ready/i);
+  assert.ok(cleaned.trim().length > 0);
 });

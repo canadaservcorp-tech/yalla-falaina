@@ -117,6 +117,49 @@ test('BILLING.SUBSCRIPTION.EXPIRED ends access: status canceled, tier cleared, r
   assert.ok(writes[0].payload.data_retention_deadline, 'a 30-day deletion countdown must start');
 });
 
+// ---------- voice-note cleanup: wired to the genuine lapse (EXPIRED), not
+// the grace-period-starting CANCELLED event -- see lib/voiceNotes.js's own
+// comment on this being a deliberate interpretation, flagged for Hicham to
+// confirm ----------
+
+test('BILLING.SUBSCRIPTION.EXPIRED deletes every voice note on the account (fire-and-forget, but observable once the response settles)', async () => {
+  h.mock.__set('users', { data: { id: 80, subscription_period_end: null }, error: null });
+  h.mock.__set('document_uploads', { data: [
+    { id: 'v1', storage_path: 'voice_note/1.webm' },
+    { id: 'v2', storage_path: 'voice_note/2.webm' },
+  ], error: null });
+  const r = await webhook({ event_type: 'BILLING.SUBSCRIPTION.EXPIRED', resource: { id: 'SUB-80', custom_id: '80' } });
+  assert.equal(r.status, 200);
+  // deleteAllVoiceNotes() is invoked unawaited (voiceNotes.deleteAllVoiceNotes(...).catch(...))
+  // so its own internal awaits (select, then a storage.remove + row delete
+  // per clip) still need their microtasks to flush after the response
+  // resolves -- same fire-and-forget shape as logTurn's already-established
+  // pattern, just one level deeper, hence the one extra tick here.
+  await new Promise(res => setImmediate(res));
+  assert.equal(h.mock.__writes('document_uploads', 'delete').length, 2);
+});
+
+test('BILLING.SUBSCRIPTION.CANCELLED (the grace period starting, access still active) does NOT delete voice notes', async () => {
+  h.mock.__set('users', { data: { id: 81, subscription_period_end: '2026-12-01T00:00:00Z' }, error: null });
+  h.mock.__set('document_uploads', { data: [{ id: 'v1', storage_path: 'voice_note/1.webm' }], error: null });
+  const r = await webhook({ event_type: 'BILLING.SUBSCRIPTION.CANCELLED', resource: { id: 'SUB-81', custom_id: '81' } });
+  assert.equal(r.status, 200);
+  await new Promise(res => setImmediate(res));
+  assert.equal(h.mock.__writes('document_uploads', 'delete').length, 0);
+});
+
+test('BILLING.SUBSCRIPTION.ACTIVATED (renewal/reactivation) does NOT delete voice notes', async () => {
+  h.mock.__set('users', { data: { id: 82, subscription_period_end: null }, error: null });
+  h.mock.__set('document_uploads', { data: [{ id: 'v1', storage_path: 'voice_note/1.webm' }], error: null });
+  const r = await webhook({
+    event_type: 'BILLING.SUBSCRIPTION.ACTIVATED',
+    resource: { id: 'SUB-82', custom_id: '82', billing_info: { next_billing_time: '2026-11-01T00:00:00Z' } },
+  });
+  assert.equal(r.status, 200);
+  await new Promise(res => setImmediate(res));
+  assert.equal(h.mock.__writes('document_uploads', 'delete').length, 0);
+});
+
 test('a renewal payment (PAYMENT.SALE.COMPLETED) re-fetches the agreement and re-activates by billing_agreement_id', async () => {
   paypal.__reply('/v1/billing/subscriptions/SUB-9', {
     custom_id: '9', billing_info: { next_billing_time: '2026-12-01T00:00:00Z' },

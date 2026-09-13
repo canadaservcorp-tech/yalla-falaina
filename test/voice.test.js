@@ -17,9 +17,17 @@ const PROVIDER = '/audio/transcriptions';
 const stubProvider = fn => { global.fetch = (url, ...a) => String(url).includes(PROVIDER) ? fn(url, ...a) : origFetch(url, ...a); };
 afterEach(() => { global.fetch = origFetch; delete process.env.STT_API_KEY; });
 
-const post = (token, body, type = 'audio/webm') => fetch(h.base + '/api/voice/transcribe', {
+// Voice notes are a subscriber perk (lib/voiceNotes.js: tier 'none' = 0/day),
+// so every test that reaches the provider path needs a paid-tier user row.
+const SUB = { subscription_tier: 'basic' };
+// The concierge rate limiter is per-IP — give each call its own visitor.
+let visitor = 0;
+const post = (token, body, type = 'audio/webm', duration = '5') => fetch(h.base + '/api/voice/transcribe', {
   method: 'POST',
-  headers: { Authorization: 'Bearer ' + token, 'Content-Type': type },
+  headers: {
+    Authorization: 'Bearer ' + token, 'Content-Type': type, 'X-Audio-Duration': duration,
+    'X-Forwarded-For': '10.8.' + (++visitor % 250) + '.' + (visitor % 250),
+  },
   body: body || Buffer.from('fake-webm-bytes'),
 });
 
@@ -27,7 +35,7 @@ test('transcribe: missing audio -> ERR_BAD_INPUT', async () => {
   process.env.STT_API_KEY = 'test-key';
   const token = actor(h, { id: 901 });
   const r = await fetch(h.base + '/api/voice/transcribe', {
-    method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'audio/webm' },
+    method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'audio/webm', 'X-Forwarded-For': '10.8.9.9' },
   });
   assert.equal(r.status, 400);
   assert.equal((await r.json()).code, 'ERR_BAD_INPUT');
@@ -55,7 +63,7 @@ test('transcribe: over the size cap -> 413 ERR_TOO_LARGE, provider never called'
 test('transcribe: a non-audio type -> 415 ERR_BAD_AUDIO_TYPE', async () => {
   process.env.STT_API_KEY = 'test-key';
   stubProvider(async () => { throw new Error('provider must not be reached'); });
-  const token = actor(h, { id: 904 });
+  const token = actor(h, { id: 904, extra: SUB });
   const r = await post(token, Buffer.from('<html>nope</html>'), 'text/html');
   assert.equal(r.status, 415);
   assert.equal((await r.json()).code, 'ERR_BAD_AUDIO_TYPE');
@@ -64,7 +72,7 @@ test('transcribe: a non-audio type -> 415 ERR_BAD_AUDIO_TYPE', async () => {
 test('transcribe: provider 5xx -> 502 ERR_VOICE_FAILED and no upstream text leaked', async () => {
   process.env.STT_API_KEY = 'test-key';
   stubProvider(async () => ({ ok: false, status: 500, text: async () => 'provider internal detail X' }));
-  const token = actor(h, { id: 905 });
+  const token = actor(h, { id: 905, extra: SUB });
   const r = await post(token, Buffer.from('bytes'));
   assert.equal(r.status, 502);
   const d = await r.json();
@@ -75,7 +83,7 @@ test('transcribe: provider 5xx -> 502 ERR_VOICE_FAILED and no upstream text leak
 test('transcribe: happy path returns the transcript', async () => {
   process.env.STT_API_KEY = 'test-key';
   stubProvider(async () => ({ ok: true, text: async () => 'ana baddi shoghoul' }));
-  const token = actor(h, { id: 906 });
+  const token = actor(h, { id: 906, extra: SUB });
   const r = await post(token, Buffer.from('bytes'));
   assert.equal(r.status, 200);
   assert.equal((await r.json()).text, 'ana baddi shoghoul');
@@ -84,7 +92,7 @@ test('transcribe: happy path returns the transcript', async () => {
 test('transcribe: empty transcript -> 422 ERR_VOICE_EMPTY', async () => {
   process.env.STT_API_KEY = 'test-key';
   stubProvider(async () => ({ ok: true, text: async () => '   ' }));
-  const token = actor(h, { id: 907 });
+  const token = actor(h, { id: 907, extra: SUB });
   const r = await post(token, Buffer.from('bytes'));
   assert.equal(r.status, 422);
   assert.equal((await r.json()).code, 'ERR_VOICE_EMPTY');
@@ -97,7 +105,7 @@ test('transcribe: dialect tags reduce to a base language hint', async () => {
     seenLanguage = opts.body.get('language');
     return { ok: true, text: async () => 'ok' };
   });
-  const token = actor(h, { id: 908 });
+  const token = actor(h, { id: 908, extra: SUB });
   h.mock.__set('profiles', { data: { preferred_language: 'ar-EG' }, error: null });
   const r = await post(token, Buffer.from('bytes'));
   assert.equal(r.status, 200);
@@ -108,6 +116,57 @@ test('transcribe: requires auth', async () => {
   process.env.STT_API_KEY = 'test-key';
   const r = await fetch(h.base + '/api/voice/transcribe', { method: 'POST', body: Buffer.from('x') });
   assert.ok([401, 403].includes(r.status));
+});
+
+test('transcribe: over 30s -> 413 ERR_VOICE_DURATION, provider never called', async () => {
+  process.env.STT_API_KEY = 'test-key';
+  let called = false;
+  stubProvider(async () => { called = true; });
+  const token = actor(h, { id: 909, extra: SUB });
+  const r = await post(token, Buffer.from('bytes'), 'audio/webm', '31');
+  assert.equal(r.status, 413);
+  assert.equal((await r.json()).code, 'ERR_VOICE_DURATION');
+  assert.equal(called, false);
+});
+
+test('transcribe: a non-subscriber gets 429 ERR_VOICE_LIMIT, provider never called', async () => {
+  process.env.STT_API_KEY = 'test-key';
+  let called = false;
+  stubProvider(async () => { called = true; });
+  const token = actor(h, { id: 910 });   // no subscription_tier -> 'none' -> 0/day
+  const r = await post(token, Buffer.from('bytes'));
+  assert.equal(r.status, 429);
+  assert.equal((await r.json()).code, 'ERR_VOICE_LIMIT');
+  assert.equal(called, false);
+});
+
+test('transcribe: success stores the transcript artifact, never the audio', async () => {
+  process.env.STT_API_KEY = 'test-key';
+  let uploadArgs;
+  const origFrom = h.mock.storage.from;
+  h.mock.storage.from = bucket => ({
+    ...origFrom.call(h.mock.storage, bucket),
+    upload: async (path, body, opts) => { uploadArgs = { bucket, path, body, opts }; return { data: { path }, error: null }; },
+  });
+  try {
+    stubProvider(async () => ({ ok: true, text: async () => 'marhaba' }));
+    const token = actor(h, { id: 911, extra: SUB });
+    const r = await post(token, Buffer.from('bytes'));
+    assert.equal(r.status, 200);
+    // the stored object is the transcript text, under a voice-notes/ path
+    assert.ok(uploadArgs, 'transcript upload expected');
+    assert.match(uploadArgs.path, /^voice-notes\/911\//);
+    assert.equal(uploadArgs.body.toString(), 'marhaba');
+    assert.equal(uploadArgs.opts.contentType, 'text/plain');
+    const rows = h.mock.__writes('document_uploads', 'insert').filter(w => w.payload.profile_id === 911);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].payload.kind, 'voice_note');
+    assert.equal(rows[0].payload.profile_id, 911);
+    assert.equal(rows[0].payload.storage_path, uploadArgs.path);
+    assert.ok(Date.parse(rows[0].payload.retention_expires_at) > Date.now());
+  } finally {
+    h.mock.storage.from = origFrom;
+  }
 });
 
 // ---------- unit-level pieces ----------

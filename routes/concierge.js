@@ -19,11 +19,19 @@ const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929';
 const MAX_TURNS = 20;                    // conversation length sent back to the model
 const MAX_CHARS = 1500;                  // per message — seekers paste longer context
 const TIMEOUT_MS = 30000;                // never hold a request open on a stalled upstream
-// Idea-configuration doc: "first 3 messages free, before the paywall — meant
-// to build interest and push the person to subscribe." A lifetime count
+// Idea-configuration doc: "free messages before the paywall — meant to build
+// interest and push the person to subscribe." A lifetime count
 // (users.free_preview_used), not a daily one — this is a conversion funnel,
 // not the fair-use quota (lib/usage.js) which still applies underneath it.
-const FREE_PREVIEW_LIMIT = 3;
+// Was a hardcoded 3; Hicham's own call was that 3 cuts the teaser off too
+// early to build real interest, and wanting to keep tuning this without a
+// code change/redeploy each time is reasonable on its own — so it's an env
+// var now, defaulting to a longer 8. Set FREE_PREVIEW_LIMIT in Railway to
+// change it without touching code.
+// A function, not a top-level const, for the same reason as paywallOn()
+// right below: read per request so an env change takes effect without a
+// reload, rather than being frozen in at first `require('./concierge')`.
+const freePreviewLimit = () => Number(process.env.FREE_PREVIEW_LIMIT) > 0 ? Number(process.env.FREE_PREVIEW_LIMIT) : 8;
 // Read per request so the gate can be flipped by env change without a reload.
 const paywallOn = () => process.env.PAYWALL_ENFORCED === 'true';
 
@@ -59,6 +67,17 @@ const FALSE_COMPLETION_CLAIM_PATTERNS = [
   { re: /(?<!\b(?:once|when|after|before)\s+your\s+)\bprofile is (?:now |fully )?complete\b/i, label: 'claimed the profile is complete' },
   { re: /\byou'?re all set\b/i, label: 'claimed the seeker is all set' },
   { re: /(?<!\b(?:once|when|after|before)\s+)\byour profile is (?:done|ready)\b/i, label: 'claimed the profile is done/ready' },
+];
+// routes/cv.js's CV export exists now (PDF/Word) -- the model can correctly
+// tell a seeker it's available, but it has no way to actually attach, send,
+// or generate the file inside this chat; only a real GET to that endpoint
+// does. Same enforcement principle as the two pattern sets above: stripped
+// unconditionally (see the unconditional scrubFalseCvClaims call below, not
+// gated by isComplete the way scrubFalseClaims is -- a CV claim is just as
+// false on a matching-mode turn as an intake one).
+const FALSE_CV_CLAIM_PATTERNS = [
+  { re: /\bi(?:'ve| have)? (?:created|generated|prepared|built|attached|sent) your (?:cv|resum[ée])/i, label: 'claimed to have created/attached/sent a CV file it cannot actually produce inside chat' },
+  { re: /\byour (?:cv|resum[ée]) is (?:ready|attached|done)\b(?!\s+to\s+download)/i, label: 'claimed a CV file is ready/attached without pointing to the real download' },
 ];
 
 // Splits after ., !, or ? followed by whitespace or end of string, keeping
@@ -114,6 +133,21 @@ function scrubFalseClaims(reply, nowComplete) {
   });
   if (!stripped) return reply;
   return kept.join('').trim() || "Let's continue with the next question.";
+}
+
+// Unconditional counterpart to scrubFalseClaims above, run on EVERY reply
+// (matching-mode turns included, not just intake) -- a false CV-readiness
+// claim is exactly as false once the profile is complete as during intake,
+// since the model still has no way to attach or send a file either way.
+function scrubFalseCvClaims(reply) {
+  let stripped = false;
+  const kept = splitSentences(reply).filter(sentence => {
+    const hit = FALSE_CV_CLAIM_PATTERNS.some(p => p.re.test(sentence));
+    if (hit) { stripped = true; console.error('concierge false CV-claim sentence stripped', JSON.stringify(sentence.trim())); }
+    return !hit;
+  });
+  if (!stripped) return reply;
+  return kept.join('').trim() || "Let's continue.";
 }
 
 // Feeds what the platform already knows about this seeker into every turn —
@@ -199,7 +233,7 @@ function demoJob(j) {
 }
 const previewInstructions = (remaining) => [
   'FREE PREVIEW MODE — this seeker has not subscribed yet. The idea-configuration',
-  'doc gives every seeker their first 3 concierge replies free, to build genuine',
+  `doc gives every seeker their first ${freePreviewLimit()} concierge replies free, to build genuine`,
   'excitement before asking them to subscribe.',
   'JOB_CONTEXT above has been redacted on purpose: the application link and the',
   'exact requirements text are hidden until they subscribe.',
@@ -210,7 +244,26 @@ const previewInstructions = (remaining) => [
   'contact/application path — say plainly that subscribing unlocks the full',
   'listing and exactly how to apply. Never imply the details are unavailable or',
   'the listing is somehow incomplete — only that unlocking it needs a subscription.',
+  'The same "tease, don\'t hand over the payoff" rule applies to their CV: you may',
+  'tell them, once you know enough about their background, that a polished CV is',
+  'ready to be generated as a PDF or Word document — but the file itself, like the',
+  'application link above, only unlocks once they subscribe.',
   `Free preview replies left after this one: ${remaining}.`,
+].join('\n');
+
+// Request-specific (depends on this seeker's actual subscription state), so
+// this is appended here rather than folded into lib/yf/systemPrompt.js's
+// general, request-independent prompt -- same reasoning as
+// previewInstructions/intakeInstructions above and profileContext's own
+// comment on the same pattern. Only ever appended when `active` is true.
+const cvAvailableInstructions = [
+  'CV EXPORT: this seeker has an active subscription. Once you and they have',
+  'covered enough of their background (work history, education, or',
+  'certifications), you may tell them their CV is ready to download as a PDF',
+  'or Word document from the "Download my CV" button in the app. You still',
+  'cannot attach, send, or generate the file yourself inside this chat --',
+  'always point them to that button, never claim you already created,',
+  'attached, or sent a CV file here.',
 ].join('\n');
 
 // Rewritten after live testing found two contract failures: the model
@@ -339,6 +392,51 @@ router.get('/diag', authenticate, sec.requireActiveUser, async (req, res) => {
   }
 });
 
+// Hicham's explicit ask: "if he closed during the subscription, all chat
+// will be saved and continued without missing any shared info with agent."
+// Every turn was ALREADY durably logged (logTurn below) -- what was missing
+// is a way for the client to get it back. public/index.html's `history`/
+// `conversationId` were plain in-memory JS variables, reset to empty on
+// every page load/reload, so a seeker closing and reopening the app saw an
+// empty chat even though nothing was actually lost server-side; the very
+// next message would also open a brand-new conversation row instead of
+// continuing the old one, silently fragmenting one seeker's history across
+// many disconnected rows. This returns the seeker's most recent
+// conversation and its full message history so the client can rehydrate
+// both `history` (replayed into the model's own context on the next turn)
+// and `conversationId` (so new messages append to the SAME conversation
+// instead of starting another one) before the seeker sends anything.
+// Deliberately not gated on an active subscription -- losing a free-preview
+// conversation on reload would be exactly as frustrating, and it's the
+// seeker's own data either way.
+router.get('/history', authenticate, sec.requireActiveUser, async (req, res) => {
+  try {
+    const { data: conv } = await supabase.from('concierge_conversations')
+      .select('id')
+      .eq('profile_id', req.user.id)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!conv) return res.json({ success: true, conversationId: null, messages: [] });
+    // Generous but bounded -- mirrors MAX_TURNS' own reasoning (the model
+    // only ever sees the last MAX_TURNS exchanges anyway); a seeker with a
+    // genuinely huge history still gets a fast, working page rather than an
+    // ever-growing payload.
+    const { data: msgs } = await supabase.from('concierge_messages')
+      .select('role, content, created_at')
+      .eq('conversation_id', conv.id)
+      .order('created_at', { ascending: true })
+      .limit(MAX_TURNS * 2 + 10);
+    res.json({
+      success: true, conversationId: conv.id,
+      messages: (msgs || []).map(m => ({ role: m.role, content: m.content })),
+    });
+  } catch (e) {
+    console.error('concierge history', e);
+    res.status(500).json({ error: 'Could not load conversation history', code: 'ERR_SERVER' });
+  }
+});
+
 // One durable log row per turn pair, matched jobs recorded so "what the bot was
 // allowed to say" is auditable. Logging must never fail a seeker's reply, so
 // every insert is best-effort and unawaited.
@@ -390,7 +488,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // before the hard paywall kicks in; intake-mode turns (isComplete false)
     // are already unpaywalled above this and never touch the counter.
     const previewUsed = Number(user.free_preview_used || 0);
-    const inPreview = isComplete && paywallOn() && !active && previewUsed < FREE_PREVIEW_LIMIT;
+    const inPreview = isComplete && paywallOn() && !active && previewUsed < freePreviewLimit();
     if (isComplete && paywallOn() && !active && !inPreview)
       return res.status(402).json({ error: 'A subscription is required to use the concierge', upgrade: true, code: 'ERR_PAYWALL' });
 
@@ -482,7 +580,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       return res.json({
         success: true, reply, jobs: outJobs, conversationId, llmConfigured: false, intake: !isComplete, isComplete, missing,
         jobsRetrieved: isComplete,
-        ...(inPreview ? { preview: true, previewRemaining: FREE_PREVIEW_LIMIT - previewUsed - 1 } : {}),
+        ...(inPreview ? { preview: true, previewRemaining: freePreviewLimit() - previewUsed - 1 } : {}),
       });
     }
 
@@ -490,7 +588,8 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     const system = buildSystemPrompt({ jobs: outJobs, dialectHint: sec.clean(req.body.dialectHint, 40) })
       + (context ? '\n\n' + context : '')
       + (isComplete ? '' : '\n\n' + intakeInstructions(missing))
-      + (inPreview ? '\n\n' + previewInstructions(FREE_PREVIEW_LIMIT - previewUsed - 1) : '');
+      + (inPreview ? '\n\n' + previewInstructions(freePreviewLimit() - previewUsed - 1) : '')
+      + (active ? '\n\n' + cvAvailableInstructions : '');
     const { status, body } = await ask(system, [...history, { role: 'user', content: message }]);
     if (status !== 200) {
       console.error('concierge upstream', status, body);
@@ -555,6 +654,10 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       // live and did not hold.
       reply = scrubFalseClaims(reply, nowComplete);
     }
+    // Unlike scrubFalseClaims above, this runs on every turn -- see
+    // scrubFalseCvClaims' own comment for why a matching-mode turn is just
+    // as capable of falsely claiming a CV file exists as an intake one.
+    reply = scrubFalseCvClaims(reply);
 
     if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), isComplete ? usage.COST.text : 0);
     if (isComplete) await usage.charge(user.id, usage.COST.text);
@@ -573,7 +676,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       // the feed at all. `jobsRetrieved` is that original, pre-extraction
       // `isComplete` — true only when `outJobs` reflects an actual search.
       jobsRetrieved: isComplete,
-      ...(inPreview ? { preview: true, previewRemaining: FREE_PREVIEW_LIMIT - previewUsed - 1 } : {}),
+      ...(inPreview ? { preview: true, previewRemaining: freePreviewLimit() - previewUsed - 1 } : {}),
     });
   } catch (e) {
     console.error('concierge', e.name, e.message);
@@ -599,3 +702,5 @@ module.exports.FALSE_COMPLETION_CLAIM_PATTERNS = FALSE_COMPLETION_CLAIM_PATTERNS
 module.exports.splitSentences = splitSentences;
 module.exports.scrubFalseClaims = scrubFalseClaims;
 module.exports.demoJob = demoJob;
+module.exports.FALSE_CV_CLAIM_PATTERNS = FALSE_CV_CLAIM_PATTERNS;
+module.exports.scrubFalseCvClaims = scrubFalseCvClaims;

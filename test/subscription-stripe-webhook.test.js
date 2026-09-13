@@ -145,6 +145,54 @@ test('customer.subscription.deleted forces status canceled even if the event obj
   assert.equal(h.mock.__writes('users', 'update')[0].payload.subscription_status, 'canceled');
 });
 
+// ---------- voice-note cleanup: same policy as PayPal's own tests
+// (test/subscription-webhook.test.js) -- wired to the genuine lapse
+// (subscription.deleted), never a still-active update ----------
+
+test('customer.subscription.deleted deletes every voice note on the account', async () => {
+  h.mock.__set('users', { data: { id: 90, subscription_period_end: '2026-09-08T00:00:00.000Z' }, error: null });
+  h.mock.__set('document_uploads', { data: [
+    { id: 'v1', storage_path: 'voice_note/1.webm' },
+    { id: 'v2', storage_path: 'voice_note/2.webm' },
+  ], error: null });
+  const r = await webhook({ type: 'customer.subscription.deleted', data: { object: { id: 'sub_90', status: 'canceled' } } });
+  assert.equal(r.status, 200);
+  // fire-and-forget, one extra tick to flush -- see the identical comment in
+  // test/subscription-webhook.test.js's own version of this test.
+  await new Promise(res => setImmediate(res));
+  assert.equal(h.mock.__writes('document_uploads', 'delete').length, 2);
+});
+
+test('customer.subscription.updated while still active (not cancel_at_period_end) does NOT delete voice notes', async () => {
+  h.mock.__set('users', { data: { id: 91, subscription_period_end: '2026-09-08T00:00:00.000Z' }, error: null });
+  h.mock.__set('document_uploads', { data: [{ id: 'v1', storage_path: 'voice_note/1.webm' }], error: null });
+  const r = await webhook({
+    type: 'customer.subscription.updated',
+    data: { object: {
+      id: 'sub_91', status: 'active', cancel_at_period_end: false,
+      current_period_end: Math.floor(new Date('2026-10-08T00:00:00.000Z').getTime() / 1000),
+    } },
+  });
+  assert.equal(r.status, 200);
+  await new Promise(res => setImmediate(res));
+  assert.equal(h.mock.__writes('document_uploads', 'delete').length, 0);
+});
+
+test('customer.subscription.updated with cancel_at_period_end (grace period starting, access still active) does NOT delete voice notes', async () => {
+  h.mock.__set('users', { data: { id: 92, subscription_period_end: null }, error: null });
+  h.mock.__set('document_uploads', { data: [{ id: 'v1', storage_path: 'voice_note/1.webm' }], error: null });
+  const r = await webhook({
+    type: 'customer.subscription.updated',
+    data: { object: {
+      id: 'sub_92', status: 'active', cancel_at_period_end: true,
+      current_period_end: Math.floor(new Date('2026-10-08T00:00:00.000Z').getTime() / 1000),
+    } },
+  });
+  assert.equal(r.status, 200);
+  await new Promise(res => setImmediate(res));
+  assert.equal(h.mock.__writes('document_uploads', 'delete').length, 0);
+});
+
 test('a subscription.updated event for an id not on file is ignored, not a 500', async () => {
   h.mock.__set('users', { data: null, error: null });
   const r = await webhook({ type: 'customer.subscription.updated', data: { object: { id: 'sub_unknown', status: 'active' } } });

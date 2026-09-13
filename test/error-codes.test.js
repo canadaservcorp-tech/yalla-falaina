@@ -120,13 +120,17 @@ test('concierge: an empty message -> ERR_BAD_INPUT', async () => {
 
 test('concierge: paywall enforced on an inactive subscription -> ERR_PAYWALL (402)', async () => {
   process.env.PAYWALL_ENFORCED = 'true';
+  // Pinned rather than left at routes/concierge.js's freePreviewLimit()
+  // production default (currently 8): this test needs the free-preview
+  // turns exhausted, whatever that count is tuned to in Railway.
+  process.env.FREE_PREVIEW_LIMIT = '3';
   try {
     // free_preview_used: 3 — the free-preview turns (Section 4.3) are exhausted;
     // this test is specifically about the hard paywall behind them.
     const r = await ask({ message: 'hi' }, caller({ free_preview_used: 3 }));
     assert.equal(r.status, 402);
     assert.equal((await r.json()).code, 'ERR_PAYWALL');
-  } finally { delete process.env.PAYWALL_ENFORCED; }
+  } finally { delete process.env.PAYWALL_ENFORCED; delete process.env.FREE_PREVIEW_LIMIT; }
 });
 
 test('concierge: daily quota exhausted -> ERR_QUOTA (429)', async () => {
