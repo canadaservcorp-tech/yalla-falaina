@@ -177,6 +177,7 @@
     <div id="messages"></div>
     <div id="inputRow">
       <input type="text" id="messageInput" placeholder="Type your message… (kifak? / bonjour / hello)" autocomplete="off">
+      <button id="micBtn" class="ghost" style="display:none" data-i18n-title="micStart" title="Record a voice note">🎤</button>
       <button id="sendBtn" data-i18n="sendBtn">Send</button>
     </div>
   </div>
@@ -240,6 +241,10 @@
     // field and must not silently read as "not enforced" while it is.
     if (typeof d.paywall === 'boolean') paywallEnforced = d.paywall;
     renderPaywall();
+    // The mic button only appears when the server can actually transcribe AND
+    // this browser can record — offering it otherwise just produces a dead
+    // button, and the seeker has no way to tell which side failed.
+    if (d.voice === true && canRecord()) $('micBtn').style.display = '';
   }).catch(() => {});
 
   // ---------- language ----------
@@ -271,6 +276,7 @@
     document.documentElement.setAttribute('dir', i18n.isRTL(currentLang) ? 'rtl' : 'ltr');
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-ph')); });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
   }
   applyLang();
 
@@ -503,6 +509,7 @@
     if (role === 'bot') div.innerHTML = renderMarkdown(text); else div.textContent = text;
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;   // transient notices (voice transcribing…) remove themselves
   }
 
   function renderJobs(jobs) {
@@ -575,12 +582,105 @@
   }
   sendBtn.onclick = sendMessage;
   inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+  // ---------- voice notes ----------
+  // Record in-page, POST the bytes to /api/voice/transcribe, and put the
+  // transcript in the message box for the seeker to read and correct — it is
+  // never auto-sent. Speech recognition on a short, code-switched, noisy phone
+  // recording gets words wrong, and these words become the seeker's stored
+  // intake answers ("I have a visa" / "I have no visa"), so a human confirms
+  // before it reaches the concierge.
+  let recorder = null, chunks = [], stopTimer = null;
+  const MAX_SECONDS = 120;
+  // Safari/iOS produce mp4, Chrome/Firefox webm; pick whatever this browser
+  // says it can actually record rather than assuming.
+  const PREFERRED_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg'];
+  const micBtn = $('micBtn');
+  function pickMimeType() {
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+    return PREFERRED_TYPES.find(type => MediaRecorder.isTypeSupported(type)) || '';
+  }
+  function canRecord() {
+    return Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  }
+  function setMicState(on) {
+    micBtn.textContent = on ? '⏹' : '🎤';
+    micBtn.title = on ? t('micStop') : t('micStart');
+    micBtn.style.color = on ? 'var(--danger)' : '';
+    micBtn.style.borderColor = on ? 'var(--danger)' : '';
+  }
+  async function startRecording() {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      // NotAllowedError is the seeker denying the prompt (or an insecure
+      // context); anything else is a device problem. Different advice each.
+      addMessage('system', err && err.name === 'NotAllowedError' ? t('micDenied') : t('micUnavailable'));
+      return;
+    }
+    const mimeType = pickMimeType();
+    try {
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    } catch (err) {
+      stream.getTracks().forEach(tr => tr.stop());
+      addMessage('system', t('micUnavailable'));
+      return;
+    }
+    chunks = [];
+    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      clearTimeout(stopTimer);
+      stream.getTracks().forEach(tr => tr.stop());   // release the mic indicator immediately
+      setMicState(false);
+      const blob = new Blob(chunks, { type: (recorder.mimeType || mimeType || 'audio/webm').split(';')[0] });
+      recorder = null; chunks = [];
+      if (!blob.size) { addMessage('system', t('voiceEmpty')); return; }
+      await transcribeBlob(blob);
+    };
+    recorder.start();
+    setMicState(true);
+    // Hard ceiling so a forgotten open mic can't run into the request size cap
+    // (or the seeker's data) — stop() runs the same path as tapping stop.
+    stopTimer = setTimeout(() => { if (recorder && recorder.state === 'recording') recorder.stop(); }, MAX_SECONDS * 1000);
+  }
+  async function transcribeBlob(blob) {
+    micBtn.disabled = true;
+    const pending = addMessage('system', t('voiceTranscribing'));
+    try {
+      const res = await fetch('/api/voice/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': blob.type || 'audio/webm', Authorization: 'Bearer ' + token() },
+        body: blob,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (pending && pending.remove) pending.remove();
+      if (res.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
+      if (!res.ok) { addMessage('system', t('errorPrefix') + apiError(data, t('voiceFailed'))); return; }
+      // Append rather than replace: a seeker may have typed context first.
+      inputEl.value = inputEl.value ? inputEl.value.trim() + ' ' + data.text : data.text;
+      inputEl.focus();
+      addMessage('system', t('voiceReady'));
+    } catch (err) {
+      if (pending && pending.remove) pending.remove();
+      addMessage('system', t('networkError'));
+      console.error(err);
+    } finally { micBtn.disabled = false; }
+  }
+  micBtn.onclick = () => {
+    if (recorder && recorder.state === 'recording') recorder.stop();
+    else startRecording();
+  };
   // The chat dialect only steers message direction — the interface layout
   // stays tied to the UI language (an English UI talking Levantine Arabic
   // keeps an LTR page with RTL bubbles/input).
   const dialectDir = () => dialectSelect.value.includes('Arabic') ? 'rtl' : 'ltr';
   const origAddMessage = addMessage;
-  addMessage = (role, text) => { origAddMessage(role, text); if (role !== 'system') messagesEl.lastChild.dir = dialectDir(); };
+  addMessage = (role, text) => {
+    const div = origAddMessage(role, text);
+    if (role !== 'system') div.dir = dialectDir();
+    return div;
+  };
   inputEl.dir = dialectDir();
   dialectSelect.addEventListener('change', () => {
     inputEl.dir = dialectDir();

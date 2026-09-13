@@ -17,5 +17,6 @@ test('GET /api/health -> 200 with feature booleans only', async () => {
     paypal: Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET),
     stripe: Boolean(process.env.STRIPE_SECRET_KEY),
     email: Boolean(process.env.RESEND_API_KEY),
+    voice: Boolean(process.env.STT_API_KEY),
   });
 });

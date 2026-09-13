@@ -5,7 +5,8 @@
 // their call site instead. test/error-i18n-wiring.test.js locks in the fix
 // for one specific family of that bug (server error codes); this file is the
 // general version — every STRINGS key must be referenced somewhere in
-// public/index.html (via data-i18n, data-i18n-ph, or t('key')), and every
+// public/index.html (via data-i18n, data-i18n-ph, data-i18n-title, or
+// t('key')), and every
 // reference in the page must point at a key that actually exists.
 const test = require('node:test');
 const assert = require('node:assert');
@@ -21,11 +22,12 @@ function extractKeys(pattern) {
 
 const dataI18n = extractKeys(/data-i18n="([a-zA-Z0-9_]+)"/g);
 const dataI18nPh = extractKeys(/data-i18n-ph="([a-zA-Z0-9_]+)"/g);
+const dataI18nTitle = extractKeys(/data-i18n-title="([a-zA-Z0-9_]+)"/g);
 const tCalls = extractKeys(/\bt\('([a-zA-Z0-9_]+)'/g);
-const usedKeys = new Set([...dataI18n, ...dataI18nPh, ...tCalls]);
+const usedKeys = new Set([...dataI18n, ...dataI18nPh, ...dataI18nTitle, ...tCalls]);
 
 test('every data-i18n / data-i18n-ph / t(\'...\') reference in index.html points at a real STRINGS key', () => {
-  const allKeys = new Set([...dataI18n, ...dataI18nPh, ...tCalls]);
+  const allKeys = new Set([...dataI18n, ...dataI18nPh, ...dataI18nTitle, ...tCalls]);
   const missing = [...allKeys].filter(k => !(k in STRINGS.en));
   assert.deepEqual(missing, [], `index.html references i18n key(s) that don't exist: ${missing.join(', ')}`);
 });
