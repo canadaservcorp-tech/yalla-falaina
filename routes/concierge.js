@@ -412,3 +412,9 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
 });
 
 module.exports = router;
+// Exported alongside the router (Express routers are plain functions, so this
+// is a harmless extra property, not a behavior change) purely so
+// scripts/verify-intake-live.js can check a real model's raw reply against
+// the exact same pattern the server itself extracts with — a hand-duplicated
+// copy in the verification script would risk silently drifting from this one.
+module.exports.PROFILE_BLOCK_RE = PROFILE_BLOCK_RE;
