@@ -33,6 +33,64 @@ const paywallOn = () => process.env.PAYWALL_ENFORCED === 'true';
 // lib/profileWrite.js's shared validation — model output never writes directly.
 const PROFILE_BLOCK_RE = /---PROFILE---\s*(\{[\s\S]*?\})\s*---END---/;
 
+// A live-model retest found that tightening intakeInstructions' wording
+// alone (below) did not hold: the model still claimed it had checked the
+// job feed, and still called the profile complete while the platform's own
+// state said isComplete:false. Prompt wording is a request, not an
+// enforcement mechanism — a non-compliant reply from a probabilistic model
+// can still ship. These patterns (and scrubFalseClaims below, applied to
+// every intake-mode reply regardless of what the model's own text says)
+// are the actual enforcement layer: the seeker never sees either kind of
+// claim while the profile is genuinely still incomplete, whether or not the
+// model followed the contract. Also exported (with PROFILE_BLOCK_RE below)
+// so scripts/verify-intake-live.js checks the SAME patterns this route
+// enforces with, instead of a hand-duplicated copy that could drift.
+// Negative lookbehinds exclude the honest, forward-looking phrasing the
+// contract itself asks for ("once your profile is complete, I can look at
+// the job feed") — only a present-tense claim about the CURRENT state is a
+// violation; a conditional about a future state is exactly correct and must
+// survive the scrub.
+const FALSE_JOB_FEED_CLAIM_PATTERNS = [
+  { re: /\bi(?:'ve| have)? (?:checked|looked at|searched|reviewed) (?:the )?(?:job|feed|listing)/i, label: 'claimed to have checked/looked at/searched the job feed or a listing' },
+  { re: /\b(?:no|there are no) (?:jobs|openings|positions|listings) (?:available|found|yet)/i, label: 'claimed a specific job-feed outcome (that none are available)' },
+  { re: /\bi(?:'ve| have)? found (?:some|several|a few )?(?:jobs|openings|positions|matches)/i, label: 'claimed to have found jobs' },
+];
+const FALSE_COMPLETION_CLAIM_PATTERNS = [
+  { re: /(?<!\b(?:once|when|after|before)\s+your\s+)\bprofile is (?:now |fully )?complete\b/i, label: 'claimed the profile is complete' },
+  { re: /\byou'?re all set\b/i, label: 'claimed the seeker is all set' },
+  { re: /(?<!\b(?:once|when|after|before)\s+)\byour profile is (?:done|ready)\b/i, label: 'claimed the profile is done/ready' },
+];
+
+// Naive but adequate for a short conversational reply: splits after ., !, or
+// ? followed by whitespace or end of string, keeping the punctuation and
+// trailing whitespace attached to each piece so re-joining needs no repair.
+function splitSentences(text) {
+  return text.match(/[^.!?]+[.!?]*(?:\s+|$)/g) || [text];
+}
+
+// Server-side enforcement, not just prompt wording: strips any sentence that
+// claims feed access (job retrieval never runs during intake, whatever this
+// reply says) or, while the profile is still genuinely incomplete, claims
+// completion — so a non-compliant reply can't lie to the seeker even when it
+// ignores intakeInstructions entirely. `nowComplete` gates the completion
+// patterns only (the same words are correct once it's actually true); the
+// job-feed patterns are stripped unconditionally, since job retrieval never
+// ran this turn regardless of what nowComplete becomes. Falls back to a
+// plain continuation line in the (expected to be rare) case where the whole
+// reply was nothing but a false claim, same "never send an empty reply"
+// principle as the block-extraction fallbacks below.
+function scrubFalseClaims(reply, nowComplete) {
+  let stripped = false;
+  const kept = splitSentences(reply).filter(sentence => {
+    const hit = FALSE_JOB_FEED_CLAIM_PATTERNS.some(p => p.re.test(sentence))
+      || (!nowComplete && FALSE_COMPLETION_CLAIM_PATTERNS.some(p => p.re.test(sentence)));
+    if (hit) { stripped = true; console.error('concierge intake false-claim sentence stripped', JSON.stringify(sentence.trim())); }
+    return !hit;
+  });
+  if (!stripped) return reply;
+  return kept.join('').trim() || "Let's continue with the next question.";
+}
+
 // Feeds what the platform already knows about this seeker into every turn —
 // complete or still in intake — so the concierge doesn't ask a returning
 // seeker to repeat themselves and can tailor matching/advice to their actual
@@ -427,6 +485,11 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
         reply = reply.slice(0, reply.indexOf('---PROFILE---')).trim()
           || "One moment, let's continue — could you say that again?";
       }
+      // Server-side enforcement layer (see scrubFalseClaims above): applied
+      // after every branch above, unconditionally, regardless of whether the
+      // model followed intakeInstructions — prompt wording alone was retested
+      // live and did not hold.
+      reply = scrubFalseClaims(reply, nowComplete);
     }
 
     if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), isComplete ? usage.COST.text : 0);
@@ -449,3 +512,8 @@ module.exports = router;
 // the exact same pattern the server itself extracts with — a hand-duplicated
 // copy in the verification script would risk silently drifting from this one.
 module.exports.PROFILE_BLOCK_RE = PROFILE_BLOCK_RE;
+// Same reasoning: scripts/verify-intake-live.js's false-claim checks now
+// import these instead of keeping their own copy, so the harness can never
+// silently drift from what the server actually enforces.
+module.exports.FALSE_JOB_FEED_CLAIM_PATTERNS = FALSE_JOB_FEED_CLAIM_PATTERNS;
+module.exports.FALSE_COMPLETION_CLAIM_PATTERNS = FALSE_COMPLETION_CLAIM_PATTERNS;

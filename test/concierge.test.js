@@ -483,6 +483,105 @@ test('the strict PUT-form validator (routes/profile.js) still rejects a bare str
   assert.equal(v.ok, false);
 });
 
+test('a "sector_or_role_type" key in the block (the Missing list\'s display name, not a real column) is routed to profiles.sector, not silently dropped', async () => {
+  // Regression for a second live-model retest: the seeker stated their
+  // sector ("logistics") and the model copied intakeInstructions' own
+  // `Missing: ..., sector_or_role_type, ...` label verbatim into the block
+  // instead of using a real column name. validateIntake has no field by
+  // that name, so before FIELD_ALIASES this was silently ignored (unknown
+  // keys are ignored by design) -- the answer never reached storage even
+  // though nothing here failed loudly.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-sector-alias' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"sector_or_role_type":"logistics"}\n---END---\nGot it, thanks!' }] } });
+  const r = await ask({ message: 'I want logistics work' }, caller({}, { id: 'sp-sector-alias', is_complete: false, confirmed_by_user: false },
+    { preferred_language: 'en', preferred_country: 'canada', sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /---PROFILE---/);
+  const profWrites = h.mock.__writes('profiles', 'upsert');
+  const intakeWrite = profWrites[profWrites.length - 1].payload;
+  assert.equal(intakeWrite.sector, 'logistics');
+  assert.ok(!('sector_or_role_type' in intakeWrite), 'the fake field name must never itself reach the database');
+  // nothing should have been rejected -- this is a successful routing, not
+  // a lenient drop
+  assert.equal(h.mock.__writes('concierge_messages', 'insert').length, 2); // sanity: the turn completed normally
+});
+
+test('the concierge never claims to have checked the job feed, even if the model says so -- stripped server-side, not just asked for in the prompt', async () => {
+  // Regression for a live retest: tightening intakeInstructions' wording did
+  // not stop the model claiming this. The server now strips the sentence
+  // regardless of what the model's own text says.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-scrub-feed' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"preferred_country":"canada"}\n---END---\n' +
+    'I checked the job feed already and there is nothing yet. What else can you tell me about your background?' }] } });
+  const r = await ask({ message: 'any jobs yet?' }, caller({}, { id: 'sp-scrub1', is_complete: false, confirmed_by_user: false },
+    { preferred_language: 'en', preferred_country: null, sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /checked the job feed/i);
+  assert.match(j.reply, /What else can you tell me about your background/);
+});
+
+test('the concierge never tells the seeker their profile is complete while isComplete is still false, even if the model says so', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-scrub-complete' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"preferred_country":"canada"}\n---END---\n' +
+    "Wonderful — your profile is now complete! Let's also talk about your education." }] } });
+  const r = await ask({ message: 'ok' }, caller({}, { id: 'sp-scrub2', is_complete: false, confirmed_by_user: false },
+    { preferred_language: 'en', preferred_country: null, sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.isComplete, false); // sanity: the platform genuinely still says incomplete
+  assert.doesNotMatch(j.reply, /profile is now complete/i);
+  assert.match(j.reply, /Let's also talk about your education/);
+});
+
+test('a legitimate, forward-looking mention of completion ("once your profile is complete...") survives the scrub -- only a present-tense claim is stripped', async () => {
+  // The scrub's patterns use negative lookbehinds specifically so the
+  // contract's own required honest phrasing doesn't get eaten along with
+  // the false claim it's meant to catch.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-scrub-forward-looking' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"preferred_country":"canada"}\n---END---\n' +
+    'Once your profile is complete, I can look at the job feed for you. What is your education background?' }] } });
+  const r = await ask({ message: 'ok' }, caller({}, { id: 'sp-scrub3', is_complete: false, confirmed_by_user: false },
+    { preferred_language: 'en', preferred_country: null, sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.match(j.reply, /Once your profile is complete, I can look at the job feed for you/);
+});
+
+test('the final legitimate completion summary (isComplete genuinely true) is never scrubbed', async () => {
+  // Guards against overshooting: once the platform's own state says the
+  // profile really is complete, saying so is correct, not a violation, and
+  // must not be stripped.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-scrub-genuine-complete' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"confirmed_by_user":true}\n---END---\nGreat, your profile is now complete! Let\'s find you some matches.' }] } });
+  const r = await ask({ message: 'yes I confirm' }, caller({}, { id: 'sp-scrub4', is_complete: false, confirmed_by_user: false,
+    work_history: [{ employer: 'X' }], education: [], certifications: [], languages: [{ language: 'ar', level: 'native' }],
+    has_passport: true, has_visa: false, has_legal_residency_current_country: true, has_family_or_host_abroad: false },
+    { preferred_language: 'en', preferred_country: 'canada', sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.isComplete, true); // sanity: genuinely complete this turn
+  assert.match(j.reply, /your profile is now complete/i);
+});
+
+test('a reply that is nothing but a false-claim sentence falls back to a plain continuation line instead of an empty reply', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-scrub-empty' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{}\n---END---\nI checked the job feed already and there is nothing yet.' }] } });
+  const r = await ask({ message: 'any jobs?' }, caller({}, { is_complete: false, confirmed_by_user: false },
+    { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /checked the job feed/i);
+  assert.ok(j.reply.trim().length > 0);
+});
+
 test('a complete profile passes straight through to matching', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c2' }, error: null });
   const r = await ask({ message: 'electrician canada' }, caller());

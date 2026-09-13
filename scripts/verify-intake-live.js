@@ -37,15 +37,18 @@ if (!process.env.ANTHROPIC_API_KEY) {
 // implementation in place for calls to api.anthropic.com, so the model reply
 // is genuine, not canned.
 const { getApp, actor, auth } = require('../test/helpers/appHarness');
-// PROFILE_BLOCK_RE is required lazily, inside main() after getApp() has run
-// (below) — NOT here at module top level. appHarness's mock-db swap only
-// happens inside getApp(), by injecting a fake module into require.cache
-// BEFORE server.js (and therefore routes/concierge.js) is required for the
-// first time. Requiring routes/concierge here, before that swap runs, would
-// make its own top-level `require('../db')` load the REAL Supabase client
-// with no SUPABASE_URL set — a hard crash unrelated to anything this script
-// is trying to check.
-let PROFILE_BLOCK_RE;
+// PROFILE_BLOCK_RE and the false-claim pattern lists are required lazily,
+// inside main() after getApp() has run (below) — NOT here at module top
+// level. appHarness's mock-db swap only happens inside getApp(), by
+// injecting a fake module into require.cache BEFORE server.js (and
+// therefore routes/concierge.js) is required for the first time. Requiring
+// routes/concierge here, before that swap runs, would make its own
+// top-level `require('../db')` load the REAL Supabase client with no
+// SUPABASE_URL set — a hard crash unrelated to anything this script is
+// trying to check. Importing the pattern lists (rather than keeping a
+// second hand-written copy here, as an earlier version of this script did)
+// means this script always checks against exactly what the server enforces.
+let PROFILE_BLOCK_RE, FALSE_JOB_FEED_CLAIM_PATTERNS, FALSE_COMPLETION_CLAIM_PATTERNS;
 
 const MAX_ROUNDS = 14;                 // safety cap — a real stuck/looping model must not run forever or spend unbounded tokens
 const realFetch = globalThis.fetch;
@@ -95,29 +98,21 @@ const SECTOR_WORDS = [
   'receptionist', 'housekeeping', 'caregiver',
 ];
 
-// Added after a live run found the model asserting things it had no way to
-// know during intake — that it had checked the job feed, and that the
-// profile was complete while the platform's own state still showed missing
-// fields. Checked against the seeker-visible `body.reply` (already stripped
-// of the block), never the raw model text, since that's what a real seeker
-// would actually read. The completion/all-set patterns are only checked
-// while the platform itself still says `isComplete: false` for that round —
-// once it's genuinely true, the same words are the correct thing to say, so
-// gating on that avoids flagging the legitimate final confirmation summary.
-const FALSE_JOB_FEED_CLAIM_PATTERNS = [
-  { re: /\bi(?:'ve| have)? (?:checked|looked at|searched|reviewed) (?:the )?(?:job|feed|listing)/i, label: 'claimed to have checked/looked at/searched the job feed or a listing' },
-  { re: /\b(?:no|there are no) (?:jobs|openings|positions|listings) (?:available|found|yet)/i, label: 'claimed a specific job-feed outcome (that none are available)' },
-  { re: /\bi(?:'ve| have)? found (?:some|several|a few )?(?:jobs|openings|positions|matches)/i, label: 'claimed to have found jobs' },
-];
-// Negative lookbehinds exclude the honest, forward-looking phrasing the
-// contract itself now asks for ("once your profile is complete, I can look
-// at the job feed") — only a present-tense claim about the CURRENT state is
-// a violation; a conditional about a future state is exactly correct.
-const FALSE_COMPLETION_CLAIM_PATTERNS = [
-  { re: /(?<!\b(?:once|when|after|before)\s+your\s+)\bprofile is (?:now |fully )?complete\b/i, label: 'claimed the profile is complete' },
-  { re: /\byou'?re all set\b/i, label: 'claimed the seeker is all set' },
-  { re: /(?<!\b(?:once|when|after|before)\s+)\byour profile is (?:done|ready)\b/i, label: 'claimed the profile is done/ready' },
-];
+// A live re-run of the checks below found that tightening intakeInstructions'
+// wording did not, by itself, stop the model claiming it had checked the job
+// feed or that the profile was complete while isComplete was still false —
+// routes/concierge.js now also SCRUBS these sentences from the seeker-visible
+// reply server-side, regardless of what the model says. That changes what
+// these checks below need to prove: a model attempting the claim is no
+// longer necessarily a problem (the scrub is supposed to catch it) — what
+// would be a real regression is the claim surviving the scrub and reaching
+// `body.reply`. So this script now checks BOTH: `raw` (the model's actual
+// text, block included) for whether the model still attempts either claim
+// at all — recorded as `attempts`, informational, does not fail the run,
+// since attempting-but-scrubbed is the enforcement layer working as
+// intended — and `body.reply` (the seeker-visible text, post-scrub) for
+// whether a claim actually got through, which DOES fail the run (kind
+// `*-leaked-to-seeker`, pushed to `violations` below).
 
 // Postgres upsert semantics (lib/profileWrite.js): a column not present in a
 // given patch is left exactly as it was. The mock DB (test/helpers/mockDb.js)
@@ -140,7 +135,7 @@ function applyWritesToTrackedRows(h) {
 
 async function main() {
   const h = getApp();
-  PROFILE_BLOCK_RE = require('../routes/concierge').PROFILE_BLOCK_RE;
+  ({ PROFILE_BLOCK_RE, FALSE_JOB_FEED_CLAIM_PATTERNS, FALSE_COMPLETION_CLAIM_PATTERNS } = require('../routes/concierge'));
   const token = auth(actor(h, { id: 7001, role: 'seeker' }));
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'live-verify-conv' }, error: null });
 
@@ -150,7 +145,9 @@ async function main() {
   let message = "Hi, I'm hoping to find work abroad and could use some guidance.";
   let sectorRevealedAtRound = null;
   let sectorPersistWarned = false;   // fires at most once — see the check right after applyWritesToTrackedRows below
+  let sawSectorAliasKey = false;     // did the model ever emit the "sector_or_role_type" alias key at all? -- see the diagnostic note below
   const violations = [];             // { round, kind, detail } — collected, not thrown, so one bad round doesn't hide the rest of the transcript
+  const attempts = [];               // { round, kind, detail } — the model tried a false claim but the server's scrub should have caught it; informational, never fails the run on its own
   let confirmedAtRound = null;
   let finalIsComplete = false;
 
@@ -200,25 +197,41 @@ async function main() {
     // the reveal (not the same round — the model's reply to THAT round is
     // what should have carried it) so this fires promptly instead of only
     // surfacing indirectly as `never-completed` once MAX_ROUNDS runs out.
+    // A second live retest traced this to the model emitting the Missing
+    // list's DISPLAY name ("sector_or_role_type") instead of a real column —
+    // lib/profileWrite.js's FIELD_ALIASES now routes that key to `sector`,
+    // so if this still fires, the detail below says whether the model used
+    // that alias key at all (routing bug — check FIELD_ALIASES) or never
+    // emitted anything sector-related (a different, prompt-level failure).
     if (sectorRevealedAtRound !== null && !sectorPersistWarned && round > sectorRevealedAtRound
       && !profileRow.sector && !profileRow.role_type) {
       sectorPersistWarned = true;
       violations.push({ round, kind: 'sector-not-persisted',
-        detail: `seeker stated their sector/role at round ${sectorRevealedAtRound} but profiles.sector/role_type is still null` });
+        detail: `seeker stated their sector/role at round ${sectorRevealedAtRound} but profiles.sector/role_type is still null` +
+          (sawSectorAliasKey
+            ? ' (model DID use the "sector_or_role_type" alias key at least once -- check lib/profileWrite.js FIELD_ALIASES routing)'
+            : ' (model never emitted "sector_or_role_type", "sector", or "role_type" at all -- likely a prompt-adherence failure, not an alias-routing one)') });
     }
 
     // Regression checks for the same live run's other failure: the model
-    // asserting things it has no way to know during intake. Checked against
-    // the seeker-VISIBLE reply (already stripped of the block), and the
-    // completion-claim patterns only while the platform itself still says
-    // this round is incomplete — the same words are correct once it's true.
+    // asserting things it has no way to know during intake. Two passes, now
+    // that routes/concierge.js scrubs these sentences server-side (a live
+    // retest found prompt wording alone did not hold): `raw` (the model's
+    // actual text) for whether it still ATTEMPTS either claim at all —
+    // informational only, since attempting-but-scrubbed is the enforcement
+    // layer doing its job, not a violation — and `body.reply` (what the
+    // seeker actually sees, post-scrub) for whether a claim survived, which
+    // IS a real violation (the scrub itself failed). Completion patterns are
+    // only checked while the platform still says this round is incomplete —
+    // the same words are correct, and must survive the scrub, once it's true.
+    const proseForAttemptCheck = raw.replace(PROFILE_BLOCK_RE, '');
     for (const { re, label } of FALSE_JOB_FEED_CLAIM_PATTERNS) {
-      if (re.test(body.reply)) violations.push({ round, kind: 'false-job-feed-claim', detail: `${label} — reply: "${body.reply.slice(0, 160)}"` });
+      if (re.test(proseForAttemptCheck)) attempts.push({ round, kind: 'false-claim-attempted', detail: `job-feed: ${label}` });
+      if (re.test(body.reply)) violations.push({ round, kind: 'false-job-feed-claim-leaked-to-seeker', detail: `${label} — reply: "${body.reply.slice(0, 160)}"` });
     }
-    if (!body.isComplete) {
-      for (const { re, label } of FALSE_COMPLETION_CLAIM_PATTERNS) {
-        if (re.test(body.reply)) violations.push({ round, kind: 'false-completion-claim', detail: `${label} while isComplete was still false — reply: "${body.reply.slice(0, 160)}"` });
-      }
+    for (const { re, label } of FALSE_COMPLETION_CLAIM_PATTERNS) {
+      if (!body.isComplete && re.test(proseForAttemptCheck)) attempts.push({ round, kind: 'false-claim-attempted', detail: `completion: ${label}` });
+      if (!body.isComplete && re.test(body.reply)) violations.push({ round, kind: 'false-completion-claim-leaked-to-seeker', detail: `${label} while isComplete was still false — reply: "${body.reply.slice(0, 160)}"` });
     }
 
     if (!blockMatch) {
@@ -228,6 +241,11 @@ async function main() {
       try { parsed = JSON.parse(blockMatch[1]); } catch (e) {
         violations.push({ round, kind: 'malformed-json', detail: e.message });
       }
+      // Diagnostic for the sector-not-persisted check above: records whether
+      // the model ever used the "sector_or_role_type" alias key, so a future
+      // failure's detail message can say whether FIELD_ALIASES routing is
+      // the suspect or the field was never mentioned at all.
+      if (parsed && 'sector_or_role_type' in parsed) sawSectorAliasKey = true;
       if (parsed && 'confirmed_by_user' in parsed) {
         if (parsed.confirmed_by_user === true) {
           if (confirmedAtRound === null) confirmedAtRound = round;
@@ -279,6 +297,13 @@ async function main() {
   console.log(`Explicit confirmation seen at round: ${confirmedAtRound ?? '(never)'}`);
   console.log(`Fields tracked at end: profiles=${JSON.stringify(profileRow)}`);
   console.log(`                       seeker_profiles=${JSON.stringify(seekerRow)}`);
+  if (attempts.length === 0) {
+    console.log('\nThe model never attempted a false job-feed/completion claim.');
+  } else {
+    console.log(`\n${attempts.length} false-claim attempt(s) by the model — informational only, since the server-side`);
+    console.log('scrub (routes/concierge.js) is expected to have caught these before the seeker saw them:');
+    for (const a of attempts) console.log(`  round ${a.round} [${a.kind}]: ${a.detail}`);
+  }
   if (violations.length === 0) {
     console.log('\nNo contract violations found. ✅');
   } else {
