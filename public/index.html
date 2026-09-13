@@ -9,9 +9,16 @@
 <script src="/i18n.js"></script>
 <style>
   :root {
-    --bg: #0f1720; --panel: #16212c; --accent: #2fae6b; --accent-dim: #1f7a4a;
-    --text: #eef3f7; --text-dim: #9fb1bf; --bubble-user: #22384a; --bubble-bot: #1c2b36;
-    --border: #24343f; --warn: #d9a441; --danger: #d9614a;
+    /* "Bleu gitane" palette (Hicham's ask, Sept 2026: calmer than the old
+       green/near-black scheme) -- a muted, dusty night-blue rather than a
+       bright/saturated one, on darker blue-tinted panels instead of the old
+       neutral near-black. --accent-contrast is the readable text color for
+       anything painted with --accent (dark text stopped being legible once
+       accent went from bright green to a mid-tone blue). */
+    --bg: #0d1826; --panel: #142234; --accent: #4a7fa6; --accent-dim: #365d7c;
+    --accent-contrast: #f3f8fc;
+    --text: #eef3f7; --text-dim: #93a8ba; --bubble-user: #1f3a52; --bubble-bot: #16283a;
+    --border: #223244; --warn: #d9a441; --danger: #d9614a;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -24,7 +31,7 @@
   select, input[type="text"], input[type="email"], input[type="password"], input[type="tel"] {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 6px 10px; font-size: 13px; }
-  button { background: var(--accent); color: #08150e; border: none; border-radius: 6px;
+  button { background: var(--accent); color: var(--accent-contrast); border: none; border-radius: 6px;
            padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 13px; }
   button:hover { background: var(--accent-dim); }
   button:disabled { opacity: 0.5; cursor: default; }
@@ -52,8 +59,20 @@
   #inputRow input { flex: 1; font-size: 14px; padding: 10px 12px; }
   [dir="rtl"] .msg.user { align-self: flex-start; border-bottom-left-radius: 4px; border-bottom-right-radius: 12px; }
   [dir="rtl"] .msg.bot { align-self: flex-end; border-bottom-right-radius: 4px; border-bottom-left-radius: 12px; }
-  #authWrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; }
-  #authCard { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  /* Hicham's ask: a flight/travel cue somewhere in the background, subtle
+     enough to stay calm rather than busy -- placed behind the sign-in card,
+     the one screen every visitor sees before anything else. A single inline
+     SVG (Material Design's "flight" glyph) painted in the accent blue at
+     low opacity, no image file to ship or slow-load. */
+  #authWrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px;
+              position: relative; overflow: hidden; }
+  #authWrap::before {
+    content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234a7fa6'%3E%3Cpath d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: center 15%;
+    background-size: min(60vw, 420px); opacity: 0.07; transform: rotate(18deg);
+  }
+  #authCard { position: relative; z-index: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
               padding: 24px; width: 100%; max-width: 420px; }
   #authCard h2 { margin: 0 0 4px; font-size: 18px; }
   #authCard .hint, #paywall .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 16px; }
@@ -72,7 +91,7 @@
   #authMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-top: 8px; }
   .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
   .tabs button { flex: 1; background: var(--bg); color: var(--text-dim); }
-  .tabs button.on { background: var(--accent); color: #08150e; }
+  .tabs button.on { background: var(--accent); color: var(--accent-contrast); }
   #paywall { background: var(--panel); border: 1px solid var(--warn); border-radius: 10px;
              margin: 14px; padding: 14px; font-size: 13px; display: none; }
   #subBar { font-size: 12px; color: var(--text-dim); }
@@ -225,6 +244,7 @@
     <div id="contactMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
   </div>
   <button id="showContact" data-i18n="contactLink">Contact us</button>
+  <button id="showPromote" class="ghost" style="border-color:var(--accent);color:var(--accent)" data-i18n="promoteLink">📣 Promote your company with us</button>
 </div>
 
 <script>
@@ -232,7 +252,16 @@
   const tokenKey = 'yf_token';
   let history = [], conversationId = null;
 
-  function token() { return sessionStorage.getItem(tokenKey) || ''; }
+  // Hicham's ask: closing the app (or the browser) and reopening it must not
+  // look like the chat was lost. The chat data itself was already durable
+  // server-side (resumeConversation() below), but the LOGIN was not: sessionStorage
+  // clears the moment the tab/browser closes, so reopening always landed back
+  // on the sign-in screen with nothing to resume. localStorage survives a
+  // full close/reopen; the 2-day JWT (routes/auth.js) still expires on its
+  // own on schedule, and any place that gets a 401 already clears it and
+  // reloads to a fresh sign-in -- that's the *only* other way this resets,
+  // short of an actual subscription cancellation wiping the profile itself.
+  function token() { return localStorage.getItem(tokenKey) || ''; }
   function headers() { return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }; }
 
   // ---------- paywall enforcement flag ----------
@@ -271,9 +300,9 @@
   // silently reset an ar/fr UI back to English mid-flow).
   const qsLang = new URLSearchParams(location.search).get('lang');
   const currentLang = i18n.LANGS.includes(qsLang) ? qsLang
-    : (i18n.LANGS.includes(sessionStorage.getItem('yf_lang')) ? sessionStorage.getItem('yf_lang')
+    : (i18n.LANGS.includes(localStorage.getItem('yf_lang')) ? localStorage.getItem('yf_lang')
     : (i18n.LANGS.includes(document.documentElement.lang) ? document.documentElement.lang : 'en'));
-  sessionStorage.setItem('yf_lang', currentLang);
+  localStorage.setItem('yf_lang', currentLang);
   document.documentElement.lang = currentLang;
   const t = (key, vars) => i18n.t(currentLang, key, vars);
   // Translates a server error response by its stable `code` (Roadmap Step
@@ -354,7 +383,7 @@
       if (r.status === 403) $('resendVerify').style.display = 'inline';
       return;
     }
-    sessionStorage.setItem(tokenKey, d.token);
+    localStorage.setItem(tokenKey, d.token);
     enter();
   }
   $('authGo').onclick = authGo;
@@ -377,6 +406,16 @@
     if (!open) $(closeId).style.display = 'none';
   }
   $('showContact').onclick = () => togglePanel('contactForm', 'postListingForm');
+  // ---------- "promote your company" (B2B interest) ----------
+  // No dedicated advertiser/listing backend exists yet (that's future work --
+  // see the roadmap doc's B2B section), so this reuses the existing, already
+  // no-account /api/contact route rather than inventing a new one: it opens
+  // the same Contact form and just pre-fills the message so a business
+  // doesn't have to explain from scratch what they're reaching out about.
+  $('showPromote').onclick = () => {
+    togglePanel('contactForm', 'postListingForm');
+    if (!$('ctMessage').value.trim()) $('ctMessage').value = t('promotePrefill');
+  };
   $('contactSubmit').onclick = async () => {
     const msg = $('contactMsg');
     msg.style.color = 'var(--warn)';
@@ -454,7 +493,7 @@
     const resumed = await resumeConversation();
     if (!resumed) addMessage('system', t('welcomeSystemMessage'));
   }
-  $('logoutBtn').onclick = () => { sessionStorage.removeItem(tokenKey); location.reload(); };
+  $('logoutBtn').onclick = () => { localStorage.removeItem(tokenKey); location.reload(); };
 
   // ---------- subscription ----------
   async function refreshSub() {
@@ -662,7 +701,7 @@
           dialectHint: dialectSelect.value || undefined,
           preferredCountry: countryInput.value || undefined }) });
       const data = await res.json();
-      if (res.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
+      if (res.status === 401) { localStorage.removeItem(tokenKey); location.reload(); return; }
       if (res.status === 402) { $('paywall').style.display = 'block'; addMessage('system', apiError(data, data.error)); return; }
       if (!res.ok) { addMessage('system', t('errorPrefix') + apiError(data, data.error || res.statusText)); return; }
       conversationId = data.conversationId || conversationId;
@@ -756,7 +795,7 @@
       });
       const data = await res.json().catch(() => ({}));
       if (pending && pending.remove) pending.remove();
-      if (res.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
+      if (res.status === 401) { localStorage.removeItem(tokenKey); location.reload(); return; }
       if (!res.ok) { addMessage('system', t('errorPrefix') + apiError(data, t('voiceFailed'))); return; }
       // Append rather than replace: a seeker may have typed context first.
       inputEl.value = inputEl.value ? inputEl.value.trim() + ' ' + data.text : data.text;
