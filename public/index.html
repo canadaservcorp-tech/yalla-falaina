@@ -173,6 +173,18 @@
     <div id="postListingMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
   </div>
   <button id="showPostListing" data-i18n="postListingLink">Post an urgent listing — no account needed</button>
+  <div id="contactForm" style="display:none">
+    <div class="hint" data-i18n="contactHint">Questions, feedback, or a problem with your account? Send us a message and we’ll reply by email.</div>
+    <label data-i18n="contactName">Your name</label>
+    <input type="text" id="ctName" maxlength="120">
+    <label data-i18n="contactEmail">Your email</label>
+    <input type="email" id="ctEmail" maxlength="254">
+    <label data-i18n="contactMessage">Your message</label>
+    <input type="text" id="ctMessage" maxlength="2000">
+    <div class="row"><button id="contactSubmit" data-i18n="contactSubmit">Send message</button></div>
+    <div id="contactMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
+  </div>
+  <button id="showContact" data-i18n="contactLink">Contact us</button>
 </div>
 
 <script>
@@ -312,6 +324,35 @@
     const open = $('postListingForm').style.display === 'block';
     $('postListingForm').style.display = open ? 'none' : 'block';
   };
+  // ---------- contact us (no account needed) ----------
+  // Shares the listing panel's floating placement for the same reason: the
+  // route takes no token, so it must be reachable signed in or out.
+  $('showContact').onclick = () => {
+    const open = $('contactForm').style.display === 'block';
+    $('contactForm').style.display = open ? 'none' : 'block';
+  };
+  $('contactSubmit').onclick = async () => {
+    const msg = $('contactMsg');
+    msg.style.color = 'var(--warn)';
+    const name = $('ctName').value.trim(), email = $('ctEmail').value.trim(), message = $('ctMessage').value.trim();
+    if (!name || !email || !message) { msg.textContent = t('contactMissing'); return; }
+    $('contactSubmit').disabled = true;
+    try {
+      const r = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, message }) });
+      const d = await r.json();
+      if (r.ok) {
+        msg.style.color = 'var(--accent)';
+        msg.textContent = t('contactSuccess');
+        ['ctName', 'ctEmail', 'ctMessage'].forEach(id => $(id).value = '');
+      } else {
+        msg.textContent = apiError(d, t('contactFailed'));
+      }
+    } catch {
+      msg.textContent = t('contactFailed');
+    } finally { $('contactSubmit').disabled = false; }
+  };
+
   $('postListingSubmit').onclick = async () => {
     const msg = $('postListingMsg');
     msg.style.color = 'var(--warn)';
