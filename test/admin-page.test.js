@@ -23,3 +23,22 @@ test('admin.html calls the real login and moderation endpoints', async () => {
   assert.match(body, /\/api\/admin\/informal-listings/);
   assert.match(body, /\$\{id\}\/review/);
 });
+
+test('admin.html’s own inline <script> carries the same per-request CSP nonce as its response header', async () => {
+  const r = await fetch(h.base + '/admin.html');
+  const csp = r.headers.get('content-security-policy');
+  const nonce = csp.match(/script-src 'self' 'nonce-([A-Za-z0-9+/=]+)'/)[1];
+  const body = await r.text();
+  // plain substring check, not a RegExp built from the nonce — base64 nonces
+  // can contain '+', a regex metacharacter, which broke this exact assertion
+  // the first time it ran against a real nonce.
+  assert.ok(body.includes(`<script nonce="${nonce}">`), `expected the page's script tag to carry nonce ${nonce}`);
+});
+
+test('admin.html wires up its own two-factor authentication settings (enable/confirm/disable), not just the moderation queue', async () => {
+  const body = await fetch(h.base + '/admin.html').then(r => r.text());
+  assert.match(body, /\/api\/auth\/totp\/status/);
+  assert.match(body, /\/api\/auth\/totp\/setup/);
+  assert.match(body, /\/api\/auth\/totp\/confirm/);
+  assert.match(body, /\/api\/auth\/totp\/disable/);
+});

@@ -20,9 +20,23 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);          // Railway terminates TLS in front of us
 app.use(sec.forceHttps);
+app.use(sec.nonce);                 // must run before sec.headers — the CSP below reads res.locals.cspNonce
 app.use(sec.headers);
+app.use(sec.permissionsPolicy);
 app.use(sec.corsSameOrigin);
+
+// Emergency, redeploy-only full-stop (see SECURITY-INCIDENT-RESPONSE.md): set
+// SITE_LOCKDOWN=true and redeploy to immediately take every /api route but
+// the health check offline while investigating a suspected active
+// compromise. Nothing is deleted or rolled back — clearing the variable and
+// redeploying again is the entire way back to normal.
+const LOCKDOWN = String(process.env.SITE_LOCKDOWN || '').toLowerCase() === 'true';
+if (LOCKDOWN) console.error('SITE_LOCKDOWN is set — every /api route (except /api/health) is returning 503 until it is cleared');
 app.use('/api', sec.limits.api);
+app.use('/api', (req, res, next) => {
+  if (LOCKDOWN && req.path !== '/health') return res.status(503).json({ error: 'Temporarily unavailable', code: 'ERR_LOCKDOWN' });
+  next();
+});
 app.use((req, res, next) => {
   // raw body for both webhooks, verified downstream (PayPal's own signature
   // check; Stripe's local HMAC check) against the exact bytes received
@@ -30,6 +44,13 @@ app.use((req, res, next) => {
   express.json({ limit: '128kb' })(req, res, next);
 });
 app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonical home URL
+// public/admin.html needs the same per-request CSP nonce stamped onto its own
+// inline <script> as the SPA shell below gets — express.static alone would
+// serve its bytes unmodified and CSP would then block that script outright
+// now that scriptSrc no longer carries 'unsafe-inline'. Registered before the
+// static middleware so this handles the request instead of it.
+const ADMIN_SHELL = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8');
+app.get('/admin.html', (_req, res) => res.type('html').send(sec.applyNonce(ADMIN_SHELL, res.locals.cspNonce)));
 app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', index: false }));
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
@@ -63,9 +84,10 @@ app.get('*', (req, res) => {
   const route = seo.INDEXABLE.includes(req.path) ? req.path : '/';
   const lang = seo.LANGS.includes(req.query.lang) ? req.query.lang : 'en';
   // function replacer: prices in the copy would otherwise be read as $-patterns
-  res.type('html').send(SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang))
+  const html = SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang))
     .replace('<!--analytics-->', () => analytics.head())
-    .replace(/<html lang="[a-z]+">/, `<html lang="${lang}"${lang === 'ar' ? ' dir="rtl"' : ''}>`));
+    .replace(/<html lang="[a-z]+">/, `<html lang="${lang}"${lang === 'ar' ? ' dir="rtl"' : ''}>`);
+  res.type('html').send(sec.applyNonce(html, res.locals.cspNonce));
 });
 
 // last resort: log the detail, never leak internals (stack traces, SQL) to clients

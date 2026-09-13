@@ -5,12 +5,22 @@ const crypto = require('crypto');
 const supabase = require('../db');
 const { sendEmail } = require('../lib/email');
 const sec = require('../lib/security');
+const totp = require('../lib/totp');
+const { authenticate } = require('../lib/auth-mw');
 const router = express.Router();
 const { JWT_SECRET } = process.env;
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
 const BCRYPT_ROUNDS = 12;
 const TERMS_VERSION = '2026-09-08';
 const LANGUAGES = ['ar-LB', 'ar-SY', 'ar-EG', 'ar', 'fr', 'en'];
+// Account-level brute-force lockout (schema.sql's record_login_result()) —
+// keyed on the account, not the IP, specifically to close the gap
+// sec.limits.credentials (IP+email) leaves open: a botnet spraying wrong
+// guesses at ONE account from many different addresses gets a fresh rate-limit
+// bucket per IP, so nothing there ever stops it. This does, regardless of
+// where the attempts come from.
+const MAX_FAILED_LOGINS = 8;
+const LOCK_MS = 15 * 60 * 1000; // 15 minutes
 
 // compared against when no account matches, so timing doesn't reveal existence
 const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), BCRYPT_ROUNDS);
@@ -19,6 +29,16 @@ const sameToken = (a, b) => {
   const x = Buffer.from(String(a || '')), y = Buffer.from(String(b || ''));
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 };
+
+// Best-effort: a hiccup here must never be why a correct login fails, or why
+// a wrong one silently escapes being counted — either way this only logs.
+async function recordLoginResult(userId, success) {
+  try {
+    const { error } = await supabase.rpc('record_login_result',
+      { p_user_id: userId, p_success: success, p_max_attempts: MAX_FAILED_LOGINS, p_lock_ms: LOCK_MS });
+    if (error) console.error('record_login_result', error.message);
+  } catch (e) { console.error('record_login_result', e.message); }
+}
 
 router.post('/register', sec.limits.register, sec.limits.credentials, async (req, res) => {
   try {
@@ -152,17 +172,109 @@ router.post('/login', sec.limits.credentials, async (req, res) => {
     if (!sec.isEmail(email) || typeof password !== 'string' || !password)
       return res.status(401).json({ error: 'Invalid credentials', code: 'ERR_INVALID_CREDENTIALS' });
     const { data: user } = await supabase.from('users')
-      .select('id, email, name, role, password_hash, email_verified, banned').eq('email', email).maybeSingle();
+      .select('id, email, name, role, password_hash, email_verified, banned, totp_secret, totp_enabled, locked_until')
+      .eq('email', email).maybeSingle();
     // always run a comparison so a missing account isn't measurably faster
     const hash = user?.password_hash || DUMMY_HASH;
     const ok = await bcrypt.compare(password, hash).catch(() => false);
-    // Same code as the malformed-input case above (both say "Invalid
+    const lockedNow = Boolean(user && user.locked_until && new Date(user.locked_until) > new Date());
+    // Same code as the malformed-input case above (all four say "Invalid
     // credentials"): the code must not let a client distinguish "wrong
-    // password" from "no such account" any more than the text already does.
-    if (!user || user.banned || !ok) return res.status(401).json({ error: 'Invalid credentials', code: 'ERR_INVALID_CREDENTIALS' });
+    // password" from "no such account" any more than the text already does —
+    // and a distinct "this account is locked" response would tell an
+    // attacker (or a curious seeker) that the address has an account at all,
+    // exactly the enumeration leak /register and /resend-verification above
+    // already go out of their way to avoid.
+    if (!user || user.banned || !ok || lockedNow) {
+      // Don't re-record against an already-locked account: record_login_result()
+      // only extends locked_until when a NEW lock is being set, but there's no
+      // reason to even ask it to on every retry of a lock that's already in effect.
+      if (user && !lockedNow) await recordLoginResult(user.id, false);
+      return res.status(401).json({ error: 'Invalid credentials', code: 'ERR_INVALID_CREDENTIALS' });
+    }
     if (!user.email_verified) return res.status(403).json({ error: 'Please verify your email first', code: 'ERR_UNVERIFIED' });
+
+    if (user.totp_enabled) {
+      // Distinguishable from here on only because the password already
+      // matched — reaching a 2FA challenge at all necessarily confirms that
+      // much to whoever is asking, exactly like any other TOTP-protected login.
+      const code = typeof req.body.totpToken === 'string' ? req.body.totpToken.trim() : '';
+      if (!code) return res.status(401).json({ error: 'Authentication code required', code: 'ERR_TOTP_REQUIRED' });
+      if (!totp.verifyTOTP(user.totp_secret, code)) {
+        await recordLoginResult(user.id, false);
+        return res.status(401).json({ error: 'Invalid authentication code', code: 'ERR_INVALID_TOTP' });
+      }
+    }
+
+    await recordLoginResult(user.id, true);
     const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '2d' });
     res.json({ success: true, token, user: { id: user.id, email, name: user.name, role: user.role } });
   } catch (e) { console.error('login', e); res.status(500).json({ error: 'Login failed', code: 'ERR_SERVER' }); }
 });
+
+// ---------- two-factor authentication (TOTP, RFC 6238) ----------
+// Available to any account, but this is specifically how an admin closes the
+// gap a leaked or phished password alone leaves: routes/admin-informal-listings.js
+// gates the moderation queue on role === 'admin' and nothing else, so today
+// a stolen admin password is a full compromise. Once enabled, a stolen
+// password alone is no longer enough to sign in.
+router.get('/totp/status', authenticate, sec.requireActiveUser, async (req, res) => {
+  try {
+    const { data: user } = await supabase.from('users').select('totp_enabled').eq('id', req.user.id).maybeSingle();
+    if (!user) return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+    res.json({ success: true, totpEnabled: Boolean(user.totp_enabled) });
+  } catch (e) { console.error('totp status', e); res.status(500).json({ error: 'Could not read two-factor status', code: 'ERR_SERVER' }); }
+});
+
+router.post('/totp/setup', authenticate, sec.requireActiveUser, sec.limits.totp, async (req, res) => {
+  try {
+    const { data: user } = await supabase.from('users').select('id, email, totp_enabled').eq('id', req.user.id).maybeSingle();
+    if (!user) return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+    if (user.totp_enabled) return res.status(400).json({ error: 'Two-factor authentication is already enabled', code: 'ERR_TOTP_ALREADY_ENABLED' });
+    // Stored but NOT enabled yet — /totp/confirm below must prove the
+    // account holder's app actually has this secret loaded before it starts
+    // being enforced, or a failed/mistyped scan would lock the account out
+    // on its very next login with no way back in.
+    const secret = totp.generateSecret();
+    const { error } = await supabase.from('users').update({ totp_secret: secret }).eq('id', user.id);
+    if (error) throw error;
+    res.json({ success: true, secret, otpauthUrl: totp.otpauthUrl(secret, user.email) });
+  } catch (e) { console.error('totp setup', e); res.status(500).json({ error: 'Could not start two-factor setup', code: 'ERR_SERVER' }); }
+});
+
+router.post('/totp/confirm', authenticate, sec.requireActiveUser, sec.limits.totp, async (req, res) => {
+  try {
+    const code = typeof req.body.token === 'string' ? req.body.token.trim() : '';
+    const { data: user } = await supabase.from('users').select('id, totp_secret, totp_enabled').eq('id', req.user.id).maybeSingle();
+    if (!user) return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+    if (user.totp_enabled) return res.status(400).json({ error: 'Two-factor authentication is already enabled', code: 'ERR_TOTP_ALREADY_ENABLED' });
+    if (!user.totp_secret) return res.status(400).json({ error: 'Call /totp/setup first', code: 'ERR_TOTP_NOT_STARTED' });
+    if (!totp.verifyTOTP(user.totp_secret, code)) return res.status(401).json({ error: 'Invalid authentication code', code: 'ERR_INVALID_TOTP' });
+    const { error } = await supabase.from('users').update({ totp_enabled: true }).eq('id', user.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) { console.error('totp confirm', e); res.status(500).json({ error: 'Could not confirm two-factor setup', code: 'ERR_SERVER' }); }
+});
+
+router.post('/totp/disable', authenticate, sec.requireActiveUser, sec.limits.totp, async (req, res) => {
+  try {
+    const { password, token: code } = req.body;
+    const { data: user } = await supabase.from('users')
+      .select('id, password_hash, totp_secret, totp_enabled').eq('id', req.user.id).maybeSingle();
+    if (!user) return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+    if (!user.totp_enabled) return res.status(400).json({ error: 'Two-factor authentication is not enabled', code: 'ERR_TOTP_NOT_ENABLED' });
+    // Turning 2FA OFF requires proving BOTH factors again, not just a valid
+    // JWT — a bearer token alone (e.g. one lifted via an XSS the nonce-based
+    // CSP mostly, but not entirely, rules out) must never be enough on its
+    // own to downgrade the account's own security posture.
+    const passwordOk = typeof password === 'string' && await bcrypt.compare(password, user.password_hash).catch(() => false);
+    const codeOk = totp.verifyTOTP(user.totp_secret, typeof code === 'string' ? code.trim() : '');
+    if (!passwordOk || !codeOk)
+      return res.status(401).json({ error: 'Password and a valid authentication code are both required', code: 'ERR_INVALID_CREDENTIALS' });
+    const { error } = await supabase.from('users').update({ totp_secret: null, totp_enabled: false }).eq('id', user.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) { console.error('totp disable', e); res.status(500).json({ error: 'Could not disable two-factor authentication', code: 'ERR_SERVER' }); }
+});
+
 module.exports = router;

@@ -346,6 +346,36 @@
       fr: "Vous n'avez aucun abonnement actif à annuler.",
       ar: 'ليس لديك اشتراك نشط لإلغائه.',
     },
+    ERR_INVALID_TOKEN: {
+      en: 'Your session has expired — please sign in again.',
+      fr: 'Votre session a expiré — veuillez vous reconnecter.',
+      ar: 'انتهت صلاحية جلستك — يرجى تسجيل الدخول مرة أخرى.',
+    },
+    ERR_TOTP_REQUIRED: {
+      en: 'Enter the code from your authenticator app.',
+      fr: "Entrez le code de votre application d'authentification.",
+      ar: 'أدخل الرمز من تطبيق المصادقة الخاص بك.',
+    },
+    ERR_INVALID_TOTP: {
+      en: 'That authentication code is not correct.',
+      fr: "Ce code d'authentification est incorrect.",
+      ar: 'رمز المصادقة هذا غير صحيح.',
+    },
+    ERR_TOTP_ALREADY_ENABLED: {
+      en: 'Two-factor authentication is already enabled on this account.',
+      fr: "L'authentification à deux facteurs est déjà activée sur ce compte.",
+      ar: 'المصادقة الثنائية مفعّلة بالفعل على هذا الحساب.',
+    },
+    ERR_TOTP_NOT_STARTED: {
+      en: 'Start two-factor setup before confirming a code.',
+      fr: "Démarrez la configuration à deux facteurs avant de confirmer un code.",
+      ar: 'ابدأ إعداد المصادقة الثنائية قبل تأكيد الرمز.',
+    },
+    ERR_TOTP_NOT_ENABLED: {
+      en: 'Two-factor authentication is not enabled on this account.',
+      fr: "L'authentification à deux facteurs n'est pas activée sur ce compte.",
+      ar: 'المصادقة الثنائية غير مفعّلة على هذا الحساب.',
+    },
   };
 
   const LANGS = Object.keys(STRINGS);
