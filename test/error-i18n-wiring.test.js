@@ -15,7 +15,7 @@ test('index.html defines an apiError() helper backed by i18n.tErr', () => {
   assert.match(script, /const apiError = \(d, fallback\) => .*i18n\.tErr\(currentLang, d\.code\)/);
 });
 
-test('every user-facing error display in the auth, listing, checkout, cancel and concierge flows goes through apiError() or an already-translated t() string', () => {
+test('every user-facing error display in the auth, contact, checkout, cancel and concierge flows goes through apiError() or an already-translated t() string', () => {
   // A bare `d.error`/`data.error` reaching a message-display call is exactly
   // the pre-fix bug: raw English regardless of the chosen UI language.
   const bareErrorDisplay = /\$\('(authMsg|subMsg)'\)\.textContent\s*=\s*d\.error(?!\s*=)/;
@@ -24,11 +24,15 @@ test('every user-facing error display in the auth, listing, checkout, cancel and
   assert.doesNotMatch(script, /textContent = d\.error \|\|/);
 
   // And apiError() is actually called at each of those sites, not just defined.
+  // (The "post an urgent listing" flow this used to also cover was removed
+  // from the page -- Hicham's ask, Sept 2026, 3 stacked footer buttons read
+  // as cluttered on a phone; routes/informal-listings.js and its own
+  // apiError()-style handling are untouched, just reached with no UI here.)
   const sites = [
     /apiError\(d, t\('resendFailedFallback'\)\)/,
     /apiError\(d, t\('errRegistrationFailed'\)\)/,
     /apiError\(d, t\('errSignInFailed'\)\)/,
-    /apiError\(d, t\('postListingFailed'\)\)/,
+    /apiError\(d, t\('contactFailed'\)\)/,
     /apiError\(d, t\('checkoutUnavailable'\)\)/,
     /apiError\(d, t\('cancelSubFailed'\)\)/,
     /apiError\(data, data\.error\)/,
