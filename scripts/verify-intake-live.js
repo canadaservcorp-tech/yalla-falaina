@@ -95,6 +95,30 @@ const SECTOR_WORDS = [
   'receptionist', 'housekeeping', 'caregiver',
 ];
 
+// Added after a live run found the model asserting things it had no way to
+// know during intake — that it had checked the job feed, and that the
+// profile was complete while the platform's own state still showed missing
+// fields. Checked against the seeker-visible `body.reply` (already stripped
+// of the block), never the raw model text, since that's what a real seeker
+// would actually read. The completion/all-set patterns are only checked
+// while the platform itself still says `isComplete: false` for that round —
+// once it's genuinely true, the same words are the correct thing to say, so
+// gating on that avoids flagging the legitimate final confirmation summary.
+const FALSE_JOB_FEED_CLAIM_PATTERNS = [
+  { re: /\bi(?:'ve| have)? (?:checked|looked at|searched|reviewed) (?:the )?(?:job|feed|listing)/i, label: 'claimed to have checked/looked at/searched the job feed or a listing' },
+  { re: /\b(?:no|there are no) (?:jobs|openings|positions|listings) (?:available|found|yet)/i, label: 'claimed a specific job-feed outcome (that none are available)' },
+  { re: /\bi(?:'ve| have)? found (?:some|several|a few )?(?:jobs|openings|positions|matches)/i, label: 'claimed to have found jobs' },
+];
+// Negative lookbehinds exclude the honest, forward-looking phrasing the
+// contract itself now asks for ("once your profile is complete, I can look
+// at the job feed") — only a present-tense claim about the CURRENT state is
+// a violation; a conditional about a future state is exactly correct.
+const FALSE_COMPLETION_CLAIM_PATTERNS = [
+  { re: /(?<!\b(?:once|when|after|before)\s+your\s+)\bprofile is (?:now |fully )?complete\b/i, label: 'claimed the profile is complete' },
+  { re: /\byou'?re all set\b/i, label: 'claimed the seeker is all set' },
+  { re: /(?<!\b(?:once|when|after|before)\s+)\byour profile is (?:done|ready)\b/i, label: 'claimed the profile is done/ready' },
+];
+
 // Postgres upsert semantics (lib/profileWrite.js): a column not present in a
 // given patch is left exactly as it was. The mock DB (test/helpers/mockDb.js)
 // has no such memory — __set() is a flat, static return value — so this
@@ -125,6 +149,7 @@ async function main() {
   let round = 0;
   let message = "Hi, I'm hoping to find work abroad and could use some guidance.";
   let sectorRevealedAtRound = null;
+  let sectorPersistWarned = false;   // fires at most once — see the check right after applyWritesToTrackedRows below
   const violations = [];             // { round, kind, detail } — collected, not thrown, so one bad round doesn't hide the rest of the transcript
   let confirmedAtRound = null;
   let finalIsComplete = false;
@@ -169,6 +194,32 @@ async function main() {
     console.log(`Seeker: ${message}`);
     console.log(`Model (visible): ${body.reply}`);
     console.log(`Block present: ${blockMatch ? 'yes' : 'NO'} | missing so far: ${body.missing.join(', ') || '(none)'}`);
+
+    // Regression check for a live-model failure: the seeker stated their
+    // sector/role and it never landed in profileRow. Checked a round after
+    // the reveal (not the same round — the model's reply to THAT round is
+    // what should have carried it) so this fires promptly instead of only
+    // surfacing indirectly as `never-completed` once MAX_ROUNDS runs out.
+    if (sectorRevealedAtRound !== null && !sectorPersistWarned && round > sectorRevealedAtRound
+      && !profileRow.sector && !profileRow.role_type) {
+      sectorPersistWarned = true;
+      violations.push({ round, kind: 'sector-not-persisted',
+        detail: `seeker stated their sector/role at round ${sectorRevealedAtRound} but profiles.sector/role_type is still null` });
+    }
+
+    // Regression checks for the same live run's other failure: the model
+    // asserting things it has no way to know during intake. Checked against
+    // the seeker-VISIBLE reply (already stripped of the block), and the
+    // completion-claim patterns only while the platform itself still says
+    // this round is incomplete — the same words are correct once it's true.
+    for (const { re, label } of FALSE_JOB_FEED_CLAIM_PATTERNS) {
+      if (re.test(body.reply)) violations.push({ round, kind: 'false-job-feed-claim', detail: `${label} — reply: "${body.reply.slice(0, 160)}"` });
+    }
+    if (!body.isComplete) {
+      for (const { re, label } of FALSE_COMPLETION_CLAIM_PATTERNS) {
+        if (re.test(body.reply)) violations.push({ round, kind: 'false-completion-claim', detail: `${label} while isComplete was still false — reply: "${body.reply.slice(0, 160)}"` });
+      }
+    }
 
     if (!blockMatch) {
       violations.push({ round, kind: 'missing-block', detail: 'no ---PROFILE---...---END--- block in the raw model reply' });

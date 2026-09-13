@@ -258,6 +258,40 @@ test('the intake contract forbids naming sectors or roles as examples, not just 
   assert.match(upstream.body.system, /let the seeker's own words be the entire answer/);
 });
 
+test('the intake contract requires recording the seeker\'s own stated sector/role, distinguishing that from the no-examples rule', async () => {
+  // Regression for a live-model failure: the seeker stated their sector
+  // ("logistics") twice and it never made it into the block, apparently
+  // because the model over-applied the no-suggesting-examples rule to
+  // withholding the seeker's own answer, not just to offering one itself.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake-record-sector' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /once the seeker states their own/);
+  assert.match(upstream.body.system, /recording that exact value in the block below is REQUIRED/);
+});
+
+test('the intake contract forbids claiming to have checked the job feed or knowing whether openings exist', async () => {
+  // Regression for the other half of the same live-model failure report:
+  // the model asserted it had checked the job feed during intake, when job
+  // retrieval never runs until the profile is complete.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake-no-feed-claim' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /You have no access to the job feed or any listing during intake/);
+  assert.match(upstream.body.system, /never state or imply whether openings do or do not exist/);
+});
+
+test('the intake contract forbids the model declaring the profile complete itself, deferring to the platform\'s own Missing list', async () => {
+  // Regression: the model called the profile complete in its reply while the
+  // API's own isComplete was still false with fields missing.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake-no-self-complete' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /never tell/);
+  assert.match(upstream.body.system, /the seeker their profile is complete, done, or ready yourself/);
+  assert.match(upstream.body.system, /platform's own authoritative record/);
+});
+
 test('the model is given more output headroom than before, so a verbose intake summary cannot silently truncate the profile block', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-intake-tokens' }, error: null });
   const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false }, { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
@@ -393,6 +427,60 @@ test('a malformed field in a ---PROFILE--- block is dropped and logged, not allo
   assert.deepEqual(seekerWrites[0].payload.work_history, []);
   // ...and the rejection left a trace in the server log
   assert.ok(errors.some(e => /concierge intake extraction rejected/.test(e) && /preferred_language/.test(e)));
+});
+
+test('a list field answered as a plain string (not the documented array shape) is normalized and persisted, not rejected', async () => {
+  // Regression for a live-model failure: the model answered `education` with
+  // a plain string ("I finished high school, no further education") instead
+  // of the documented array-of-objects shape, and the strict Array.isArray
+  // check in cleanJsonArray threw the whole answer away -- intake could
+  // never reach isComplete even though the seeker had genuinely answered.
+  // Covers every JSON_ARRAY_FIELDS field, since the report asked to verify
+  // every Section 10 field actually round-trips through the contract.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-string-list-fields' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n' + JSON.stringify({
+      work_history: 'Hotel receptionist for three years in Beirut.',
+      education: 'Finished high school, no further formal education.',
+      certifications: 'None.',
+      languages: 'Arabic natively, English fluently.',
+    }) + '\n---END---\nThanks, noted!' }] } });
+  const r = await ask({ message: 'here is my background' }, caller({}, { id: 'sp-strings', is_complete: false, confirmed_by_user: false },
+    { preferred_language: 'en', preferred_country: 'canada', sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /---PROFILE---/);
+  const writes = h.mock.__writes('seeker_profiles', 'upsert');
+  assert.equal(writes.length, 1);
+  // normalized into single-item arrays -- never dropped as invalid, and never
+  // silently stored as a bare string either (still real JSONB array data)
+  assert.deepEqual(writes[0].payload.work_history, ['Hotel receptionist for three years in Beirut.']);
+  assert.deepEqual(writes[0].payload.education, ['Finished high school, no further formal education.']);
+  assert.deepEqual(writes[0].payload.certifications, ['None.']);
+  assert.deepEqual(writes[0].payload.languages, ['Arabic natively, English fluently.']);
+  // nothing here should have been rejected
+  assert.equal(writes.length, 1);
+});
+
+test('an empty-string answer for a list field normalizes to an empty array (a real "no entries" answer), same as the array form', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-empty-string-list' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"certifications":""}\n---END---\nGot it.' }] } });
+  const r = await ask({ message: 'no certifications' }, caller({}, { id: 'sp-empty', is_complete: false, confirmed_by_user: false },
+    { preferred_language: 'en', preferred_country: 'canada', sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const writes = h.mock.__writes('seeker_profiles', 'upsert');
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].payload.certifications, []);
+});
+
+test('the strict PUT-form validator (routes/profile.js) still rejects a bare string for a list field -- the tolerance is scoped to model extraction only', async () => {
+  // The regression above must never loosen the human-facing PUT endpoint:
+  // a client sending a bare string there is a real client-side bug worth a
+  // 400, unlike a probabilistic model's free-text answer.
+  const { validateIntake } = require('../lib/profileWrite');
+  const v = validateIntake({ work_history: 'plumber for 10 years' });
+  assert.equal(v.ok, false);
 });
 
 test('a complete profile passes straight through to matching', async () => {
