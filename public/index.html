@@ -58,13 +58,14 @@
   #authCard input, #authCard select { width: 100%; }
   #authCard .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; font-size: 13px; }
   #authCard .row input { width: auto; }
-  #postListingAside { position: fixed; bottom: 12px; inset-inline-start: 12px; width: min(340px, calc(100vw - 24px)); z-index: 30; }
-  #postListingForm { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-                     padding: 14px; margin-bottom: 8px; max-height: 72vh; overflow-y: auto; }
-  #postListingForm .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 10px; }
-  #postListingForm label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
-  #postListingForm input { width: 100%; }
-  #postListingForm .row { display: flex; gap: 8px; margin: 12px 0 4px; }
+  #postListingAside { position: fixed; bottom: 12px; inset-inline-start: 12px; width: min(340px, calc(100vw - 24px));
+                      z-index: 30; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  #postListingForm, #contactForm { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+                     padding: 14px; margin-bottom: 8px; max-height: 60dvh; overflow-y: auto; }
+  #postListingForm .hint, #contactForm .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 10px; }
+  #postListingForm label, #contactForm label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
+  #postListingForm input, #contactForm input { width: 100%; }
+  #postListingForm .row, #contactForm .row { display: flex; gap: 8px; margin: 12px 0 4px; }
   #authMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-top: 8px; }
   .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
   .tabs button { flex: 1; background: var(--bg); color: var(--text-dim); }
@@ -72,6 +73,32 @@
   #paywall { background: var(--panel); border: 1px solid var(--warn); border-radius: 10px;
              margin: 14px; padding: 14px; font-size: 13px; display: none; }
   #subBar { font-size: 12px; color: var(--text-dim); }
+
+  /* Phones. `main` is a two-pane row (chat flex:2, jobs flex:1 with a 260px
+     floor), which at 360px leaves the chat — the actual product — about 100px
+     wide. Stack them instead: the conversation gets the full width and the
+     matched-jobs list sits below it, scrolled to as needed. */
+  @media (max-width: 720px) {
+    main { flex-direction: column; overflow-y: auto; }
+    #chatPane { border-right: none; border-bottom: 1px solid var(--border); min-height: 60dvh; }
+    #jobsPane { min-width: 0; width: auto; overflow-y: visible; }
+    .msg { max-width: 92%; }
+    header { padding: 10px 12px; }
+    header h1 { font-size: 15px; }
+    /* the two floating panels are tall forms; on a phone only one can fit, so
+       they're mutually exclusive here (see showContact/showPostListing) */
+    #postListingForm, #contactForm { max-height: 56dvh; }
+    /* one compact row of small toggles: at full button size the two stacked
+       buttons were ~90px tall and covered the bottom of the signup card */
+    #postListingAside { display: flex; flex-wrap: wrap; gap: 6px; bottom: 8px;
+                        inset-inline-start: 8px; width: min(340px, calc(100vw - 16px)); }
+    #postListingAside > button { order: 2; flex: 1; font-size: 12px; padding: 8px 6px;
+                                 white-space: normal; }
+    #postListingForm, #contactForm { order: 1; flex: 1 1 100%; }
+    /* let a tall card scroll clear of the fixed controls instead of hiding
+       its bottom (and its submit button) underneath them */
+    #authWrap { align-items: flex-start; padding-bottom: 92px; }
+  }
 </style>
 </head>
 <body>
@@ -320,17 +347,18 @@
   // a visitor actually post the "shawarma cook needed today" pattern the
   // whole feature was built for. Lives in a floating panel outside both the
   // signed-out and signed-in containers since the route itself takes no token.
-  $('showPostListing').onclick = () => {
-    const open = $('postListingForm').style.display === 'block';
-    $('postListingForm').style.display = open ? 'none' : 'block';
-  };
+  $('showPostListing').onclick = () => togglePanel('postListingForm', 'contactForm');
   // ---------- contact us (no account needed) ----------
   // Shares the listing panel's floating placement for the same reason: the
   // route takes no token, so it must be reachable signed in or out.
-  $('showContact').onclick = () => {
-    const open = $('contactForm').style.display === 'block';
-    $('contactForm').style.display = open ? 'none' : 'block';
-  };
+  // Only one panel open at a time: stacked, the two forms are taller than a
+  // phone viewport, which pushed the top of the open one off-screen.
+  function togglePanel(openId, closeId) {
+    const open = $(openId).style.display === 'block';
+    $(openId).style.display = open ? 'none' : 'block';
+    if (!open) $(closeId).style.display = 'none';
+  }
+  $('showContact').onclick = () => togglePanel('contactForm', 'postListingForm');
   $('contactSubmit').onclick = async () => {
     const msg = $('contactMsg');
     msg.style.color = 'var(--warn)';
