@@ -354,7 +354,20 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     if (!isComplete) {
       const m = reply.match(PROFILE_BLOCK_RE);
       if (m) {
-        reply = reply.replace(PROFILE_BLOCK_RE, '').trim() || reply;
+        // Bug found in a follow-up audit: `reply.replace(...).trim() || reply`
+        // looks like a safe "don't blank the reply" fallback, but `reply` on
+        // the right of `||` is evaluated BEFORE this assignment lands, so it
+        // still holds the ORIGINAL, unstripped string — block included. If
+        // the model's entire turn was nothing but the block (plausible now
+        // that the contract puts the block first and no longer requires
+        // trailing prose), the stripped result is '', the fallback kicks in,
+        // and the raw "---PROFILE---{...}---END---" JSON — the seeker's own
+        // just-given passport/visa/work-history answers — gets shipped
+        // straight into their chat instead of a clean reply. Same failure
+        // family as the truncated-block leak fixed above (else-if below):
+        // a successful match must never leave the raw fencing visible either.
+        const stripped = reply.replace(PROFILE_BLOCK_RE, '').trim();
+        reply = stripped || 'Got it, thanks for sharing that!';
         try {
           const extracted = JSON.parse(m[1]);
           // Lenient validation: a malformed field in the block is dropped and

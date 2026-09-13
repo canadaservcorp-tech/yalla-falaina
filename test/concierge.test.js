@@ -308,6 +308,30 @@ test('a ---PROFILE--- block placed FIRST (as the intake contract now asks for) s
   assert.equal(writes[0].payload.has_passport, true);
 });
 
+test('a reply that is ONLY a well-formed ---PROFILE--- block (no text before or after) still extracts and never echoes the raw fencing back', async () => {
+  // Regression for a real bug a follow-up audit found: `reply.replace(...)
+  // .trim() || reply` looks like a safe "don't send an empty reply"
+  // fallback, but `reply` on the right of `||` still holds its ORIGINAL,
+  // pre-strip value at that point in evaluation -- so when the stripped
+  // result is '' (the model's whole turn was nothing but the block, now
+  // more likely since the contract puts the block first and doesn't
+  // require trailing prose), the fallback silently restores the raw
+  // "---PROFILE---{...}---END---" text, including the seeker's own
+  // just-given passport/visa/work-history answers, straight into their chat.
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-block-only' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"preferred_country":"canada","has_passport":true}\n---END---' }] } });
+  const r = await ask({ message: 'I want Canada and I have a passport' }, caller({}, { id: 'sp-prior', is_complete: false, confirmed_by_user: false }, { preferred_language: 'en', preferred_country: null, sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /---PROFILE---/);
+  assert.doesNotMatch(j.reply, /has_passport/);   // the raw JSON itself must never surface
+  assert.ok(j.reply.trim().length > 0);           // a friendly fallback line, not an empty reply
+  const writes = h.mock.__writes('seeker_profiles', 'upsert');
+  assert.equal(writes.length, 1);                 // extraction still happened -- this branch DID match
+  assert.equal(writes[0].payload.has_passport, true);
+});
+
 test('a truncated ---PROFILE--- block (cut off before ---END---, e.g. hitting the token budget) persists nothing and never leaks raw fencing to the seeker', async () => {
   // Launch-readiness review: PROFILE_BLOCK_RE requires a closing ---END---,
   // so an unclosed block already can't be extracted or half-persisted -- this
