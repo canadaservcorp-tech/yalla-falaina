@@ -11,7 +11,8 @@
     "test": "node --test --test-force-exit test/*.test.js",
     "jobs:refresh": "node lib/jobsIngest.js",
     "retention": "node scripts/document-retention.js",
-    "paypal:setup": "node scripts/paypal-setup.js"
+    "paypal:setup": "node scripts/paypal-setup.js",
+    "verify:intake-live": "node scripts/verify-intake-live.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

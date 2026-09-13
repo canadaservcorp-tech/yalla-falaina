@@ -124,6 +124,25 @@ const previewInstructions = (remaining) => [
 //    budget could truncate the JSON block itself — malformed JSON (or a
 //    missing ---END---) fails PROFILE_BLOCK_RE silently, which looks
 //    identical from the outside to the model never emitting a block at all.
+//
+// A THIRD round of live-model verification (against the real API, via
+// scripts/verify-intake-live.js) found two more failures, addressed below:
+//
+// 4. The seeker stated their sector/role twice and it never made it into the
+//    block, so sector_or_role_type stayed missing forever and intake could
+//    never complete. The old wording's only mention of sector/role was the
+//    no-examples rule ("do not name specific sectors/roles as examples") —
+//    plausible reading: the model over-applied that ban to recording the
+//    seeker's OWN stated answer, not just to suggesting one. The new
+//    paragraph below draws that line explicitly: the ban is about what the
+//    model offers, never about withholding what the seeker already said.
+// 5. The model asserted things it has no way to know during intake — that it
+//    had checked the job feed, and that the profile was complete while the
+//    platform's own state still showed missing fields. Nothing in the old
+//    contract forbade either claim outright (the no-jobs rule bans
+//    mentioning job CONTENT, not claims about having looked), so both are
+//    now named explicitly, and completeness is pinned to the platform's own
+//    Missing list rather than the model's own tally.
 const intakeInstructions = (missing) => [
   'INTAKE MODE — the seeker\'s profile is incomplete (Section 10 required fields).',
   'Your only task: conversationally collect the missing fields below, in the seeker\'s language, a few questions at a time:',
@@ -139,6 +158,13 @@ const intakeInstructions = (missing) => [
   '"are you looking for something like construction or hospitality?". Ask sector/role_type as a fully open question',
   '("what kind of work are you hoping to find?") and let the seeker\'s own words be the entire answer — an example',
   'you supply is a suggestion, not an open question, and this is intake, not matching.',
+  'This rule is about what YOU suggest, never about what the seeker tells you: once the seeker states their own',
+  'sector or role in their own words, recording that exact value in the block below is REQUIRED, not an exception',
+  'to the no-examples rule. Leaving a field the seeker already answered out of the block, out of caution about',
+  'naming a sector, is itself a contract violation.',
+  'You have no access to the job feed or any listing during intake, and none is ever checked or retrieved before',
+  'the profile is complete. Never claim to have checked, looked at, searched, or reviewed jobs or the feed, and',
+  'never state or imply whether openings do or do not exist — you have no way to actually know that right now.',
   '',
   'REQUIRED ON EVERY REPLY, no exceptions, even if this turn taught you nothing new: start your reply with a',
   '---PROFILE--- block, then continue with your conversational reply to the seeker below it, like this:',
@@ -150,6 +176,11 @@ const intakeInstructions = (missing) => [
   'whatever the platform already told you this seeker answered, plus anything said in this conversation — not only',
   'what changed this turn.',
   'Omit a field entirely if you don\'t have a value for it yet; never guess or invent one.',
+  'The Missing list above is the platform\'s own authoritative record of what is still absent, recomputed fresh',
+  'every turn from what was actually persisted — not your own memory of the conversation. If you believe a field is',
+  'already answered but it still appears there, ask about it again rather than assuming it was recorded; never tell',
+  'the seeker their profile is complete, done, or ready yourself — that determination is the platform\'s alone, made',
+  'only after you and the seeker both confirm together.',
   'When every field above is collected, summarize what you heard and ask the seeker to confirm. Do not include',
   '"confirmed_by_user" at all until they explicitly confirm — omit it, rather than sending false, so a later reply',
   'can never accidentally undo a real confirmation. Only once they explicitly confirm, add "confirmed_by_user": true',
@@ -412,3 +443,9 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
 });
 
 module.exports = router;
+// Exported alongside the router (Express routers are plain functions, so this
+// is a harmless extra property, not a behavior change) purely so
+// scripts/verify-intake-live.js can check a real model's raw reply against
+// the exact same pattern the server itself extracts with — a hand-duplicated
+// copy in the verification script would risk silently drifting from this one.
+module.exports.PROFILE_BLOCK_RE = PROFILE_BLOCK_RE;
