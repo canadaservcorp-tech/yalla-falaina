@@ -88,6 +88,16 @@
     /* the two floating panels are tall forms; on a phone only one can fit, so
        they're mutually exclusive here (see showContact/showPostListing) */
     #postListingForm, #contactForm { max-height: 56dvh; }
+    /* one compact row of small toggles: at full button size the two stacked
+       buttons were ~90px tall and covered the bottom of the signup card */
+    #postListingAside { display: flex; flex-wrap: wrap; gap: 6px; bottom: 8px;
+                        inset-inline-start: 8px; width: min(340px, calc(100vw - 16px)); }
+    #postListingAside > button { order: 2; flex: 1; font-size: 12px; padding: 8px 6px;
+                                 white-space: normal; }
+    #postListingForm, #contactForm { order: 1; flex: 1 1 100%; }
+    /* let a tall card scroll clear of the fixed controls instead of hiding
+       its bottom (and its submit button) underneath them */
+    #authWrap { align-items: flex-start; padding-bottom: 92px; }
   }
 </style>
 </head>
