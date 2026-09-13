@@ -41,6 +41,8 @@
   .flag.unverified { background: rgba(217, 164, 65, 0.18); color: var(--warn); }
   .flag.demo { background: rgba(140, 140, 140, 0.18); color: var(--text-dim); }
   .flag.honesty { background: rgba(217, 97, 74, 0.15); color: var(--danger); }
+  #cvPane { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+  #cvButtons { display: flex; gap: 8px; flex-wrap: wrap; }
   #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; line-height: 1.45; font-size: 14px; white-space: pre-wrap; }
   .msg.user { align-self: flex-end; background: var(--bubble-user); border-bottom-right-radius: 4px; }
@@ -185,6 +187,15 @@
   <div id="jobsPane">
     <h2 data-i18n="jobsHeading">Matched opportunities</h2>
     <div id="jobsList"><p style="color:var(--text-dim);font-size:13px;" data-i18n="jobsPlaceholder">Send a message to see what the matching engine finds — jobs shown here are the only ones the assistant is allowed to reference.</p></div>
+    <div id="cvPane">
+      <h2 data-i18n="cvHeading">Your CV</h2>
+      <p id="cvStatus" style="color:var(--text-dim);font-size:13px;"></p>
+      <div id="cvButtons" style="display:none">
+        <button id="cvDownloadPdf" data-i18n="cvDownloadPdf">Download PDF</button>
+        <button id="cvDownloadDocx" class="ghost" data-i18n="cvDownloadWord">Download Word</button>
+      </div>
+      <button id="cvSubscribePrompt" class="ghost" style="display:none" data-i18n="cvSubscribeToDownload">🔒 Subscribe to download</button>
+    </div>
   </div>
 </main>
 
@@ -415,13 +426,33 @@
     } finally { $('postListingSubmit').disabled = false; }
   };
 
-  function enter() {
+  // Hicham's explicit ask: closing and reopening the app while subscribed
+  // (or even mid-free-preview) must not look like the conversation was
+  // lost -- every turn is already durably logged server-side (GET
+  // /api/concierge/history), this just rehydrates the chat UI and the
+  // conversationId from it before deciding whether to show the one-time
+  // welcome message.
+  async function resumeConversation() {
+    try {
+      const r = await fetch('/api/concierge/history', { headers: headers() });
+      if (!r.ok) return false;
+      const d = await r.json();
+      if (!d.success || !d.messages || !d.messages.length) return false;
+      conversationId = d.conversationId || null;
+      history = d.messages.map(m => ({ role: m.role, content: m.content }));
+      for (const m of d.messages) addMessage(m.role === 'assistant' ? 'bot' : 'user', m.content);
+      return true;
+    } catch { return false; }
+  }
+
+  async function enter() {
     $('authWrap').style.display = 'none';
     $('appMain').style.display = 'flex';
     $('logoutBtn').style.display = 'inline-block';
     refreshSub();
-    if (!history.length)
-      addMessage('system', t('welcomeSystemMessage'));
+    refreshCv();
+    const resumed = await resumeConversation();
+    if (!resumed) addMessage('system', t('welcomeSystemMessage'));
   }
   $('logoutBtn').onclick = () => { sessionStorage.removeItem(tokenKey); location.reload(); };
 
@@ -453,6 +484,46 @@
       if (!active || canceled) $('cancelSubConfirm').style.display = 'none';
     } catch { /* status is advisory only */ }
   }
+
+  // ---------- CV export (PDF/Word), gated on subscription -- see routes/cv.js ----------
+  // The tease: GET /api/cv/preview is free for everyone (never the file
+  // itself, just readiness + counts), same "show there's something real,
+  // withhold the payoff" mechanic as the job cards' teaser fields.
+  async function refreshCv() {
+    try {
+      const r = await fetch('/api/cv/preview', { headers: headers() });
+      if (!r.ok) return;
+      const d = await r.json();
+      $('cvButtons').style.display = (d.subscribed && d.ready) ? 'flex' : 'none';
+      $('cvSubscribePrompt').style.display = (!d.subscribed) ? 'inline-block' : 'none';
+      $('cvStatus').textContent = !d.ready ? t('cvNotReady') : (d.subscribed ? t('cvReadySubscribed') : t('cvReadyPreview'));
+    } catch { /* advisory only, same as refreshSub */ }
+  }
+  // A plain <a href> can't carry the Authorization header the export route
+  // needs, so this fetches the file as a blob and hands the browser a
+  // temporary object URL to save instead -- the download itself, not just
+  // the request, still requires the subscription (a 402 here means the
+  // server refused, not that the button shouldn't have been shown).
+  async function downloadCv(format) {
+    try {
+      const r = await fetch(`/api/cv/export?format=${format}`, { headers: headers() });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        if (r.status === 402) { $('paywall').style.display = 'block'; }
+        addMessage('system', t('errorPrefix') + apiError(d, d.error || r.statusText));
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = format === 'docx' ? 'CV.docx' : 'CV.pdf';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch { addMessage('system', t('networkError')); }
+  }
+  $('cvDownloadPdf').onclick = () => downloadCv('pdf');
+  $('cvDownloadDocx').onclick = () => downloadCv('docx');
+  $('cvSubscribePrompt').onclick = () => { $('paywall').style.display = 'block'; };
   // Same handler for both providers — PayPal and Stripe differ only in which
   // endpoint starts the checkout, not in how the client waits for or reports it.
   async function startCheckout(path) {
@@ -598,6 +669,7 @@
       addMessage('bot', data.reply);
       history.push({ role: 'assistant', content: data.reply });
       renderJobs(data.jobs, data.jobsRetrieved);
+      refreshCv(); // the seeker's collected background just grew (or their profile just completed)
       if (data.llmConfigured === false) addMessage('system', t('demoModeNotice'));
       if (data.preview) addMessage('system', t('previewRemainingNotice', { n: data.previewRemaining }));
     } catch (err) {
@@ -615,8 +687,10 @@
   // recording gets words wrong, and these words become the seeker's stored
   // intake answers ("I have a visa" / "I have no visa"), so a human confirms
   // before it reaches the concierge.
-  let recorder = null, chunks = [], stopTimer = null;
-  const MAX_SECONDS = 120;
+  let recorder = null, chunks = [], stopTimer = null, recordStart = 0;
+  // Must match lib/voiceNotes.js's MAX_VOICE_SECONDS — the server rejects
+  // longer notes anyway, and stopping early is a kinder failure than a 413.
+  const MAX_SECONDS = 30;
   // Safari/iOS produce mp4, Chrome/Firefox webm; pick whatever this browser
   // says it can actually record rather than assuming.
   const PREFERRED_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg'];
@@ -659,23 +733,25 @@
       stream.getTracks().forEach(tr => tr.stop());   // release the mic indicator immediately
       setMicState(false);
       const blob = new Blob(chunks, { type: (recorder.mimeType || mimeType || 'audio/webm').split(';')[0] });
+      const durationSec = Math.max(1, Math.round((Date.now() - recordStart) / 1000));
       recorder = null; chunks = [];
       if (!blob.size) { addMessage('system', t('voiceEmpty')); return; }
-      await transcribeBlob(blob);
+      await transcribeBlob(blob, durationSec);
     };
     recorder.start();
+    recordStart = Date.now();
     setMicState(true);
     // Hard ceiling so a forgotten open mic can't run into the request size cap
     // (or the seeker's data) — stop() runs the same path as tapping stop.
     stopTimer = setTimeout(() => { if (recorder && recorder.state === 'recording') recorder.stop(); }, MAX_SECONDS * 1000);
   }
-  async function transcribeBlob(blob) {
+  async function transcribeBlob(blob, durationSec) {
     micBtn.disabled = true;
     const pending = addMessage('system', t('voiceTranscribing'));
     try {
       const res = await fetch('/api/voice/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': blob.type || 'audio/webm', Authorization: 'Bearer ' + token() },
+        headers: { 'Content-Type': blob.type || 'audio/webm', Authorization: 'Bearer ' + token(), 'X-Audio-Duration': String(durationSec) },
         body: blob,
       });
       const data = await res.json().catch(() => ({}));

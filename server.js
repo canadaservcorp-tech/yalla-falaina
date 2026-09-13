@@ -65,6 +65,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/concierge', require('./routes/concierge')); // the AI concierge — the product
 app.use('/api/profile', require('./routes/profile'));
+app.use('/api/cv', require('./routes/cv')); // CV export (PDF/Word) -- subscription-gated, see routes/cv.js
 app.use('/api/informal-listings', require('./routes/informal-listings'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/voice', require('./routes/voice'));    // chat voice notes -> transcript -> /api/concierge

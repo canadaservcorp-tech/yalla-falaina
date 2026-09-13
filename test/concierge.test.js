@@ -18,13 +18,19 @@ globalThis.fetch = async (url, opts) => {
   return realFetch(url, opts);
 };
 
-after(() => { globalThis.fetch = realFetch; return h.stop(); });
+after(() => { globalThis.fetch = realFetch; delete process.env.FREE_PREVIEW_LIMIT; return h.stop(); });
 beforeEach(() => {
   h.mock.__reset();
   upstream = null;
   respond = () => ({ status: 200, body: { content: [{ type: 'text', text: 'Ahla! Tell me where you want to go.' }] } });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   delete process.env.PAYWALL_ENFORCED;
+  // Pinned rather than left at the production default (routes/concierge.js's
+  // freePreviewLimit(), currently 8): the free-preview tests below are
+  // exercising the BOUNDARY logic (Nth turn still teased, N+1th hits the
+  // paywall), not asserting what today's tuned default happens to be, so
+  // they fix their own limit and stay correct whatever Hicham sets in Railway.
+  process.env.FREE_PREVIEW_LIMIT = '3';
 });
 
 let uid = 0;
@@ -668,6 +674,28 @@ test('a complete profile passes straight through to matching', async () => {
   const j = await r.json();
   assert.equal(j.intake, false);
   assert.match(upstream.body.system, /JOB_CONTEXT/);
+});
+
+// ---------- cvAvailableInstructions: only told to a subscriber ----------
+
+// lib/yf/systemPrompt.js's own general "what this platform does" section
+// mentions CV generation and the literal words "CV EXPORT" (as a pointer to
+// this request-specific block) unconditionally, for every seeker -- so the
+// assertions below key on cvAvailableInstructions' own unique wording
+// (routes/concierge.js), not the "CV EXPORT" heading, to actually
+// distinguish "told it's available now" from "told it exists as a concept."
+test('an active subscriber\'s system prompt tells the model CV download exists, and how it may talk about it', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-cv-active' }, error: null });
+  const r = await ask({ message: 'electrician canada' }, caller({ subscription_status: 'active', subscription_tier: 'basic' }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /cannot attach, send, or generate the file yourself/);
+});
+
+test('an inactive/unsubscribed seeker\'s system prompt is not told the CV is available to download right now -- there is nothing for the model to correctly offer yet', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-cv-inactive' }, error: null });
+  const r = await ask({ message: 'electrician canada' }, caller({ subscription_status: 'inactive' }));
+  assert.equal(r.status, 200);
+  assert.doesNotMatch(upstream.body.system, /cannot attach, send, or generate the file yourself/);
 });
 
 // ---------- feeding the stored profile into every turn ----------

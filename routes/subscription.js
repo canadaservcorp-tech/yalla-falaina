@@ -22,6 +22,7 @@ const stripe = require('../lib/stripe');
 const sec = require('../lib/security');
 const ev = require('../lib/subscription-events');
 const stripeEv = require('../lib/stripe-events');
+const voiceNotes = require('../lib/voiceNotes');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
@@ -190,6 +191,15 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
         if (patch.subscription_status === 'canceled') patch.subscription_tier = 'none';
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
+        // Hicham's explicit ask: voice notes are deleted once a subscription
+        // genuinely ends -- see lib/voiceNotes.js's own comment on why this
+        // is wired to the webhook-confirmed cancellation rather than the
+        // POST /cancel click (which only starts the grace period). Never
+        // lets a storage-cleanup failure fail the webhook itself -- PayPal
+        // retries a non-2xx response, and re-processing the same
+        // cancellation event must stay safe either way.
+        if (patch.subscription_status === 'canceled')
+          voiceNotes.deleteAllVoiceNotes(user.id).catch(e => console.error('voice note cleanup', e.message));
       }
     }
     res.json({ received: true });
@@ -249,6 +259,10 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json', limit: '1
         if (patch.subscription_status === 'canceled') patch.subscription_tier = 'none';
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
+        // See the identical PayPal-branch comment above -- same policy, same
+        // "never fail the webhook over a cleanup side-effect" discipline.
+        if (patch.subscription_status === 'canceled')
+          voiceNotes.deleteAllVoiceNotes(user.id).catch(e => console.error('voice note cleanup', e.message));
       }
       return res.json({ received: true });
     }
