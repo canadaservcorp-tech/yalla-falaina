@@ -63,6 +63,9 @@
     <div class="hint">Same login as any account — this page just refuses anyone whose role isn't admin.</div>
     <label>Email</label><input type="email" id="email">
     <label>Password</label><input type="password" id="password">
+    <div id="totpRow" style="display:none">
+      <label>Authentication code</label><input type="text" id="totpCode" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code">
+    </div>
     <div style="margin-top:14px"><button id="loginBtn" style="width:100%">Sign in</button></div>
     <div id="loginMsg"></div>
   </div>
@@ -73,10 +76,32 @@
     <button data-status="pending" class="on">Pending</button>
     <button data-status="approved">Approved</button>
     <button data-status="rejected">Rejected</button>
+    <button data-tab="security">Security</button>
   </div>
   <div id="topMsg"></div>
   <div id="list"></div>
   <div id="empty" style="display:none">Nothing here.</div>
+
+  <div id="securityPanel" class="card" style="display:none">
+    <div class="title">Two-factor authentication</div>
+    <div id="totpOff">
+      <div class="meta">Not enabled on this account. Turning it on means a leaked or guessed password alone can no longer sign in as you.</div>
+      <button id="totpStartBtn">Enable two-factor authentication</button>
+      <div id="totpEnroll" style="display:none; margin-top:12px">
+        <div class="meta">Scan this into Google Authenticator, Authy, or 1Password — or enter the secret manually:</div>
+        <div class="desc" id="totpSecretText" style="word-break:break-all"></div>
+        <label>Code from your app</label><input type="text" id="totpConfirmCode" inputmode="numeric" autocomplete="one-time-code" style="max-width:140px">
+        <div style="margin-top:8px"><button id="totpConfirmBtn">Confirm and turn on</button></div>
+      </div>
+    </div>
+    <div id="totpOn" style="display:none">
+      <div class="meta">Two-factor authentication is <strong>ON</strong> for this account.</div>
+      <label>Current password</label><input type="password" id="totpDisablePw" style="max-width:220px">
+      <label>Current code</label><input type="text" id="totpDisableCode" inputmode="numeric" autocomplete="one-time-code" style="max-width:140px">
+      <div style="margin-top:8px"><button class="danger" id="totpDisableBtn">Disable two-factor authentication</button></div>
+    </div>
+    <div id="securityMsg" style="font-size:13px;color:var(--warn);margin-top:8px;min-height:18px"></div>
+  </div>
 </div>
 
 <script>
@@ -97,13 +122,25 @@
   $('loginBtn').onclick = async () => {
     $('loginMsg').textContent = '';
     const email = $('email').value.trim(), password = $('password').value;
+    const totpToken = $('totpCode').value.trim();
     if (!email || !password) { $('loginMsg').textContent = 'Enter both fields.'; return; }
     $('loginBtn').disabled = true;
     try {
+      const body = { email, password };
+      if (totpToken) body.totpToken = totpToken;
       const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }) });
+        body: JSON.stringify(body) });
       const d = await r.json();
-      if (!r.ok) { $('loginMsg').textContent = d.error || 'Sign-in failed'; return; }
+      if (!r.ok) {
+        // The password already matched to get this far — reveal the code
+        // field only now, same as any other TOTP-protected sign-in flow.
+        if (d.code === 'ERR_TOTP_REQUIRED' || d.code === 'ERR_INVALID_TOTP') {
+          $('totpRow').style.display = 'block';
+          $('totpCode').focus();
+        }
+        $('loginMsg').textContent = d.error || 'Sign-in failed';
+        return;
+      }
       sessionStorage.setItem(tokenKey, d.token);
       // Confirm admin role before showing the console — a non-admin token
       // still signs in fine, it just can't read anything past this point.
@@ -123,8 +160,18 @@
     btn.onclick = () => {
       document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
       btn.classList.add('on');
-      status = btn.dataset.status;
-      load();
+      $('topMsg').textContent = '';
+      if (btn.dataset.tab === 'security') {
+        $('list').style.display = 'none';
+        $('empty').style.display = 'none';
+        $('securityPanel').style.display = 'block';
+        loadSecurity();
+      } else {
+        $('securityPanel').style.display = 'none';
+        $('list').style.display = 'block';
+        status = btn.dataset.status;
+        load();
+      }
     };
   });
 
@@ -195,6 +242,62 @@
       card.querySelectorAll('button').forEach(b => b.disabled = false);
     }
   }
+
+  // ---------- two-factor authentication settings ----------
+  async function loadSecurity() {
+    $('securityMsg').textContent = '';
+    $('totpEnroll').style.display = 'none';
+    try {
+      const r = await fetch('/api/auth/totp/status', { headers: headers() });
+      if (r.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
+      const d = await r.json();
+      $('totpOff').style.display = d.totpEnabled ? 'none' : 'block';
+      $('totpOn').style.display = d.totpEnabled ? 'block' : 'none';
+    } catch (e) { $('securityMsg').textContent = 'Network error — try again.'; }
+  }
+
+  $('totpStartBtn').onclick = async () => {
+    $('securityMsg').textContent = '';
+    $('totpStartBtn').disabled = true;
+    try {
+      const r = await fetch('/api/auth/totp/setup', { method: 'POST', headers: headers() });
+      const d = await r.json();
+      if (!r.ok) { $('securityMsg').textContent = d.error || 'Could not start setup.'; return; }
+      $('totpSecretText').textContent = d.secret + ' — or scan: ' + d.otpauthUrl;
+      $('totpEnroll').style.display = 'block';
+    } catch (e) { $('securityMsg').textContent = 'Network error — try again.'; }
+    finally { $('totpStartBtn').disabled = false; }
+  };
+
+  $('totpConfirmBtn').onclick = async () => {
+    $('securityMsg').textContent = '';
+    const code = $('totpConfirmCode').value.trim();
+    if (!code) { $('totpConfirmCode').focus(); return; }
+    $('totpConfirmBtn').disabled = true;
+    try {
+      const r = await fetch('/api/auth/totp/confirm', { method: 'POST', headers: headers(), body: JSON.stringify({ token: code }) });
+      const d = await r.json();
+      if (!r.ok) { $('securityMsg').textContent = d.error || 'Could not confirm.'; return; }
+      $('totpConfirmCode').value = '';
+      loadSecurity();
+    } catch (e) { $('securityMsg').textContent = 'Network error — try again.'; }
+    finally { $('totpConfirmBtn').disabled = false; }
+  };
+
+  $('totpDisableBtn').onclick = async () => {
+    $('securityMsg').textContent = '';
+    const password = $('totpDisablePw').value, code = $('totpDisableCode').value.trim();
+    if (!password || !code) { $('securityMsg').textContent = 'Enter both your password and your current code.'; return; }
+    $('totpDisableBtn').disabled = true;
+    try {
+      const r = await fetch('/api/auth/totp/disable', { method: 'POST', headers: headers(), body: JSON.stringify({ password, token: code }) });
+      const d = await r.json();
+      if (!r.ok) { $('securityMsg').textContent = d.error || 'Could not disable.'; return; }
+      $('totpDisablePw').value = ''; $('totpDisableCode').value = '';
+      loadSecurity();
+    } catch (e) { $('securityMsg').textContent = 'Network error — try again.'; }
+    finally { $('totpDisableBtn').disabled = false; }
+  };
 
   // A token from a previous session is worth trying before making the admin
   // sign in again — same convenience the main app gives seekers.

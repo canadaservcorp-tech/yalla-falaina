@@ -27,6 +27,18 @@
 -- daily_usage and rate_hit() below, for why): no dedupe needed here, unlike
 -- the constraint above — just run the two `create or replace function`
 -- statements once by hand; they don't touch existing table data.
+--
+-- Migrating an ALREADY-DEPLOYED project onto two-factor auth and login
+-- lockout (routes/auth.js's /totp/* endpoints and record_login_result()
+-- below): add the four new users columns, then run the `create or replace
+-- function` statement for record_login_result() near rate_hit() below —
+-- neither step touches any existing row (every new column defaults to "not
+-- set up yet"):
+--   alter table public.users
+--     add column if not exists totp_secret text,
+--     add column if not exists totp_enabled boolean not null default false,
+--     add column if not exists failed_login_count integer not null default 0,
+--     add column if not exists locked_until timestamptz;
 
 create extension if not exists "uuid-ossp";
 
@@ -55,6 +67,10 @@ create table if not exists public.users (
   signup_source text,
   banned boolean not null default false,
   free_preview_used integer not null default 0,  -- lifetime count of free-preview concierge turns used (limit 3)
+  totp_secret text,                              -- base32 TOTP secret (RFC 6238); null until /totp/setup is called
+  totp_enabled boolean not null default false,   -- only true once /totp/confirm has proven the secret was scanned correctly
+  failed_login_count integer not null default 0, -- consecutive failed logins; reset to 0 on success (record_login_result())
+  locked_until timestamptz,                      -- set once failed_login_count crosses the threshold; null when not locked
   created_at timestamptz default now()
 );
 create table if not exists public.banned_emails (   -- blocklist (can't re-subscribe)
@@ -91,6 +107,47 @@ returns integer language sql security definer set search_path = public
 as $$
   with gone as (delete from public.rate_hits where reset_at < now() - interval '1 hour' returning 1)
   select count(*)::int from gone;
+$$;
+
+-- Account-level login lockout bookkeeping (routes/auth.js /login), keyed on
+-- the user row itself rather than the IP — sec.limits.credentials already
+-- rate-limits by IP+email, which stops one address from password-spraying a
+-- list of accounts, but does nothing to stop a botnet distributing wrong
+-- guesses against a SINGLE target account across many different IPs, since
+-- each IP gets its own bucket. This closes that gap independent of where the
+-- attempts come from. Same atomic-update discipline as usage_charge() and
+-- increment_free_preview() above: routes/auth.js used to read
+-- failed_login_count, add 1 in JS, and write the sum back, which let two
+-- concurrent wrong-password requests both read the same count and clobber
+-- each other's increment — undercounting failures and letting an account run
+-- past the point it should have locked. A successful login resets the
+-- counter and clears any lock; a failure increments it and, once it reaches
+-- p_max_attempts, sets locked_until p_lock_ms into the future (an
+-- ALREADY-locked account that keeps failing does not push locked_until
+-- forward again — see the `case` branch below — so retrying during a lock
+-- can't turn a bounded lock into an unbounded one).
+create or replace function public.record_login_result(p_user_id bigint, p_success boolean, p_max_attempts integer, p_lock_ms integer)
+returns table(failed_login_count integer, locked_until timestamptz)
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if p_success then
+    update public.users u set failed_login_count = 0, locked_until = null
+    where u.id = p_user_id
+    returning u.failed_login_count, u.locked_until into failed_login_count, locked_until;
+  else
+    update public.users u set
+      failed_login_count = u.failed_login_count + 1,
+      locked_until = case
+        when u.locked_until is not null and u.locked_until > now() then u.locked_until
+        when u.failed_login_count + 1 >= p_max_attempts then now() + make_interval(secs => p_lock_ms / 1000.0)
+        else u.locked_until
+      end
+    where u.id = p_user_id
+    returning u.failed_login_count, u.locked_until into failed_login_count, locked_until;
+  end if;
+  return next;
+end;
 $$;
 
 -- One row per user — Section 10 signup/intake fields. id IS users.id (1:1).
