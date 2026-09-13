@@ -134,7 +134,7 @@ test('concierge: paywall enforced on an inactive subscription -> ERR_PAYWALL (40
 });
 
 test('concierge: daily quota exhausted -> ERR_QUOTA (429)', async () => {
-  h.mock.__set('daily_usage', { data: { units_used: 5 }, error: null }); // 'none' tier limit is 5
+  h.mock.__set('daily_usage', { data: { units_used: 8 }, error: null }); // 'none' tier cap tracks FREE_PREVIEW_LIMIT (default 8)
   const r = await ask({ message: 'hi' }, caller());
   assert.equal(r.status, 429);
   assert.equal((await r.json()).code, 'ERR_QUOTA');

@@ -614,11 +614,19 @@
   // showing the plain "no opportunities matched" copy there would falsely
   // claim the feed was checked. Defaults to true so every other call site
   // (which predates this fix and always did search) keeps its old text.
-  function renderJobs(jobs, retrieved) {
+  function renderJobs(jobs, retrieved, isComplete) {
     if (!jobs || !jobs.length) {
       const p = document.createElement('p');
       p.style.cssText = 'color:var(--text-dim);font-size:13px;';
-      p.textContent = retrieved === false ? t('profileCompleteSearching') : t('noJobsMatched');
+      // `retrieved === false` covers EVERY intake turn (the feed never runs
+      // during intake), not just the completion transition — the "your
+      // profile is complete" copy only belongs on the transition turn, so it
+      // additionally requires isComplete. Ordinary intake turns get the
+      // placeholder copy instead (live smoke test found the complete-banner
+      // showing from the first intake message).
+      p.textContent = retrieved === false
+        ? (isComplete ? t('profileCompleteSearching') : t('jobsPlaceholder'))
+        : t('noJobsMatched');
       jobsListEl.innerHTML = '';
       jobsListEl.appendChild(p);
       return;
@@ -680,7 +688,7 @@
       conversationId = data.conversationId || conversationId;
       addMessage('bot', data.reply);
       history.push({ role: 'assistant', content: data.reply });
-      renderJobs(data.jobs, data.jobsRetrieved);
+      renderJobs(data.jobs, data.jobsRetrieved, data.isComplete);
       refreshCv(); // the seeker's collected background just grew (or their profile just completed)
       if (data.llmConfigured === false) addMessage('system', t('demoModeNotice'));
       if (data.preview) addMessage('system', t('previewRemainingNotice', { n: data.previewRemaining }));
