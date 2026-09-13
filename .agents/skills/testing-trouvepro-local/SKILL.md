@@ -47,8 +47,19 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
   informal_unverified and honesty badges. Seed postings are fixtures, not verified
   live vacancies; do not describe successful model calls as proof of job validity.
 - For exact-user cleanup, resolve conversation IDs by concierge_conversations.profile_id,
-  then delete daily_usage → concierge_messages (by conversation_id) →
-  concierge_conversations → profiles → users. Re-query each scoped table; keep jobs.
+  then delete daily_usage (profile_id) → concierge_messages (by conversation_id) →
+  concierge_conversations → seeker_profiles (profile_id) → profiles → users.
+  Re-query each scoped table; keep jobs.
+- For live conversational intake, inspect browser-originated responses and database
+  state after each turn. A clean prose summary is not proof of extraction or
+  completeness. Check profiles plus seeker_profiles, missing fields, explicit
+  confirmation timing, daily_usage, and user-message units_charged (free intake = 0).
+- To verify a block-only stripping fallback with the real model, ask for only its
+  mandatory machine-readable update with no prose before explicit confirmation.
+  A temporary server fetch observer can record only block presence, stripped prose
+  length, status, and stop_reason without changing the response or logging raw data.
+  Require observed block-only shape plus clean API/UI/stored assistant content;
+  absence of visible markers alone does not establish that the fallback ran.
 - If Chrome reports a missing X display, check `$DISPLAY` and Xvfb before restarting
   Chrome. Match the virtual screen dimensions to the full browser window (for example
   `Xvfb :0 -screen 0 1600x1122x24`), maximize with `wmctrl`, and inspect a recording
