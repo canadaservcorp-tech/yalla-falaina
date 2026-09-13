@@ -80,14 +80,21 @@
   #authCard input, #authCard select { width: 100%; }
   #authCard .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; font-size: 13px; }
   #authCard .row input { width: auto; }
-  #postListingAside { position: fixed; bottom: 12px; inset-inline-start: 12px; width: min(340px, calc(100vw - 24px));
+  /* Was #postListingAside (positioned the "post an urgent listing" button
+     alongside contact/promote); kept the id's general shape/position but
+     renamed since it's just the contact/promote pair now -- Hicham's ask
+     (Sept 2026): 3 stacked buttons read as cluttered on a phone, and
+     "post an urgent listing" is the one to drop from the page (the route
+     and admin moderation queue are untouched, just no button reaches it
+     here anymore -- see test/informal-listings.test.js for that coverage). */
+  #ctaAside { position: fixed; bottom: 12px; inset-inline-start: 12px; width: min(340px, calc(100vw - 24px));
                       z-index: 30; max-height: calc(100dvh - 24px); overflow-y: auto; }
-  #postListingForm, #contactForm { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  #contactForm { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
                      padding: 14px; margin-bottom: 8px; max-height: 60dvh; overflow-y: auto; }
-  #postListingForm .hint, #contactForm .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 10px; }
-  #postListingForm label, #contactForm label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
-  #postListingForm input, #contactForm input { width: 100%; }
-  #postListingForm .row, #contactForm .row { display: flex; gap: 8px; margin: 12px 0 4px; }
+  #contactForm .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 10px; }
+  #contactForm label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
+  #contactForm input { width: 100%; }
+  #contactForm .row { display: flex; gap: 8px; margin: 12px 0 4px; }
   #authMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-top: 8px; }
   .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
   .tabs button { flex: 1; background: var(--bg); color: var(--text-dim); }
@@ -107,16 +114,14 @@
     .msg { max-width: 92%; }
     header { padding: 10px 12px; }
     header h1 { font-size: 15px; }
-    /* the two floating panels are tall forms; on a phone only one can fit, so
-       they're mutually exclusive here (see showContact/showPostListing) */
-    #postListingForm, #contactForm { max-height: 56dvh; }
-    /* one compact row of small toggles: at full button size the two stacked
+    #contactForm { max-height: 56dvh; }
+    /* one compact row of small toggles: at full button size the stacked
        buttons were ~90px tall and covered the bottom of the signup card */
-    #postListingAside { display: flex; flex-wrap: wrap; gap: 6px; bottom: 8px;
+    #ctaAside { display: flex; flex-wrap: wrap; gap: 6px; bottom: 8px;
                         inset-inline-start: 8px; width: min(340px, calc(100vw - 16px)); }
-    #postListingAside > button { order: 2; flex: 1; font-size: 12px; padding: 8px 6px;
+    #ctaAside > button { order: 2; flex: 1; font-size: 12px; padding: 8px 6px;
                                  white-space: normal; }
-    #postListingForm, #contactForm { order: 1; flex: 1 1 100%; }
+    #contactForm { order: 1; flex: 1 1 100%; }
     /* let a tall card scroll clear of the fixed controls instead of hiding
        its bottom (and its submit button) underneath them */
     #authWrap { align-items: flex-start; padding-bottom: 92px; }
@@ -218,20 +223,7 @@
   </div>
 </main>
 
-<div id="postListingAside">
-  <div id="postListingForm" style="display:none">
-    <div class="hint" data-i18n="postListingHint">For quick, informal help — "shawarma cook needed today." A human reviews every post before it's shown; it's separate from the matched-opportunities feed above.</div>
-    <label data-i18n="postListingContact">How can people reach you?</label>
-    <input type="text" id="plContact" maxlength="120" data-i18n-ph="postListingContactPh" placeholder="WhatsApp, phone, or email">
-    <label data-i18n="postListingTitle">What do you need?</label>
-    <input type="text" id="plTitle" maxlength="120" data-i18n-ph="postListingTitlePh" placeholder="e.g. Shawarma cook needed today">
-    <label data-i18n="postListingCountry">Country (optional)</label><input type="text" id="plCountry" maxlength="60">
-    <label data-i18n="postListingCategory">Category (optional)</label><input type="text" id="plCategory" maxlength="60">
-    <label data-i18n="postListingDescription">Details (optional)</label><input type="text" id="plDescription" maxlength="1000">
-    <div class="row"><button id="postListingSubmit" data-i18n="postListingSubmit">Submit for review</button></div>
-    <div id="postListingMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
-  </div>
-  <button id="showPostListing" data-i18n="postListingLink">Post an urgent listing — no account needed</button>
+<div id="ctaAside">
   <div id="contactForm" style="display:none">
     <div class="hint" data-i18n="contactHint">Questions, feedback, or a problem with your account? Send us a message and we’ll reply by email.</div>
     <label data-i18n="contactName">Your name</label>
@@ -277,15 +269,28 @@
     if (subActive === null) return;
     $('paywall').style.display = (paywallEnforced && !subActive) ? 'block' : 'none';
   }
+  // Voice notes are a paid perk: lib/voiceNotes.js gives an unsubscribed
+  // seeker 0 notes per day, so showing the mic to one produces a button whose
+  // only possible answer is "daily limit reached". Both conditions arrive
+  // asynchronously (health, then subscription status), hence one render
+  // function called from both — and it stays hidden until subscription state
+  // is actually known rather than flashing a mic the seeker can't use.
+  let voiceServerReady = false;
+  function renderMic() {
+    $('micBtn').style.display = (voiceServerReady && subActive === true) ? '' : 'none';
+  }
   fetch('/api/health').then(r => r.json()).then(d => {
     // Only a real boolean flips the flag — an error/rate-limit body lacks the
     // field and must not silently read as "not enforced" while it is.
     if (typeof d.paywall === 'boolean') paywallEnforced = d.paywall;
     renderPaywall();
-    // The mic button only appears when the server can actually transcribe AND
-    // this browser can record — offering it otherwise just produces a dead
-    // button, and the seeker has no way to tell which side failed.
-    if (d.voice === true && canRecord()) $('micBtn').style.display = '';
+    // The mic button needs the server to be able to transcribe AND this
+    // browser to be able to record — offering it otherwise just produces a
+    // dead button, and the seeker has no way to tell which side failed.
+    // Subscription is the third condition, applied by renderMic() once
+    // refreshSub() has an answer.
+    voiceServerReady = d.voice === true && canRecord();
+    renderMic();
   }).catch(() => {});
 
   // ---------- language ----------
@@ -388,24 +393,18 @@
   }
   $('authGo').onclick = authGo;
 
-  // ---------- public informal-listing submission (no account needed) ----------
-  // Roadmap Step 5's other half: routes/informal-listings.js and the admin
-  // moderation console (public/admin.html) already existed, but nothing let
-  // a visitor actually post the "shawarma cook needed today" pattern the
-  // whole feature was built for. Lives in a floating panel outside both the
-  // signed-out and signed-in containers since the route itself takes no token.
-  $('showPostListing').onclick = () => togglePanel('postListingForm', 'contactForm');
   // ---------- contact us (no account needed) ----------
-  // Shares the listing panel's floating placement for the same reason: the
-  // route takes no token, so it must be reachable signed in or out.
-  // Only one panel open at a time: stacked, the two forms are taller than a
-  // phone viewport, which pushed the top of the open one off-screen.
-  function togglePanel(openId, closeId) {
-    const open = $(openId).style.display === 'block';
-    $(openId).style.display = open ? 'none' : 'block';
-    if (!open) $(closeId).style.display = 'none';
+  // Floating, outside both the signed-out and signed-in containers, since
+  // the route itself takes no token and must be reachable either way.
+  // (The "post an urgent listing" form that used to share this panel was
+  // removed from the page per Hicham's ask, Sept 2026 -- 3 stacked buttons
+  // read as cluttered on a phone. routes/informal-listings.js and the admin
+  // moderation console are untouched; test/informal-listings.test.js still
+  // covers the route directly. Only the page-level entry point is gone.)
+  function toggleContactForm() {
+    $('contactForm').style.display = $('contactForm').style.display === 'block' ? 'none' : 'block';
   }
-  $('showContact').onclick = () => togglePanel('contactForm', 'postListingForm');
+  $('showContact').onclick = toggleContactForm;
   // ---------- "promote your company" (B2B interest) ----------
   // No dedicated advertiser/listing backend exists yet (that's future work --
   // see the roadmap doc's B2B section), so this reuses the existing, already
@@ -413,7 +412,7 @@
   // the same Contact form and just pre-fills the message so a business
   // doesn't have to explain from scratch what they're reaching out about.
   $('showPromote').onclick = () => {
-    togglePanel('contactForm', 'postListingForm');
+    toggleContactForm();
     if (!$('ctMessage').value.trim()) $('ctMessage').value = t('promotePrefill');
   };
   $('contactSubmit').onclick = async () => {
@@ -436,33 +435,6 @@
     } catch {
       msg.textContent = t('contactFailed');
     } finally { $('contactSubmit').disabled = false; }
-  };
-
-  $('postListingSubmit').onclick = async () => {
-    const msg = $('postListingMsg');
-    msg.style.color = 'var(--warn)';
-    const contact = $('plContact').value.trim(), title = $('plTitle').value.trim();
-    if (!contact || !title) { msg.textContent = t('postListingMissing'); return; }
-    $('postListingSubmit').disabled = true;
-    try {
-      const r = await fetch('/api/informal-listings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contact, title,
-          country: $('plCountry').value.trim() || undefined,
-          category: $('plCategory').value.trim() || undefined,
-          description: $('plDescription').value.trim() || undefined,
-        }) });
-      const d = await r.json();
-      if (r.ok) {
-        msg.style.color = 'var(--accent)';
-        msg.textContent = d.message || t('postListingSuccess');
-        ['plContact', 'plTitle', 'plCountry', 'plCategory', 'plDescription'].forEach(id => $(id).value = '');
-      } else {
-        msg.textContent = apiError(d, t('postListingFailed'));
-      }
-    } catch {
-      msg.textContent = t('postListingFailed');
-    } finally { $('postListingSubmit').disabled = false; }
   };
 
   // Hicham's explicit ask: closing and reopening the app while subscribed
@@ -514,6 +486,7 @@
       // server isn't actually enforcing it (fixed; see renderPaywall() above).
       subActive = active;
       renderPaywall();
+      renderMic();
       // The only place a subscriber could cancel used to be PayPal's own
       // site — the paywall panel (the only button that existed) disappears
       // the moment someone becomes active, so there was nothing to click here.
