@@ -28,6 +28,7 @@ afterEach(() => {
   delete process.env.JOB_API_ID;
   delete process.env.JOB_API_KEY;
   delete process.env.JOB_API_COUNTRY;
+  delete process.env.JOB_API_LOCATION;
 });
 
 // ---------- trackFor ----------
@@ -265,7 +266,82 @@ test('fetchJooble maps a result to the row shape', async () => {
   assert.equal(rows.length, 1);
   assert.equal(rows[0].external_source, 'jooble');
   assert.equal(rows[0].title, 'Plumber');
+  // 'Montreal' matches no known-country alias (deliberately not one of
+  // TRACK_BY_COUNTRY's entries via Jooble in this repo -- Canada's real
+  // feed is Adzuna) -- unresolved rows keep the raw text exactly as before
+  // this fix, logged rather than guessed at.
   assert.equal(rows[0].country, 'Montreal');
+  assert.equal(rows[0].track, 'demand-led');
+});
+
+// ---------- fetchJooble: Gulf/MENA country resolution ----------
+// Jooble's `location` field is one free-text string with no separate
+// country field (confirmed against Jooble's own REST API docs) -- these
+// lock in the fix that resolves it into something trackFor() can actually
+// match, closing the same class of gap ADZUNA_COUNTRY_NAMES already closed
+// for Adzuna's country codes (Section 6.1: tracks drive matching).
+test('fetchJooble resolves a "City, Country" location into the gcc track', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  const { fetchJooble } = freshModule();
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    jobs: [{ id: 1, title: 'Site Engineer', company: 'Acme', location: 'Dubai, United Arab Emirates', link: 'https://example.test/1' }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const rows = await fetchJooble();
+  assert.equal(rows[0].country, 'United Arab Emirates');
+  assert.equal(rows[0].track, 'gcc');
+});
+
+test('fetchJooble resolves a bare city name (no comma) via the alias table', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  const { fetchJooble } = freshModule();
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    jobs: [{ id: 2, title: 'Nurse', company: 'Acme', location: 'Riyadh', link: 'https://example.test/2' }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const rows = await fetchJooble();
+  assert.equal(rows[0].country, 'Saudi Arabia');
+  assert.equal(rows[0].track, 'gcc');
+});
+
+test('fetchJooble resolves a bare abbreviation, punctuation and case-insensitively', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  const { fetchJooble } = freshModule();
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    jobs: [{ id: 3, title: 'Driver', company: 'Acme', location: 'U.A.E.', link: 'https://example.test/3' }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const rows = await fetchJooble();
+  assert.equal(rows[0].country, 'United Arab Emirates');
+  assert.equal(rows[0].track, 'gcc');
+});
+
+test('fetchJooble falls back to the deploy\'s own JOB_API_LOCATION when the row\'s own text does not resolve', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  process.env.JOB_API_LOCATION = 'Qatar';
+  const { fetchJooble } = freshModule();
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    // A location string with no recognizable country/city segment at all --
+    // this deploy's own configured target is the reasonable fallback.
+    jobs: [{ id: 4, title: 'Cashier', company: 'Acme', location: 'Remote', link: 'https://example.test/4' }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const rows = await fetchJooble();
+  assert.equal(rows[0].country, 'Qatar');
+  assert.equal(rows[0].track, 'gcc');
+  delete process.env.JOB_API_LOCATION;
+});
+
+test('fetchJooble logs (does not throw) when a location resolves to nothing at all', async () => {
+  process.env.JOB_API_KEY = 'jkey';
+  const { fetchJooble } = freshModule();
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    jobs: [{ id: 5, title: 'Cook', company: 'Acme', location: 'Nowhereville', link: 'https://example.test/5' }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const errors = [];
+  const origError = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  try {
+    const rows = await fetchJooble();
+    assert.equal(rows[0].country, 'Nowhereville');
+    assert.ok(errors.some(e => /no country-name mapping for Jooble location/.test(e)));
+  } finally { console.error = origError; }
 });
 
 // ---------- fetchSeed ----------
