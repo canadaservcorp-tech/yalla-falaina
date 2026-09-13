@@ -40,6 +40,7 @@ app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/concierge', require('./routes/concierge')); // the AI concierge — the product
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/informal-listings', require('./routes/informal-listings'));
+app.use('/api/contact', require('./routes/contact'));
 app.use('/api/admin/informal-listings', require('./routes/admin-informal-listings'));
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either.

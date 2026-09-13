@@ -179,6 +179,19 @@ create index if not exists jobs_track_idx on public.jobs(track);
 create index if not exists jobs_country_idx on public.jobs(country);
 create index if not exists jobs_status_idx on public.jobs(status);
 
+-- Public "contact us" submissions. Persisted rather than only emailed: the
+-- notification email is a third-party call that can fail, and a visitor's
+-- message shouldn't be lost with it. routes/contact.js inserts here first,
+-- then emails CONTACT_EMAIL.
+-- Migration note (already-deployed projects): run this create statement.
+create table if not exists public.contact_messages (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  email text not null,
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Moderated informal/urgent submissions (the "shawarma master, urgent"
 -- pattern, Section 4.1) before they become a `jobs` row with
 -- source_type = 'informal_unverified'.
