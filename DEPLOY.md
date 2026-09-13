@@ -24,7 +24,7 @@ invented — copy the file and fill it in on the host's env-var UI.
 | Variable | Required | Notes |
 |---|---|---|
 | `PORT` | no | Most hosts inject this themselves; the app reads it and falls back to 3000. |
-| `PUBLIC_URL` | **yes** | The service's real public URL (e.g. `https://yallansafer.com`), no trailing slash. Drives `robots.txt`, `sitemap.xml`, and every canonical/hreflang link `lib/seo.js` emits — wrong here means wrong SEO tags and a sitemap pointing at the wrong host. |
+| `PUBLIC_URL` | **yes** — but not boot-enforced, see below | The service's real public URL (e.g. `https://yallansafer.com`), no trailing slash. Drives `robots.txt`, `sitemap.xml`, every canonical/hreflang link `lib/seo.js` emits, the links in verification/receipt emails (`routes/auth.js`), and the PayPal/Stripe checkout return/cancel URLs (`routes/subscription.js`). Unlike `JWT_SECRET`/`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`, the server does **not** refuse to boot without this one — it falls back to `http://localhost:3000` in those files, so a forgotten `PUBLIC_URL` looks completely healthy (`/api/health` doesn't check for it either) while every email link and payment redirect silently points at localhost instead of your real domain. Set it before the first real signup or checkout, not just before launch. |
 | `JWT_SECRET` | **yes** | 32+ chars; the app refuses to boot below that. Generate with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`. Rotating it invalidates every issued session. |
 | `SUPABASE_URL` | **yes** | The new project's URL. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **yes** | Service-role key — this app manages its own `users` table/auth, it does not use Supabase Auth. Treat as a secret; it bypasses RLS. |
