@@ -54,15 +54,28 @@
       jobsHeading: 'Matched opportunities',
       jobsPlaceholder: 'Send a message to see what the matching engine finds — jobs shown here are the only ones the assistant is allowed to reference.',
       noJobsMatched: 'No opportunities matched this message.',
+      // Live-test finding ("feed-claim on completion turn"): the feed is
+      // never actually searched until the turn AFTER a profile becomes
+      // complete, so an empty jobs list on the completion turn itself means
+      // "not searched yet," not "searched and found nothing" — showing
+      // noJobsMatched there would be a false claim about the feed. This is
+      // the honest alternative for exactly that turn.
+      profileCompleteSearching: "Your profile is complete — send your next message and I'll search real openings for you.",
       viewPosting: 'View posting ↗',
       welcomeSystemMessage: 'Ask me about real opportunities abroad — jobs, what a posting requires, or whether an offer looks safe. I answer in your language and dialect.',
       demoModeNotice: 'Demo mode — the assistant model is not configured yet; showing raw matches.',
       networkError: 'Network error — please try again.',
       errorPrefix: 'Error: ',
       subActiveRenews: 'Basic — active (renews {date})',
+      subActiveCanceled: 'Basic — active until {date} (canceled, will not renew)',
       checkoutPending: '…',
       checkoutUnavailable: 'Checkout unavailable',
       unverifiedFlagLabel: 'unverified listing — verify independently',
+      // Live-test finding ("seed jobs presented as real"): flags a
+      // routes/concierge.js demoJob()-redacted fixture/placeholder listing
+      // so it never reads like a real opening, same purpose as
+      // unverifiedFlagLabel above for a different honesty gap.
+      demoFlagLabel: 'demo listing — not a real opening',
       previewUnlockLabel: '🔒 Subscribe to see the details & apply',
       previewRemainingNotice: 'Free preview — {n} free replies left before subscribing.',
       readTermsLink: '(read)',
@@ -139,15 +152,18 @@
       jobsHeading: 'Opportunités correspondantes',
       jobsPlaceholder: "Envoyez un message pour voir ce que le moteur de recherche trouve — les offres affichées ici sont les seules que l'assistant est autorisé à mentionner.",
       noJobsMatched: 'Aucune opportunité ne correspond à ce message.',
+      profileCompleteSearching: 'Votre profil est complet — envoyez votre prochain message et je chercherai de vraies offres pour vous.',
       viewPosting: "Voir l'offre ↗",
       welcomeSystemMessage: "Posez-moi des questions sur de vraies opportunités à l'étranger — les emplois, ce qu'exige une offre, ou si une offre semble sûre. Je réponds dans votre langue et votre dialecte.",
       demoModeNotice: "Mode démo — le modèle de l'assistant n'est pas encore configuré; affichage des résultats bruts.",
       networkError: 'Erreur réseau — veuillez réessayer.',
       errorPrefix: 'Erreur : ',
       subActiveRenews: 'Basique — actif (renouvellement le {date})',
+      subActiveCanceled: "Basique — actif jusqu'au {date} (annulé, ne sera pas renouvelé)",
       checkoutPending: '…',
       checkoutUnavailable: 'Paiement indisponible',
       unverifiedFlagLabel: 'annonce non vérifiée — à vérifier vous-même',
+      demoFlagLabel: 'annonce de démonstration — pas une offre réelle',
       previewUnlockLabel: "🔒 Abonnez-vous pour voir les détails et postuler",
       previewRemainingNotice: 'Aperçu gratuit — {n} réponses gratuites restantes avant l\'abonnement.',
       readTermsLink: '(lire)',
@@ -224,15 +240,18 @@
       jobsHeading: 'الفرص المطابقة',
       jobsPlaceholder: 'أرسل رسالة لترى ما يجده محرك المطابقة — الوظائف المعروضة هنا هي الوحيدة التي يُسمح للمساعد بالإشارة إليها.',
       noJobsMatched: 'لا توجد فرص مطابقة لهذه الرسالة.',
+      profileCompleteSearching: 'ملفك الشخصي مكتمل — أرسل رسالتك التالية وسأبحث عن فرص حقيقية من أجلك.',
       viewPosting: 'عرض الإعلان ↗',
       welcomeSystemMessage: 'اسألني عن فرص حقيقية في الخارج — الوظائف، ما تتطلبه إعلانات العمل، أو ما إذا كان العرض آمنًا. أجيبك بلغتك ولهجتك.',
       demoModeNotice: 'وضع تجريبي — لم يتم إعداد نموذج المساعد بعد؛ يتم عرض النتائج الأولية فقط.',
       networkError: 'خطأ في الشبكة — يرجى المحاولة مرة أخرى.',
       errorPrefix: 'خطأ: ',
       subActiveRenews: 'الباقة الأساسية — نشطة (يتجدد بتاريخ {date})',
+      subActiveCanceled: 'الباقة الأساسية — نشطة حتى {date} (تم الإلغاء، لن تتجدد)',
       checkoutPending: '…',
       checkoutUnavailable: 'الدفع غير متاح',
       unverifiedFlagLabel: 'إعلان غير موثّق — يُرجى التحقق بنفسك',
+      demoFlagLabel: 'إعلان تجريبي — ليست فرصة حقيقية',
       previewUnlockLabel: '🔒 اشترك لرؤية التفاصيل والتقديم',
       previewRemainingNotice: 'معاينة مجانية — تبقّى لك {n} ردود مجانية قبل الاشتراك.',
       readTermsLink: '(اقرأ)',

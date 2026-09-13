@@ -61,11 +61,36 @@ const FALSE_COMPLETION_CLAIM_PATTERNS = [
   { re: /(?<!\b(?:once|when|after|before)\s+)\byour profile is (?:done|ready)\b/i, label: 'claimed the profile is done/ready' },
 ];
 
-// Naive but adequate for a short conversational reply: splits after ., !, or
-// ? followed by whitespace or end of string, keeping the punctuation and
-// trailing whitespace attached to each piece so re-joining needs no repair.
+// Splits after ., !, or ? followed by whitespace or end of string, keeping
+// the punctuation and trailing whitespace attached to each piece so
+// re-joining (kept.join('') below) always reproduces the original text
+// exactly when nothing is stripped.
+//
+// A live-test finding ("scrub text mutilation"): the previous pattern was
+// `/[^.!?]+[.!?]*(?:\s+|$)/g`, which REQUIRES at least one non-terminal
+// character before any terminal punctuation can match. A run of terminal
+// punctuation with nothing non-terminal immediately before it in the same
+// match attempt — a numbered-list marker at the very start of the reply
+// ("1. First point"), a decimal number ("3.5 kg"), or an ellipsis opening a
+// sentence ("...actually, yes") — can't be captured by any match at all, so
+// `String.match` silently DROPS those characters entirely: "3.5 kg is
+// enough." reassembled as just "5 kg is enough." with "3." gone, with no
+// error, no log line, nothing to catch it except close reading. This only
+// showed up in the visible reply on a turn where the scrub actually
+// stripped a different sentence (kept.join(...) is only used at all when
+// something was stripped — see scrubFalseClaims below), which is why it
+// read as the scrub "mutilating" otherwise-correct text.
+//
+// Fixed by allowing the non-terminal run to be EMPTY before terminal
+// punctuation (`[^.!?]*` instead of `+`), with a second alternative for a
+// trailing remainder that never reaches terminal punctuation at all (plain
+// `+` there, since `*` would match an empty string forever and the regex
+// engine would never advance). Every character in the input is now
+// accounted for by exactly one alternative or the other — verified in
+// test/concierge.test.js against numbered lists, decimals, and leading
+// ellipses, not just re-checked against this file's own reasoning.
 function splitSentences(text) {
-  return text.match(/[^.!?]+[.!?]*(?:\s+|$)/g) || [text];
+  return text.match(/[^.!?]*[.!?]+\s*|[^.!?]+$/g) || [text];
 }
 
 // Server-side enforcement, not just prompt wording: strips any sentence that
@@ -138,6 +163,38 @@ function teaserJob(j) {
     requirements: '[subscribe to see the full requirements]',
     sourceLabel: '[subscribe to see the source and how to apply]',
     url: '', honestyFlags: [], teaser: true,
+  };
+}
+
+// A live-test finding ("seed jobs presented as real"): lib/jobsIngest.js's
+// fetchSeed() imports the handoff prototype's 12-listing mock feed so the
+// concierge is testable end-to-end before a licensed provider is approved
+// (JOB_API_PROVIDER=seed) — but until this fix, every one of those fixture
+// rows that wasn't already the deliberately-informal one got
+// source_type: 'licensed_api', the SAME label real Adzuna/Jooble rows get.
+// formatJobsForPrompt's guardrail (lib/yf/systemPrompt.js) only adds a
+// lower-confidence disclosure for 'informal_unverified' — everything else
+// reads to the model, and therefore to the seeker, as a real, currently-open,
+// licensed opportunity. Fixture data has a made-up employer, contact path,
+// and requirements text; presenting it as real to someone actually trying to
+// travel for work is exactly the "fabricate an opening" harm Section 6.1/6.2
+// and this file's own JOB_CONTEXT rule exist to prevent — and it doesn't stop
+// being a live risk just because it's demo data instead of the model
+// inventing it outright.
+// Fixed at the same layer as teaserJob above and for the same reason: data
+// minimization the model can't talk its way around, not a prompt request it
+// could ignore (see scrubFalseClaims' own comment on why prompt wording
+// alone doesn't hold). Applied unconditionally, subscribed or not — a paying
+// seeker has exactly as much right to not be told fake data is real as a
+// free-preview one.
+function demoJob(j) {
+  return {
+    id: j.id, title: j.title, country: j.country, city: j.city, category: j.category,
+    track: j.track, salaryNote: null, sourceType: j.sourceType,
+    employer: '[internal placeholder data — not a real employer]',
+    requirements: '[internal placeholder data — this is not a real, currently open opportunity; the live job feed is not configured yet]',
+    sourceLabel: '[internal test data — no licensed feed configured yet]',
+    url: '', honestyFlags: [], demo: true,
   };
 }
 const previewInstructions = (remaining) => [
@@ -358,11 +415,17 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       preferredCountry: sec.clean(req.body.preferredCountry, 60) || profileRow?.preferred_country || '',
       limit: 5,
     }) : [];
+    // Seed/demo fixture rows (see demoJob above) are redacted before either
+    // the model or the client sees them, regardless of preview/subscription
+    // status — applied first so a demo job during free preview still gets
+    // its (harmless, already-fake) fields further redacted by teaserJob
+    // rather than the two redactions fighting over field shape.
+    const safeJobs = jobs.map(j => j.sourceType === 'seed_demo' ? demoJob(j) : j);
     // Free preview: what the model sees and what the client gets back are
     // BOTH the redacted shape — data minimization, not a prompt instruction
     // the model could be talked out of. matched_job_ids in the audit log
     // below still uses the real `jobs`, ids only, never anything redacted.
-    const outJobs = inPreview ? jobs.map(teaserJob) : jobs;
+    const outJobs = inPreview ? safeJobs.map(teaserJob) : safeJobs;
     // Best-effort, never fails the seeker's turn: the counter existing at all
     // is what makes preview mode self-limiting, but a write hiccup shouldn't
     // block someone who's genuinely on their last free reply.
@@ -418,6 +481,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       markPreviewUsed();
       return res.json({
         success: true, reply, jobs: outJobs, conversationId, llmConfigured: false, intake: !isComplete, isComplete, missing,
+        jobsRetrieved: isComplete,
         ...(inPreview ? { preview: true, previewRemaining: FREE_PREVIEW_LIMIT - previewUsed - 1 } : {}),
       });
     }
@@ -497,6 +561,18 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     markPreviewUsed();
     res.json({
       success: true, reply, jobs: outJobs, conversationId, llmConfigured: true, intake: !nowComplete, isComplete: nowComplete, missing: nowMissing,
+      // A live-test finding ("feed-claim on completion turn"): `jobs` above
+      // was computed from the ORIGINAL `isComplete` (line ~356, before this
+      // turn's intake extraction could flip it), so on the exact turn a
+      // profile transitions incomplete -> complete, retrieval never ran and
+      // `outJobs` is genuinely `[]` — even though the response's own
+      // `isComplete` field now reads true. The client had no way to tell
+      // "retrieval ran and truly found nothing" apart from "retrieval never
+      // ran this turn" and rendered the same "no jobs matched" copy either
+      // way, falsely claiming a feed outcome on a turn that never checked
+      // the feed at all. `jobsRetrieved` is that original, pre-extraction
+      // `isComplete` — true only when `outJobs` reflects an actual search.
+      jobsRetrieved: isComplete,
       ...(inPreview ? { preview: true, previewRemaining: FREE_PREVIEW_LIMIT - previewUsed - 1 } : {}),
     });
   } catch (e) {
@@ -517,3 +593,9 @@ module.exports.PROFILE_BLOCK_RE = PROFILE_BLOCK_RE;
 // silently drift from what the server actually enforces.
 module.exports.FALSE_JOB_FEED_CLAIM_PATTERNS = FALSE_JOB_FEED_CLAIM_PATTERNS;
 module.exports.FALSE_COMPLETION_CLAIM_PATTERNS = FALSE_COMPLETION_CLAIM_PATTERNS;
+// Exported so the sentence-splitting fix ("scrub text mutilation") can be
+// unit-tested directly against tricky inputs (numbered lists, decimals,
+// leading ellipses) without needing a live/mocked model turn to exercise it.
+module.exports.splitSentences = splitSentences;
+module.exports.scrubFalseClaims = scrubFalseClaims;
+module.exports.demoJob = demoJob;
