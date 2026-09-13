@@ -18,7 +18,7 @@ test('GET /api/subscription/status without token -> 401', async () => {
   assert.equal(res.status, 401);
 });
 
-test('GET /api/subscription/status with token -> { success, status, tier, periodEnd }', async () => {
+test('GET /api/subscription/status with token -> { success, status, tier, periodEnd, cancelAt }', async () => {
   const token = actor(h, { id: 11, role: 'seeker', extra: { subscription_status: 'active', subscription_tier: 'basic', subscription_period_end: null } });
   const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });
   assert.equal(res.status, 200);
@@ -27,6 +27,25 @@ test('GET /api/subscription/status with token -> { success, status, tier, period
   assert.equal(body.status, 'active');
   assert.equal(body.tier, 'basic');
   assert.ok('periodEnd' in body);
+  assert.equal(body.cancelAt, null, 'no cancellation on file');
+});
+
+// The grace-period banner bug: cancel_at_period_end (routes/subscription.js's
+// /cancel) leaves subscription_status = 'active' until the paid period
+// actually ends — status alone can't tell "will renew" from "already
+// canceled, just counting down to expiry" apart. Without cancelAt, the
+// client showed "active (renews {date})" to someone who had, in fact,
+// already canceled.
+test('GET /api/subscription/status surfaces subscription_cancel_at as cancelAt, so a canceled-but-still-active subscriber can be told apart from a genuinely renewing one', async () => {
+  const token = actor(h, { id: 14, role: 'seeker', extra: {
+    subscription_status: 'active', subscription_tier: 'basic',
+    subscription_period_end: '2026-10-15T00:00:00.000Z',
+    subscription_cancel_at: '2026-10-15T00:00:00.000Z',
+  } });
+  const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });
+  const body = await res.json();
+  assert.equal(body.status, 'active', 'status stays active through the paid-out period');
+  assert.equal(body.cancelAt, '2026-10-15T00:00:00.000Z');
 });
 
 test('an unverified account cannot use authenticated endpoints -> 403', async () => {

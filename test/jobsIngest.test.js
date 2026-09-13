@@ -270,16 +270,22 @@ test('fetchJooble maps a result to the row shape', async () => {
 
 // ---------- fetchSeed ----------
 
-test('fetchSeed loads the handoff bundle and preserves its track, marking the informal listing unverified', async () => {
+// Live-test finding ("seed jobs presented as real"): every non-informal seed
+// row used to get source_type 'licensed_api' — indistinguishable from a real
+// Adzuna/Jooble row to routes/concierge.js's guardrail. They now get their
+// own 'seed_demo' label so demoJob() can redact them before a live seeker
+// ever sees fixture data presented as a real opening.
+test('fetchSeed loads the handoff bundle and preserves its track, marking the informal listing unverified and every other row seed_demo (never licensed_api)', async () => {
   const { fetchSeed } = freshModule();
   const rows = await fetchSeed();
   assert.ok(rows.length > 0);
   const informal = rows.find(r => r.source_type === 'informal_unverified');
   assert.ok(informal, 'the seed bundle is expected to include an informal listing');
   assert.equal(informal.external_source, 'informal_submission');
-  const licensed = rows.find(r => r.source_type === 'licensed_api');
-  assert.ok(licensed);
-  assert.equal(licensed.external_source, 'seed');
+  const demo = rows.find(r => r.source_type === 'seed_demo');
+  assert.ok(demo);
+  assert.equal(demo.external_source, 'seed');
+  assert.ok(!rows.some(r => r.source_type === 'licensed_api'), 'fixture data must never carry the same label as a real licensed-feed row');
   // seed rows keep the handoff bundle's own track rather than the country heuristic
   assert.ok(rows.every(r => r.track));
 });

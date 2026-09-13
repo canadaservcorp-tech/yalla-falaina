@@ -582,6 +582,85 @@ test('a reply that is nothing but a false-claim sentence falls back to a plain c
   assert.ok(j.reply.trim().length > 0);
 });
 
+// ---------- live-test finding: "feed-claim on completion turn" ----------
+// jobs is always [] on the turn a profile transitions incomplete -> complete
+// (retrieval only starts NEXT turn -- see routes/concierge.js's comment on
+// `jobs`/`isComplete`/`nowComplete`), so the response must say so honestly
+// via jobsRetrieved rather than let an empty jobs array read the same as
+// "searched and found nothing."
+
+test('jobsRetrieved is false on the exact turn a profile becomes complete, even though isComplete is now true', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-jobsretrieved-1' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+    '---PROFILE---\n{"confirmed_by_user":true}\n---END---\nGreat, your profile is now complete! Let\'s find you some matches.' }] } });
+  const r = await ask({ message: 'yes I confirm' }, caller({}, { id: 'sp-jr1', is_complete: false, confirmed_by_user: false,
+    work_history: [{ employer: 'X' }], education: [], certifications: [], languages: [{ language: 'ar', level: 'native' }],
+    has_passport: true, has_visa: false, has_legal_residency_current_country: true, has_family_or_host_abroad: false },
+    { preferred_language: 'en', preferred_country: 'canada', sector: 'hospitality', role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.isComplete, true);      // genuinely complete as of this turn
+  assert.deepEqual(j.jobs, []);          // retrieval never ran this turn
+  assert.equal(j.jobsRetrieved, false, 'the client must be told retrieval did not run, not just see an empty jobs array');
+});
+
+test('jobsRetrieved is true on an ordinary matching turn (profile already complete before this turn)', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-jobsretrieved-2' }, error: null });
+  const r = await ask({ message: 'electrician canada' }, caller());
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.jobsRetrieved, true);
+});
+
+test('jobsRetrieved is present and correct in demo mode too (no ANTHROPIC_API_KEY)', async () => {
+  delete process.env.ANTHROPIC_API_KEY;
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-jobsretrieved-3' }, error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false },
+    { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.jobsRetrieved, false);
+});
+
+// ---------- live-test finding: "seed jobs presented as real" ----------
+
+test('a seed_demo job is redacted before it reaches either the model or the client -- never presented as a real opening', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-seed-demo' }, error: null });
+  h.mock.__set('jobs', { data: [
+    { id: 30, title: 'Electrician', employer: 'Totally Real Corp', country: 'Canada', city: 'Laval',
+      category: 'trades', track: 'western', source_type: 'seed_demo', external_source: 'seed',
+      source_url: 'https://example.test/30', raw: { sourceLabel: 'Handoff Bundle' } },
+  ], error: null });
+  const r = await ask({ message: 'electrician canada' }, caller());
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.jobs[0].demo, true);
+  assert.equal(j.jobs[0].url, '');
+  assert.doesNotMatch(j.jobs[0].employer, /Totally Real Corp/);
+  assert.doesNotMatch(j.jobs[0].sourceLabel, /Handoff Bundle/);
+  // the same redaction must apply to what the model itself is shown, not
+  // just what the client renders -- data minimization, not a prompt ask.
+  assert.doesNotMatch(upstream.body.system, /Totally Real Corp/);
+  assert.doesNotMatch(upstream.body.system, /Handoff Bundle/);
+  assert.match(upstream.body.system, /seed_demo/);
+});
+
+test('a seed_demo job during free preview still comes back with no real fixture data anywhere -- demo redaction is not conditional on subscription, and runs before teaser redaction', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-seed-demo-preview' }, error: null });
+  h.mock.__set('jobs', { data: [
+    { id: 31, title: 'Electrician', employer: 'Totally Real Corp', country: 'Canada', city: 'Laval',
+      category: 'trades', track: 'western', source_type: 'seed_demo', external_source: 'seed',
+      source_url: 'https://example.test/31', raw: { sourceLabel: 'Handoff Bundle' } },
+  ], error: null });
+  const r = await ask({ message: 'electrician canada' }, caller({ free_preview_used: 0 }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.preview, true);
+  assert.equal(j.jobs[0].teaser, true, 'teaser redaction still applies on top of demo redaction');
+  assert.doesNotMatch(JSON.stringify(j.jobs[0]), /Totally Real Corp|Handoff Bundle/);
+});
+
 test('a complete profile passes straight through to matching', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c2' }, error: null });
   const r = await ask({ message: 'electrician canada' }, caller());

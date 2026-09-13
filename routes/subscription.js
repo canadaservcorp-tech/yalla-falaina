@@ -86,13 +86,20 @@ router.post('/stripe/checkout', authenticate, sec.requireActiveUser, sec.limits.
 
 router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
   const { data } = await supabase.from('users')
-    .select('subscription_status, subscription_tier, subscription_period_end')
+    .select('subscription_status, subscription_tier, subscription_period_end, subscription_cancel_at')
     .eq('id', req.user.id).maybeSingle();
   res.json({
     success: true,
     status: data?.subscription_status || 'inactive',
     tier: data?.subscription_tier || 'none',
     periodEnd: data?.subscription_period_end || null,
+    // A canceled subscription stays subscription_status = 'active' until the
+    // paid period actually ends (POST /cancel below is cancel_at_period_end,
+    // not immediate) — the client needs this to tell "will renew" from
+    // "already canceled, just counting down" apart; without it, "active"
+    // alone reads the same for both, and a canceled subscriber sees a banner
+    // that falsely says it will auto-renew.
+    cancelAt: data?.subscription_cancel_at || null,
   });
 });
 
