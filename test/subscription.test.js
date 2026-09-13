@@ -48,6 +48,20 @@ test('GET /api/subscription/status surfaces subscription_cancel_at as cancelAt, 
   assert.equal(body.cancelAt, '2026-10-15T00:00:00.000Z');
 });
 
+test('GET /api/subscription/status surfaces payment_provider as provider, defaulting to paypal for a pre-Stripe row', async () => {
+  const token = actor(h, { id: 15, role: 'seeker', extra: { subscription_status: 'active', subscription_tier: 'basic' } });
+  const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });
+  const body = await res.json();
+  assert.equal(body.provider, 'paypal', 'no payment_provider column set at all -- must default to paypal, the only rail that could have written a row like this');
+});
+
+test('GET /api/subscription/status surfaces provider: stripe for a Stripe subscriber', async () => {
+  const token = actor(h, { id: 16, role: 'seeker', extra: { subscription_status: 'active', payment_provider: 'stripe' } });
+  const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });
+  const body = await res.json();
+  assert.equal(body.provider, 'stripe');
+});
+
 test('an unverified account cannot use authenticated endpoints -> 403', async () => {
   const token = actor(h, { id: 12, role: 'seeker', verified: false });
   const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });
@@ -191,4 +205,102 @@ test('cancel: a row with no payment_provider set at all defaults to the PayPal b
   assert.equal(res.status, 200);
   assert.equal(paypal.__calls('/v1/billing/subscriptions/SUB-54/cancel').length, 1);
   assert.equal(stripe.__calls().length, 0);
+});
+
+// ---------- POST /api/subscription/resume (Devin's review on PR #56) ----------
+// Stripe can genuinely undo a pending cancel_at_period_end on the SAME
+// subscription; PayPal cannot (its own /cancel above is an immediate,
+// terminal cancellation on PayPal's side) -- this route only ever handles
+// the Stripe branch and explicitly refuses the PayPal one rather than
+// pretending to support it. The client calls POST /checkout directly for a
+// PayPal account instead (see public/index.html's resumeSubBtn handler).
+
+const resume = token => fetch(h.base + '/api/subscription/resume', { method: 'POST', headers: auth(token) });
+
+test('resume: a Stripe subscriber mid-grace-period gets cancel_at_period_end flipped back to false, and the route does not write to the DB directly', async () => {
+  paypal.__reset(); stripe.__reset();
+  const writesBefore = h.mock.__writes('users', 'update').length;
+  const token = actor(h, { id: 60, role: 'seeker', extra: {
+    subscription_status: 'active', payment_provider: 'stripe', stripe_subscription_id: 'sub_60',
+    subscription_cancel_at: '2026-10-15T00:00:00.000Z',
+  } });
+  const res = await resume(token);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.success, true);
+
+  const calls = stripe.__calls('/subscriptions/sub_60');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].method, 'POST');
+  assert.equal(calls[0].params.cancel_at_period_end, 'false');
+  assert.equal(paypal.__calls().length, 0);
+  assert.equal(h.mock.__writes('users', 'update').length, writesBefore, 'the state transition is left to the Stripe webhook, same discipline as /cancel');
+});
+
+test('resume: nothing pending to resume (no subscription_cancel_at) -> 400 ERR_NOT_CANCELING, Stripe never called', async () => {
+  paypal.__reset(); stripe.__reset();
+  const token = actor(h, { id: 61, role: 'seeker', extra: {
+    subscription_status: 'active', payment_provider: 'stripe', stripe_subscription_id: 'sub_61', subscription_cancel_at: null,
+  } });
+  const res = await resume(token);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, 'ERR_NOT_CANCELING');
+  assert.equal(stripe.__calls().length, 0);
+});
+
+test('resume: no subscription at all -> 400 ERR_NOT_CANCELING', async () => {
+  paypal.__reset(); stripe.__reset();
+  const token = actor(h, { id: 62, role: 'seeker', extra: { subscription_status: 'inactive', subscription_cancel_at: null } });
+  const res = await resume(token);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, 'ERR_NOT_CANCELING');
+});
+
+test('resume: a PayPal subscriber mid-grace-period is explicitly refused -> 400 ERR_RESUME_NEEDS_NEW_PAYPAL_SUB, neither provider called', async () => {
+  paypal.__reset(); stripe.__reset();
+  const token = actor(h, { id: 63, role: 'seeker', extra: {
+    subscription_status: 'active', payment_provider: 'paypal', paypal_subscription_id: 'SUB-63',
+    subscription_cancel_at: '2026-10-15T00:00:00.000Z',
+  } });
+  const res = await resume(token);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, 'ERR_RESUME_NEEDS_NEW_PAYPAL_SUB');
+  assert.equal(paypal.__calls().length, 0);
+  assert.equal(stripe.__calls().length, 0);
+});
+
+test('resume: a row with no payment_provider set at all (pre-Stripe) is treated as PayPal and refused, not silently routed to Stripe', async () => {
+  paypal.__reset(); stripe.__reset();
+  const token = actor(h, { id: 64, role: 'seeker', extra: {
+    subscription_status: 'active', subscription_cancel_at: '2026-10-15T00:00:00.000Z',
+    // no payment_provider field at all
+  } });
+  const res = await resume(token);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, 'ERR_RESUME_NEEDS_NEW_PAYPAL_SUB');
+  assert.equal(stripe.__calls().length, 0);
+});
+
+test('resume: Stripe subscriber mid-grace-period but no stripe_subscription_id on file -> 400 ERR_NO_ACTIVE_SUBSCRIPTION', async () => {
+  paypal.__reset(); stripe.__reset();
+  const token = actor(h, { id: 65, role: 'seeker', extra: {
+    subscription_status: 'active', payment_provider: 'stripe', stripe_subscription_id: null,
+    subscription_cancel_at: '2026-10-15T00:00:00.000Z',
+  } });
+  const res = await resume(token);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, 'ERR_NO_ACTIVE_SUBSCRIPTION');
+  assert.equal(stripe.__calls().length, 0);
+});
+
+test('resume: Stripe API failure -> 500 ERR_PAYMENT_UNAVAILABLE', async () => {
+  paypal.__reset(); stripe.__reset();
+  stripe.__reply('/subscriptions/sub_66', new Error('Stripe 500'));
+  const token = actor(h, { id: 66, role: 'seeker', extra: {
+    subscription_status: 'active', payment_provider: 'stripe', stripe_subscription_id: 'sub_66',
+    subscription_cancel_at: '2026-10-15T00:00:00.000Z',
+  } });
+  const res = await resume(token);
+  assert.equal(res.status, 500);
+  assert.equal((await res.json()).code, 'ERR_PAYMENT_UNAVAILABLE');
 });
