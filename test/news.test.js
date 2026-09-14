@@ -4,9 +4,9 @@
 const { test, after, mock } = require('node:test');
 const assert = require('node:assert');
 const { getApp, actor, auth } = require('./helpers/appHarness');
-const newsIngest = require('../lib/newsIngest');
 
-const h = getApp();
+const h = getApp();            // sets env + mocks db before anything can require it
+const newsIngest = require('../lib/newsIngest');
 after(() => h.stop());
 
 const EE_SAMPLE = {
