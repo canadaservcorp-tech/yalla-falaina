@@ -249,6 +249,26 @@ create table if not exists public.contact_messages (
   created_at timestamptz not null default now()
 );
 
+-- Immigration-news ticker items (lib/newsIngest.js + routes/admin-news.js).
+-- `url` is not nullable on purpose: the product's rule is that a visitor can
+-- always check a claim against its source, and a ticker headline is a claim.
+-- Migration note (already-deployed projects): run this create statement.
+create table if not exists public.news_items (
+  id uuid primary key default uuid_generate_v4(),
+  source text not null,        -- 'ircc_draw' | 'ircc_news' | 'operator'
+  external_id text not null,   -- draw number / entry url / generated for operator posts
+  country text,
+  category text,               -- 'express_entry' | 'announcement'
+  title_en text not null,
+  title_fr text,               -- null when the source published English only
+  title_ar text,
+  url text not null,
+  published_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (source, external_id)
+);
+create index if not exists news_items_published_idx on public.news_items(published_at desc);
+
 -- Moderated informal/urgent submissions (the "shawarma master, urgent"
 -- pattern, Section 4.1) before they become a `jobs` row with
 -- source_type = 'informal_unverified'.
