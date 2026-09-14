@@ -429,11 +429,25 @@
   // Coming back from Google: the URL carries a two-minute handoff token, never
   // the session token. Trade it for the real one and scrub the address bar so
   // it doesn't sit in history or get pasted into a chat.
-  (function finishGoogleSignIn() {
+  //
+  // Declared here, CALLED at the end of the script (with startAnalytics /
+  // loadNews): it needs t(), currentLang and enter(), none of which exist yet
+  // at this point in the file.
+  function finishGoogleSignIn() {
     const params = new URLSearchParams(location.search);
     const handoff = params.get('google');
     const err = params.get('googleError');
-    const clean = () => history.replaceState(null, '', location.pathname);
+    // window.history explicitly: `history` at this scope is the chat array.
+    // Only the Google parameters are dropped -- ?lang= is what the server used
+    // to render this page, so scrubbing it would contradict the page itself.
+    const clean = () => {
+      try {
+        params.delete('google');
+        params.delete('googleError');
+        const q = params.toString();
+        window.history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+      } catch (e) {}
+    };
     if (err) {
       clean();
       $('authMsg').textContent = err === 'blocked' ? t('googleBlocked') : t('googleFailed');
@@ -451,7 +465,7 @@
         enter();
       })
       .catch(() => { $('authMsg').textContent = t('networkError'); });
-  })();
+  }
 
   // ---------- language ----------
   // The server already picked and stamped the language on <html lang> (and
@@ -1163,6 +1177,7 @@
   function track(name, params) { if (window.gtag) window.gtag('event', name, params || {}); }
   startAnalytics();
   loadNews();
+  finishGoogleSignIn();
 
   // ---------- share bar ----------
   // Which channel actually brings seekers in is guesswork without this: each
