@@ -5,13 +5,14 @@ const h = getApp();
 after(() => h.stop());
 const geo = require('../lib/geo');
 
-const LANGS = ['en', 'fr', 'ar'];
+const LANGS = ['en', 'fr', 'ar', 'hi'];
 const req = (headers = {}, ip = null) => ({ headers, ip });
 
 test('the countries the operator named get the language they asked for', () => {
   for (const c of ['IQ', 'EG', 'LB', 'SY']) assert.equal(geo.COUNTRY_LANG[c], 'ar', c);
   assert.equal(geo.COUNTRY_LANG.TN, 'fr');
   for (const c of ['SA', 'AE', 'KW', 'QA', 'BH', 'OM']) assert.equal(geo.COUNTRY_LANG[c], 'en', c);
+  assert.equal(geo.COUNTRY_LANG.IN, 'hi');
 });
 
 test('country beats Accept-Language, because phones in this market report en', () => {
@@ -47,6 +48,13 @@ test('the served page is Arabic and RTL for an Arabic-reading country', async ()
   const body = await fetch(h.base + '/', { headers: { 'cf-ipcountry': 'EG' } }).then(r => r.text());
   assert.match(body, /<html lang="ar" dir="rtl">/);
   assert.match(body, /<title>يلا نسافر/);
+});
+
+test('India lands on the Hindi page', async () => {
+  const body = await fetch(h.base + '/', { headers: { 'cf-ipcountry': 'IN' } }).then(r => r.text());
+  assert.match(body, /<html lang="hi">/);
+  assert.match(body, /<title>यल्ला नसाफ़िर/);
+  assert.doesNotMatch(body, /<html[^>]*dir="rtl"/);
 });
 
 test('the geo-picked page still canonicalises to the bare URL', async () => {

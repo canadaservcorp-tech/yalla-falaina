@@ -26,8 +26,8 @@ test('unknown paths fall back to the home metadata', async () => {
   assert.match(body, /<title>Yalla Nsafer — Your Assistant to Travel<\/title>/);
 });
 
-test('the page is indexable in all three product languages', async () => {
-  for (const l of ['en', 'fr', 'ar']) {
+test('the page is indexable in all product languages', async () => {
+  for (const l of seo.LANGS) {
     const body = await html(`/?lang=${l}`);
     assert.ok(body.includes(`hreflang="${l}"`), l);
   }
