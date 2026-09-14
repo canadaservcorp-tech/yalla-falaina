@@ -171,6 +171,21 @@ test('the page never reaches for a bare `history` — it is the chat array, not 
   assert.equal(bare, null, 'use window.history.' + (bare ? bare[2] : 'replaceState') + '()');
 });
 
+// Same failure mode, second cause: the handler reads t(), currentLang and
+// enter(), all declared further down the file. Running it where it is defined
+// threw "Cannot access 't' before initialization" — again at top level, again
+// taking the auth handlers with it. It has to be CALLED after those exist.
+test('the Google return handler is called after the page is initialized, not where it is defined', () => {
+  const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.doesNotMatch(html, /function finishGoogleSignIn\(\)[\s\S]*?\n\s*\}\)\(\);/,
+    'finishGoogleSignIn must not be an immediately-invoked function');
+  const declared = html.indexOf('function finishGoogleSignIn()');
+  const called = html.indexOf('finishGoogleSignIn();');
+  const tDefined = html.indexOf('const t = (key, vars)');
+  assert.ok(declared > -1 && called > -1 && tDefined > -1);
+  assert.ok(called > tDefined, 'the call must come after t() exists');
+});
+
 test('a banned user holding a valid handoff still gets nothing', async () => {
   h.mock.__set('users', { data: { id: 51, email: 'seeker@gmail.com', name: 'x', role: 'seeker', banned: true }, error: null });
   const r = await fetch(h.base + '/api/auth/google/exchange', {
