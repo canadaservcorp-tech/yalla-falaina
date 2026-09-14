@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const sec = require('./lib/security');
 const seo = require('./lib/seo');
+const geo = require('./lib/geo');
 const analytics = require('./lib/analytics');
 const paypal = require('./lib/paypal');
 const stripeLib = require('./lib/stripe');
@@ -93,9 +94,13 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 const SHELL = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
 app.get('*', (req, res) => {
   const route = seo.INDEXABLE.includes(req.path) ? req.path : '/';
-  const lang = seo.LANGS.includes(req.query.lang) ? req.query.lang : 'en';
+  // ?lang= is the visitor's own choice and always wins; without it the country
+  // the request comes from picks the first page's language (lib/geo.js).
+  const asked = seo.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, seo.LANGS) || 'en';
+  res.set('Vary', 'Accept-Language');
   // function replacer: prices in the copy would otherwise be read as $-patterns
-  const html = SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang))
+  const html = SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang, asked || 'en'))
     .replace('<!--analytics-->', () => analytics.head())
     .replace(/<html lang="[a-z]+">/, `<html lang="${lang}"${lang === 'ar' ? ' dir="rtl"' : ''}>`);
   res.type('html').send(sec.applyNonce(html, res.locals.cspNonce));
