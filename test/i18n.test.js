@@ -10,8 +10,8 @@ const fs = require('fs');
 const path = require('path');
 const { STRINGS, LANGS, isRTL, t, tErr } = require('../public/i18n.js');
 
-test('en, fr, and ar all exist and cover the same key set — no silent drift', () => {
-  assert.deepEqual(LANGS.sort(), ['ar', 'en', 'fr']);
+test('all UI languages exist and cover the same key set — no silent drift', () => {
+  assert.deepEqual(LANGS.sort(), ['ar', 'en', 'fr', 'hi']);
   const enKeys = Object.keys(STRINGS.en).sort();
   for (const lang of LANGS) {
     assert.deepEqual(Object.keys(STRINGS[lang]).sort(), enKeys, `${lang} is missing or has extra keys vs. en`);
