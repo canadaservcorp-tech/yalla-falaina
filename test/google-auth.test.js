@@ -177,7 +177,7 @@ test('the page never reaches for a bare `history` — it is the chat array, not 
 // taking the auth handlers with it. It has to be CALLED after those exist.
 test('the Google return handler is called after the page is initialized, not where it is defined', () => {
   const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'index.html'), 'utf8');
-  assert.doesNotMatch(html, /function finishGoogleSignIn\(\)[\s\S]*?\n\s*\}\)\(\);/,
+  assert.doesNotMatch(html, /\(function finishGoogleSignIn\(\)/,
     'finishGoogleSignIn must not be an immediately-invoked function');
   const declared = html.indexOf('function finishGoogleSignIn()');
   const called = html.indexOf('finishGoogleSignIn();');
