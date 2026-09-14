@@ -39,6 +39,9 @@
 --     add column if not exists totp_enabled boolean not null default false,
 --     add column if not exists failed_login_count integer not null default 0,
 --     add column if not exists locked_until timestamptz;
+--
+-- Migrating onto "Continue with Google" (routes/auth.js's /google/* endpoints):
+--   alter table public.users add column if not exists google_sub text unique;
 
 create extension if not exists "uuid-ossp";
 
@@ -71,6 +74,7 @@ create table if not exists public.users (
   totp_enabled boolean not null default false,   -- only true once /totp/confirm has proven the secret was scanned correctly
   failed_login_count integer not null default 0, -- consecutive failed logins; reset to 0 on success (record_login_result())
   locked_until timestamptz,                      -- set once failed_login_count crosses the threshold; null when not locked
+  google_sub text unique,                        -- Google account id for "Continue with Google"; null for password-only accounts
   created_at timestamptz default now()
 );
 create table if not exists public.banned_emails (   -- blocklist (can't re-subscribe)
