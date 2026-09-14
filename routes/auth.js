@@ -229,6 +229,117 @@ router.post('/login', sec.limits.credentials, async (req, res) => {
   } catch (e) { console.error('login', e); res.status(500).json({ error: 'Login failed', code: 'ERR_SERVER' }); }
 });
 
+// ---------- "Continue with Google" ----------
+// Signing up with an email and a password, then finding the verification mail
+// (often in spam, on a slow connection), is where most seekers drop out. This
+// skips all of it: Google has already proven the address, so the account is
+// usable immediately.
+const google = require('../lib/googleOAuth');
+
+router.get('/google', sec.limits.oauth, (req, res) => {
+  if (!google.configured()) return res.status(503).send('Google sign-in is not configured');
+  const source = (sec.clean(req.query.source, 40) || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '') || null;
+  res.redirect(google.authUrl(google.issueState(source ? { s: source } : {})));
+});
+
+router.get('/google/callback', sec.limits.oauth, async (req, res) => {
+  const fail = code => res.redirect(`${PUBLIC_URL}/?googleError=${code}`);
+  try {
+    if (!google.configured()) return fail('unconfigured');
+    const state = google.readState(req.query.state);
+    if (!state) return fail('state');
+    if (req.query.error || !req.query.code) return fail('denied');
+
+    const { sub, email: rawEmail, name: googleName } = await google.exchangeCode(req.query.code);
+    const email = sec.normalizeEmail(rawEmail);
+    if (!sec.isEmail(email)) return fail('email');
+
+    const { data: banned } = await supabase.from('banned_emails').select('email').eq('email', email).maybeSingle();
+    if (banned) return fail('blocked');
+
+    // Match on the Google account id first, then fall back to the address:
+    // someone who registered with a password and later clicks the Google
+    // button must land in their existing account, not a duplicate.
+    let { data: user } = await supabase.from('users')
+      .select('id, email, name, role, banned, google_sub, email_verified').eq('google_sub', sub).maybeSingle();
+    if (!user) {
+      const byEmail = await supabase.from('users')
+        .select('id, email, name, role, banned, google_sub, email_verified').eq('email', email).maybeSingle();
+      user = byEmail.data || null;
+    }
+    if (user && user.banned) return fail('blocked');
+
+    if (user) {
+      // Google verified the address, so an account still sitting unverified
+      // becomes usable here — that is the whole point of this path.
+      const patch = {};
+      if (user.google_sub !== sub) patch.google_sub = sub;
+      if (!user.email_verified) { patch.email_verified = true; patch.verify_token = null; }
+      if (Object.keys(patch).length) {
+        const { error } = await supabase.from('users').update(patch).eq('id', user.id);
+        if (error) throw error;
+        sec.dropUserFromCache(user.id);
+      }
+    } else {
+      const name = sec.clean(googleName, 80) || email.split('@')[0];
+      // password_hash is NOT NULL and a Google account has no password: store
+      // an unguessable random hash so /login can never match, rather than
+      // relaxing the column and letting an empty password mean anything.
+      const password_hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), BCRYPT_ROUNDS);
+      const { data: created, error } = await supabase.from('users')
+        .insert({
+          email, password_hash, name, role: 'seeker', google_sub: sub, email_verified: true,
+          signup_source: state.s || 'google',
+          terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION,
+        })
+        .select('id, email, name, role').single();
+      if (error) throw error;
+      user = created;
+
+      const { error: pErr } = await supabase.from('profiles')
+        .insert({ id: user.id, full_name: name, age_confirmed_18_plus: true });
+      if (pErr) console.error('google profile create', pErr.message);
+
+      const notifyTo = sec.normalizeEmail(process.env.NOTIFY_EMAIL || '') || sec.normalizeEmail(process.env.CONTACT_EMAIL || '');
+      if (notifyTo) {
+        try {
+          await sendEmail(notifyTo, 'New signup — Yalla Nsafer',
+            '<p>A new seeker registered with Google:</p><ul>' +
+            `<li>Name: ${escapeHtml(name)}</li><li>Email: ${escapeHtml(email)}</li>` +
+            `<li>User ID: ${user.id}</li></ul>`);
+        } catch (e) { console.error('google:notify email', e.message); }
+      }
+    }
+
+    await recordLoginResult(user.id, true);
+    // The session token is NOT put in the URL. This short-lived handoff is
+    // single-purpose and worthless after two minutes; the page trades it for
+    // the real token over POST and drops it from the address bar.
+    const handoff = jwt.sign({ id: user.id, purpose: 'google_handoff' }, JWT_SECRET, { expiresIn: '2m' });
+    res.redirect(`${PUBLIC_URL}/?google=${encodeURIComponent(handoff)}`);
+  } catch (e) {
+    console.error('google callback', e.message);
+    fail('failed');
+  }
+});
+
+router.post('/google/exchange', sec.limits.oauth, async (req, res) => {
+  try {
+    let claims;
+    try { claims = jwt.verify(String(req.body.handoff || ''), JWT_SECRET); }
+    catch (e) { return res.status(401).json({ error: 'Sign-in link expired, please try again', code: 'ERR_INVALID_TOKEN' }); }
+    if (claims.purpose !== 'google_handoff')
+      return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+
+    const { data: user } = await supabase.from('users')
+      .select('id, email, name, role, banned').eq('id', claims.id).maybeSingle();
+    if (!user || user.banned) return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+
+    const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '2d' });
+    res.json({ success: true, token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  } catch (e) { console.error('google exchange', e); res.status(500).json({ error: 'Sign-in failed', code: 'ERR_SERVER' }); }
+});
+
 // ---------- two-factor authentication (TOTP, RFC 6238) ----------
 // Available to any account, but this is specifically how an admin closes the
 // gap a leaked or phished password alone leaves: routes/admin-informal-listings.js

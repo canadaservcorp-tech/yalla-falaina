@@ -86,6 +86,7 @@ app.get('/api/health', (_req, res) => res.json({
   stripe: stripeLib.configured(),
   email: Boolean(process.env.RESEND_API_KEY),
   voice: transcribeLib.configured(),
+  google: require('./lib/googleOAuth').configured(),
 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 // the SPA is a single file, so give crawlers per-route <head> metadata on the way out
