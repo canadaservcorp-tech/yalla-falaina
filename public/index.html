@@ -101,6 +101,22 @@
                    width: 34px; height: 34px; border-radius: 6px; margin-top: 8px;
                    border: 1px solid var(--border); background: var(--panel); color: var(--accent); }
   #ctaAside a.ig:hover { border-color: var(--accent); }
+  /* Share bar: word of mouth is the cheapest channel we have, and the
+     og:image card (lib/seo.js) only pays off if links actually get shared. */
+  #shareBar { margin-top: 8px; }
+  #shareBar .lbl { display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; }
+  #shareBar .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  #shareBar a, #shareBar button { font-size: 12px; padding: 5px 10px; border-radius: 999px;
+                                  border: 1px solid var(--border); background: var(--panel);
+                                  color: var(--text); text-decoration: none; cursor: pointer; }
+  #shareBar a:hover, #shareBar button:hover { border-color: var(--accent); color: var(--accent); }
+  /* Law 25 / GDPR-style: gtag.js is never fetched before the visitor accepts. */
+  #cookiebar { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 90; display: none;
+               gap: 10px; align-items: center; flex-wrap: wrap; max-width: 720px; margin: auto;
+               background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+               padding: 12px 14px; font-size: 12px; color: var(--text); }
+  #cookiebar p { margin: 0; flex: 1 1 240px; }
+  #cookiebar button { font-size: 12px; padding: 6px 12px; }
   /* Side strips flanking the page: airplane glyphs for now — these are
      the reserved slots for media/announcements later (Hicham's ask).
      Desktop-only; on phones there is no free margin for them. */
@@ -138,6 +154,7 @@
                                  white-space: normal; }
     #ctaAside a.ig { order: 2; flex: 0 0 auto; width: 32px; height: 32px; margin-top: 0; align-self: center; }
     #contactForm { order: 1; flex: 1 1 100%; }
+    #shareBar { order: 3; flex: 1 1 100%; margin-top: 0; }
     /* let a tall card scroll clear of the fixed controls instead of hiding
        its bottom (and its submit button) underneath them */
     #authWrap { align-items: flex-start; padding-bottom: 92px; }
@@ -289,6 +306,21 @@
       <circle cx="17.6" cy="6.4" r="1.3" fill="currentColor" stroke="none"/>
     </svg>
   </a>
+  <div id="shareBar">
+    <span class="lbl" data-i18n="shareHeading">Know someone looking? Share Yalla Nsafer</span>
+    <div class="row">
+      <a id="shareWhatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
+      <a id="shareFacebook" href="#" target="_blank" rel="noopener">Facebook</a>
+      <a id="shareTelegram" href="#" target="_blank" rel="noopener">Telegram</a>
+      <button id="shareCopy" class="ghost" data-i18n="shareCopy">Copy link</button>
+    </div>
+  </div>
+</div>
+
+<div id="cookiebar" role="dialog" aria-live="polite">
+  <p data-i18n="cookieText">We’d like to measure visits with Google Analytics to see which countries we reach. Nothing runs until you accept.</p>
+  <button class="ghost" id="cookieNo" data-i18n="cookieDecline">Decline</button>
+  <button id="cookieYes" data-i18n="cookieAccept">Accept</button>
 </div>
 
 <script>
@@ -987,6 +1019,67 @@
     inputEl.dir = dialectDir();
     document.querySelectorAll('.msg:not(.system)').forEach(m => { m.dir = dialectDir(); });
   });
+  // ---------- analytics consent ----------
+  // The server only publishes the measurement id (lib/analytics.js); the tag
+  // itself is fetched here, and only after the visitor accepts. A refusal is
+  // remembered, so the bar is asked once and a "no" keeps the site tracker-free.
+  function loadAnalytics() {
+    const id = window.TP_GA_ID;
+    if (!id || window.TP_GA_LOADED) return;
+    window.TP_GA_LOADED = true;
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(id);
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    gtag('js', new Date());
+    gtag('config', id, { anonymize_ip: true });
+  }
+  function setAnalyticsConsent(answer) {
+    try { localStorage.setItem('yf_analytics', answer); } catch (e) {}
+    $('cookiebar').style.display = 'none';
+    if (answer === 'yes') loadAnalytics();
+  }
+  $('cookieYes').onclick = () => setAnalyticsConsent('yes');
+  $('cookieNo').onclick = () => setAnalyticsConsent('no');
+  function startAnalytics() {
+    if (!window.TP_GA_ID) return;
+    let c = null;
+    try { c = localStorage.getItem('yf_analytics'); } catch (e) {}
+    if (c === 'yes') return loadAnalytics();
+    if (c === 'no') return;
+    $('cookiebar').style.display = 'flex';
+  }
+  // No-op until consent loads gtag, so callers never have to check.
+  function track(name, params) { if (window.gtag) window.gtag('event', name, params || {}); }
+  startAnalytics();
+
+  // ---------- share bar ----------
+  // Which channel actually brings seekers in is guesswork without this: each
+  // chip reports a GA event, so the answer shows up in the same dashboard.
+  (function shareBar() {
+    const url = location.origin + '/';
+    const text = t('shareText');
+    const links = {
+      shareWhatsapp: 'https://wa.me/?text=' + encodeURIComponent(text + ' ' + url),
+      shareFacebook: 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url),
+      shareTelegram: 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text),
+    };
+    for (const id in links) {
+      const a = $(id);
+      a.href = links[id];
+      a.onclick = () => track('share', { method: id.replace('share', '').toLowerCase(), content_type: 'site' });
+    }
+    $('shareCopy').onclick = async () => {
+      try { await navigator.clipboard.writeText(url); } catch (e) { return; }
+      const btn = $('shareCopy');
+      btn.textContent = t('shareCopied');
+      setTimeout(() => { btn.textContent = t('shareCopy'); }, 2000);
+      track('share', { method: 'copy', content_type: 'site' });
+    };
+  })();
+
   // Runs last: enter() touches messagesEl/dialectSelect, which aren't
   // initialized until the chat section above.
   if (token()) enter();
