@@ -98,7 +98,12 @@ app.get('*', (req, res) => {
   // the request comes from picks the first page's language (lib/geo.js).
   const asked = seo.LANGS.includes(req.query.lang) ? req.query.lang : null;
   const lang = asked || geo.pickLang(req, seo.LANGS) || 'en';
-  res.set('Vary', 'Accept-Language');
+  // The response body differs by visitor location and browser language; the
+  // page must never be served to a second visitor out of a shared cache, and
+  // Vary covers the fallback signal. (Railway fronts us with no shared cache
+  // today — this guards the day that stops being true.)
+  res.set('Vary', 'Accept-Language, CF-IPCountry, X-Vercel-IP-Country, X-Country-Code, X-Geo-Country');
+  res.set('Cache-Control', 'private, no-cache');
   // function replacer: prices in the copy would otherwise be read as $-patterns
   const html = SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang, asked || 'en'))
     .replace('<!--analytics-->', () => analytics.head())
