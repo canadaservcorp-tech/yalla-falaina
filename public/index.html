@@ -433,7 +433,10 @@
     const params = new URLSearchParams(location.search);
     const handoff = params.get('google');
     const err = params.get('googleError');
-    const clean = () => history.replaceState(null, '', location.pathname);
+    // window.history explicitly: `history` at this scope is the chat array.
+    // Guarded because this runs at load: a throw here would abort the rest of
+    // the script and leave the page with no working sign-in handlers at all.
+    const clean = () => { try { window.history.replaceState(null, '', location.pathname); } catch (e) {} };
     if (err) {
       clean();
       $('authMsg').textContent = err === 'blocked' ? t('googleBlocked') : t('googleFailed');

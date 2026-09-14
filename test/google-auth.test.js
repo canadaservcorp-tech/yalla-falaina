@@ -160,6 +160,17 @@ test('exchange trades a valid handoff for a session token, and refuses anything 
   assert.equal((await post('garbage')).status, 401);
 });
 
+// The page declares `let history = []` for the chat transcript, which shadows
+// window.history for the whole script. A bare history.replaceState() therefore
+// throws at load — and because this runs top-level, it took the sign-in
+// handlers below it down with it, leaving the auth card completely inert.
+test('the page never reaches for a bare `history` — it is the chat array, not the browser one', () => {
+  const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.match(html, /let history = \[\]/, 'the shadowing declaration this guards against is gone — revisit this test');
+  const bare = html.match(/(^|[^.\w])history\s*\.\s*(replaceState|pushState|back|forward|go)\b/m);
+  assert.equal(bare, null, 'use window.history.' + (bare ? bare[2] : 'replaceState') + '()');
+});
+
 test('a banned user holding a valid handoff still gets nothing', async () => {
   h.mock.__set('users', { data: { id: 51, email: 'seeker@gmail.com', name: 'x', role: 'seeker', banned: true }, error: null });
   const r = await fetch(h.base + '/api/auth/google/exchange', {
