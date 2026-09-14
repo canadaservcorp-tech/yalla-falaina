@@ -76,11 +76,30 @@
     <button data-status="pending" class="on">Pending</button>
     <button data-status="approved">Approved</button>
     <button data-status="rejected">Rejected</button>
+    <button data-tab="news">News ticker</button>
     <button data-tab="security">Security</button>
   </div>
   <div id="topMsg"></div>
   <div id="list"></div>
   <div id="empty" style="display:none">Nothing here.</div>
+
+  <!-- Australia, the EU and the Gulf publish no feed we can ingest, so their
+       news reaches the ticker through this form. IRCC items arrive on their
+       own every 6 hours (lib/newsIngest.js) and are listed here read-only. -->
+  <div id="newsPanel" style="display:none">
+    <div class="card">
+      <div class="title">Post an announcement</div>
+      <div class="meta">Shows in the ticker for every visitor. The source link is required — a headline no one can check is what this site refuses to publish.</div>
+      <label>Headline (English)</label><input type="text" id="nTitleEn" maxlength="240">
+      <label>Headline (French, optional)</label><input type="text" id="nTitleFr" maxlength="240">
+      <label>Headline (Arabic, optional)</label><input type="text" id="nTitleAr" maxlength="240">
+      <label>Source link (https)</label><input type="url" id="nUrl" maxlength="500" placeholder="https://…">
+      <label>Country (optional)</label><input type="text" id="nCountry" maxlength="60" placeholder="Australia">
+      <div style="margin-top:10px"><button id="nPostBtn">Post to the ticker</button></div>
+      <div id="newsMsg" style="font-size:13px;color:var(--warn);margin-top:8px;min-height:18px"></div>
+    </div>
+    <div id="newsList"></div>
+  </div>
 
   <div id="securityPanel" class="card" style="display:none">
     <div class="title">Two-factor authentication</div>
@@ -161,13 +180,14 @@
       document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
       btn.classList.add('on');
       $('topMsg').textContent = '';
-      if (btn.dataset.tab === 'security') {
+      $('securityPanel').style.display = 'none';
+      $('newsPanel').style.display = 'none';
+      if (btn.dataset.tab === 'security' || btn.dataset.tab === 'news') {
         $('list').style.display = 'none';
         $('empty').style.display = 'none';
-        $('securityPanel').style.display = 'block';
-        loadSecurity();
+        if (btn.dataset.tab === 'news') { $('newsPanel').style.display = 'block'; loadNews(); }
+        else { $('securityPanel').style.display = 'block'; loadSecurity(); }
       } else {
-        $('securityPanel').style.display = 'none';
         $('list').style.display = 'block';
         status = btn.dataset.status;
         load();
@@ -297,6 +317,54 @@
       loadSecurity();
     } catch (e) { $('securityMsg').textContent = 'Network error — try again.'; }
     finally { $('totpDisableBtn').disabled = false; }
+  };
+
+  async function loadNews() {
+    $('newsMsg').textContent = '';
+    const r = await fetch('/api/admin/news', { headers: headers() });
+    if (r.status === 401) { sessionStorage.removeItem(tokenKey); location.reload(); return; }
+    const d = await r.json();
+    if (!r.ok) { $('newsMsg').textContent = d.error || 'Could not load the news items.'; return; }
+    const list = $('newsList');
+    list.innerHTML = '';
+    (d.items || []).forEach(it => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="title">${esc(it.title_en)}</div>
+        <div class="meta">${esc(it.source)} · ${esc((it.published_at || '').slice(0, 10))}
+        · <a href="${esc(it.url)}" target="_blank" rel="noopener">source</a></div>`;
+      if (it.source === 'operator') {
+        const del = document.createElement('button');
+        del.className = 'danger';
+        del.textContent = 'Delete';
+        del.onclick = async () => {
+          del.disabled = true;
+          const res = await fetch('/api/admin/news/' + encodeURIComponent(it.id), { method: 'DELETE', headers: headers() });
+          if (res.ok) loadNews(); else { del.disabled = false; $('newsMsg').textContent = 'Could not delete.'; }
+        };
+        card.appendChild(del);
+      }
+      list.appendChild(card);
+    });
+  }
+
+  $('nPostBtn').onclick = async () => {
+    $('newsMsg').textContent = '';
+    $('nPostBtn').disabled = true;
+    try {
+      const r = await fetch('/api/admin/news', {
+        method: 'POST', headers: headers(),
+        body: JSON.stringify({
+          title_en: $('nTitleEn').value, title_fr: $('nTitleFr').value,
+          title_ar: $('nTitleAr').value, url: $('nUrl').value, country: $('nCountry').value,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) { $('newsMsg').textContent = d.error || 'Could not post.'; return; }
+      ['nTitleEn', 'nTitleFr', 'nTitleAr', 'nUrl', 'nCountry'].forEach(id => { $(id).value = ''; });
+      loadNews();
+    } catch (e) { $('newsMsg').textContent = 'Network error — try again.'; }
+    finally { $('nPostBtn').disabled = false; }
   };
 
   // A token from a previous session is worth trying before making the admin

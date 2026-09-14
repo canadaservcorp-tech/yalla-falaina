@@ -101,6 +101,26 @@
                    width: 34px; height: 34px; border-radius: 6px; margin-top: 8px;
                    border: 1px solid var(--border); background: var(--panel); color: var(--accent); }
   #ctaAside a.ig:hover { border-color: var(--accent); }
+  /* Immigration-news ticker ("manchette"). Sits above the header because it
+     is the one live signal a visitor gets before signing in. Hidden until
+     /api/news actually returns items -- an empty band reads as broken. */
+  #newsTicker { display: none; align-items: center; gap: 10px; overflow: hidden;
+                background: var(--panel); border-bottom: 1px solid var(--border);
+                padding: 6px 12px; font-size: 12px; }
+  #newsTicker .tag { flex: 0 0 auto; color: var(--accent); font-weight: 600;
+                     text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
+  #newsTrack { display: flex; gap: 40px; white-space: nowrap; flex: 1;
+               animation: newsScroll 90s linear infinite; }
+  #newsTicker:hover #newsTrack { animation-play-state: paused; }
+  #newsTrack a { color: var(--text); text-decoration: none; }
+  #newsTrack a:hover { color: var(--accent); text-decoration: underline; }
+  #newsTrack .dot { color: var(--text-dim); margin-inline-end: 6px; }
+  @keyframes newsScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  /* A moving band is unusable for some readers -- and for anyone trying to
+     actually click a headline -- so the motion goes away when it isn't wanted. */
+  @media (prefers-reduced-motion: reduce) {
+    #newsTrack { animation: none; overflow-x: auto; }
+  }
   /* Share bar: word of mouth is the cheapest channel we have, and the
      og:image card (lib/seo.js) only pays off if links actually get shared. */
   #shareBar { margin-top: 8px; }
@@ -167,6 +187,10 @@
 </div>
 <div class="sideSlot right" aria-hidden="true">
   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+</div>
+<div id="newsTicker" aria-live="polite">
+  <span class="tag" data-i18n="newsLabel">Immigration news</span>
+  <div id="newsTrack"></div>
 </div>
 <header>
   <div>
@@ -1019,6 +1043,39 @@
     inputEl.dir = dialectDir();
     document.querySelectorAll('.msg:not(.system)').forEach(m => { m.dir = dialectDir(); });
   });
+  // ---------- immigration news ticker ----------
+  // Official items only (lib/newsIngest.js): IRCC's Express Entry open data
+  // and its news feed, plus announcements the operator posts. Every headline
+  // links to its own source, so nothing here is a claim a visitor can't check.
+  async function loadNews() {
+    let items = [];
+    try {
+      const res = await fetch('/api/news?lang=' + encodeURIComponent(currentLang));
+      if (!res.ok) return;
+      items = (await res.json()).items || [];
+    } catch (e) { return; }
+    if (!items.length) return;
+    const trackEl = $('newsTrack');
+    const fill = () => items.forEach(it => {
+      const a = document.createElement('a');
+      a.href = it.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.title = t('newsOfficial');
+      a.onclick = () => track('news_click', { country: it.country || '' });
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.textContent = '\u2022';
+      a.append(dot, document.createTextNode(it.title));
+      trackEl.appendChild(a);
+    });
+    // The animation translates the track by -50%, so the list is laid out
+    // twice: the second copy is what's on screen as the first scrolls off,
+    // which is what makes the loop seamless instead of scrolling into a gap.
+    fill(); fill();
+    $('newsTicker').style.display = 'flex';
+  }
+
   // ---------- analytics consent ----------
   // The server only publishes the measurement id (lib/analytics.js); the tag
   // itself is fetched here, and only after the visitor accepts. A refusal is
@@ -1054,6 +1111,7 @@
   // No-op until consent loads gtag, so callers never have to check.
   function track(name, params) { if (window.gtag) window.gtag('event', name, params || {}); }
   startAnalytics();
+  loadNews();
 
   // ---------- share bar ----------
   // Which channel actually brings seekers in is guesswork without this: each
