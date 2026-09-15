@@ -69,6 +69,7 @@ app.use('/api/profile', require('./routes/profile'));
 app.use('/api/cv', require('./routes/cv')); // CV export (PDF/Word) -- subscription-gated, see routes/cv.js
 app.use('/api/informal-listings', require('./routes/informal-listings'));
 app.use('/api/contact', require('./routes/contact'));
+app.use('/api/jobs', require('./routes/jobs'));      // public feed stats (the live count on the landing page)
 app.use('/api/news', require('./routes/news'));      // immigration-news ticker (public)
 app.use('/api/voice', require('./routes/voice'));    // chat voice notes -> transcript -> /api/concierge
 app.use('/api/admin/informal-listings', require('./routes/admin-informal-listings'));
