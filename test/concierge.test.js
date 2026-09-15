@@ -158,6 +158,25 @@ test('an active subscriber under an enforced paywall never hits the 402, even on
   assert.equal(h.mock.__rpcCalls('increment_free_preview').length, 0);   // never enters preview bookkeeping at all
 });
 
+// A referral-reward bonus (users.bonus_access_until) must open the same
+// enforced-paywall gate as a real subscription -- see lib/access.js.
+test('a live referral bonus gets full, non-teased access under an enforced paywall, with no real subscription at all', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-bonus-paywall' }, error: null });
+  const future = new Date(Date.now() + 5 * 86400000).toISOString();
+  const r = await ask({ message: 'hi' }, caller({ subscription_status: 'inactive', bonus_access_until: future, free_preview_used: 3 }));
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.ok(!j.preview);
+});
+
+test('an expired referral bonus is treated as no access at all under an enforced paywall', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  const past = new Date(Date.now() - 5 * 86400000).toISOString();
+  const r = await ask({ message: 'hi' }, caller({ subscription_status: 'inactive', bonus_access_until: past, free_preview_used: 3 }));
+  assert.equal(r.status, 402);
+});
+
 // ---------- free preview (first 3 messages) ----------
 
 test('the first free-preview turn reaches the model with redacted jobs, not a 402', async () => {

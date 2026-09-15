@@ -45,6 +45,9 @@ beforeEach(() => {
   stripe.__reset();
   h.mock.__reset();
   paypal.__reply('/v1/notifications/verify-webhook-signature', { verification_status: 'SUCCESS' });
+  // Default: the conversion RPC recorded (and paid) — tests that exercise the
+  // retry/failure paths override this with their own __setRpc.
+  h.mock.__setRpc('record_referral_conversion', { data: true, error: null });
 });
 
 // ---------- PayPal ----------
@@ -60,13 +63,18 @@ test('PayPal: a first-time activation for a referred account credits the referre
   });
   assert.equal(r.status, 200);
 
-  const conversions = h.mock.__writes('referral_conversions', 'insert');
-  assert.equal(conversions.length, 1);
-  assert.deepEqual(conversions[0].payload, { referrer_id: 7, referred_id: 42 });
+  // The ledger insert + bonus grant happen inside schema.sql's
+  // record_referral_conversion() RPC (one transaction), so the JS side shows
+  // exactly one rpc call and one users.update -- the webhook's own patch.
+  const calls = h.mock.__rpcCalls('record_referral_conversion');
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args, { p_referrer_id: 7, p_referred_id: 42, p_days: 30 });
 
-  const [update] = h.mock.__writes('users', 'update');
-  assert.equal(update.payload.subscription_status, 'active');
-  assert.equal(update.payload.referral_credited, true);
+  const writes = h.mock.__writes('users', 'update');
+  assert.equal(writes.length, 1, 'only the activation patch should write to users — the grant is inside the RPC');
+  const activation = writes.find(w => 'subscription_status' in w.payload);
+  assert.equal(activation.payload.subscription_status, 'active');
+  assert.equal(activation.payload.referral_credited, true);
 });
 
 test('PayPal: a renewal payment for an already-active referred account never re-credits', async () => {
@@ -79,7 +87,7 @@ test('PayPal: a renewal payment for an already-active referred account never re-
     resource: { billing_agreement_id: 'SUB-43', custom_id: '43' },
   });
   assert.equal(r.status, 200);
-  assert.equal(h.mock.__writes('referral_conversions', 'insert').length, 0);
+  assert.equal(h.mock.__rpcCalls('record_referral_conversion').length, 0);
   const [update] = h.mock.__writes('users', 'update');
   assert.equal(update.payload.referral_credited, undefined, 'a renewal patch should not even mention referral_credited');
 });
@@ -90,7 +98,7 @@ test('PayPal: an account with no referrer never touches the ledger', async () =>
     error: null,
   });
   await ppWebhook({ event_type: 'BILLING.SUBSCRIPTION.ACTIVATED', resource: { id: 'SUB-44', custom_id: '44' } });
-  assert.equal(h.mock.__writes('referral_conversions', 'insert').length, 0);
+  assert.equal(h.mock.__rpcCalls('record_referral_conversion').length, 0);
 });
 
 test('PayPal: reactivating an already-credited account (a later cancel/resubscribe) does not double-credit', async () => {
@@ -99,19 +107,31 @@ test('PayPal: reactivating an already-credited account (a later cancel/resubscri
     error: null,
   });
   await ppWebhook({ event_type: 'BILLING.SUBSCRIPTION.RE-ACTIVATED', resource: { id: 'SUB-45', custom_id: '45' } });
-  assert.equal(h.mock.__writes('referral_conversions', 'insert').length, 0);
+  assert.equal(h.mock.__rpcCalls('record_referral_conversion').length, 0);
 });
 
-test('PayPal: a concurrent duplicate credit (unique-violation on insert) still marks credited, doesn\'t fail the webhook', async () => {
+test('PayPal: an already-recorded conversion (RPC returns false — the retry path) still marks credited, doesn\'t fail the webhook', async () => {
   h.mock.__set('users', {
     data: { id: 46, subscription_period_end: null, subscription_status: 'inactive', referred_by: 7, referral_credited: false },
     error: null,
   });
-  h.mock.__setOp('referral_conversions', 'insert', { error: { code: '23505', message: 'duplicate key' } });
+  h.mock.__setRpc('record_referral_conversion', { data: false, error: null });
   const r = await ppWebhook({ event_type: 'BILLING.SUBSCRIPTION.ACTIVATED', resource: { id: 'SUB-46', custom_id: '46' } });
   assert.equal(r.status, 200);
   const [update] = h.mock.__writes('users', 'update');
   assert.equal(update.payload.referral_credited, true);
+});
+
+test('PayPal: a failed record RPC leaves referral_credited unset — the webhook retry must get another shot at the grant', async () => {
+  h.mock.__set('users', {
+    data: { id: 47, subscription_period_end: null, subscription_status: 'inactive', referred_by: 7, referral_credited: false },
+    error: null,
+  });
+  h.mock.__setRpc('record_referral_conversion', { data: null, error: { message: 'db down' } });
+  const r = await ppWebhook({ event_type: 'BILLING.SUBSCRIPTION.ACTIVATED', resource: { id: 'SUB-47', custom_id: '47' } });
+  assert.equal(r.status, 200);
+  const [update] = h.mock.__writes('users', 'update');
+  assert.equal(update.payload.referral_credited, undefined, 'the failed grant must not be consumed by the credited flag');
 });
 
 // ---------- Stripe ----------
@@ -130,11 +150,12 @@ test('Stripe: checkout.session.completed for a referred first-time subscriber cr
     data: { object: { mode: 'subscription', subscription: 'sub_ref', customer: 'cus_1', client_reference_id: '50' } },
   });
   assert.equal(r.status, 200);
-  const conversions = h.mock.__writes('referral_conversions', 'insert');
-  assert.equal(conversions.length, 1);
-  assert.deepEqual(conversions[0].payload, { referrer_id: 9, referred_id: 50 });
-  const [update] = h.mock.__writes('users', 'update');
-  assert.equal(update.payload.referral_credited, true);
+  const calls = h.mock.__rpcCalls('record_referral_conversion');
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args, { p_referrer_id: 9, p_referred_id: 50, p_days: 30 });
+  const writes = h.mock.__writes('users', 'update');
+  const activation = writes.find(w => 'referral_credited' in w.payload);
+  assert.equal(activation.payload.referral_credited, true);
 });
 
 test('Stripe: customer.subscription.updated reactivating a lapsed referred account credits once', async () => {
@@ -147,7 +168,7 @@ test('Stripe: customer.subscription.updated reactivating a lapsed referred accou
     data: { object: { id: 'sub_51', status: 'active', cancel_at_period_end: false, current_period_end: Math.floor(Date.now() / 1000) + 86400 } },
   });
   assert.equal(r.status, 200);
-  assert.equal(h.mock.__writes('referral_conversions', 'insert').length, 1);
+  assert.equal(h.mock.__rpcCalls('record_referral_conversion').length, 1);
 });
 
 test('Stripe: a plain renewal-style update for an already-active referred account never re-credits', async () => {
@@ -159,5 +180,5 @@ test('Stripe: a plain renewal-style update for an already-active referred accoun
     type: 'customer.subscription.updated',
     data: { object: { id: 'sub_52', status: 'active', cancel_at_period_end: false, current_period_end: Math.floor(Date.now() / 1000) + 86400 } },
   });
-  assert.equal(h.mock.__writes('referral_conversions', 'insert').length, 0);
+  assert.equal(h.mock.__rpcCalls('record_referral_conversion').length, 0);
 });
