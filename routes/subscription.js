@@ -23,6 +23,7 @@ const sec = require('../lib/security');
 const ev = require('../lib/subscription-events');
 const stripeEv = require('../lib/stripe-events');
 const voiceNotes = require('../lib/voiceNotes');
+const referral = require('../lib/referral');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
@@ -221,7 +222,7 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
       catch (e) { console.error('paypal renewal lookup', e.message); }
     }
     const custom = String(resource.custom_id || r.custom_id || r.custom || '');
-    const q = supabase.from('users').select('id, subscription_period_end');
+    const q = supabase.from('users').select('id, subscription_period_end, subscription_status, referred_by, referral_credited');
     const { data: user } = sec.isId(custom)
       ? await q.eq('id', Number(custom)).maybeSingle()
       : subId ? await q.eq('paypal_subscription_id', subId).maybeSingle() : { data: null };
@@ -231,6 +232,7 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
         if (subId && !isRenewal) patch.paypal_subscription_id = subId;
         if (patch.subscription_status === 'active') patch.subscription_tier = TIER;
         if (patch.subscription_status === 'canceled') patch.subscription_tier = 'none';
+        await referral.creditConversionIfNew(user, patch);
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
         // Hicham's explicit ask: voice notes are deleted once a subscription
@@ -272,7 +274,8 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json', limit: '1
       // The session is a snapshot from when checkout started; the live
       // subscription object (status/period end) is what actually matters.
       const sub = await stripe.stripeApi('GET', `/subscriptions/${encodeURIComponent(obj.subscription)}`);
-      const { data: user } = await supabase.from('users').select('id, subscription_period_end').eq('id', userId).maybeSingle();
+      const { data: user } = await supabase.from('users')
+        .select('id, subscription_period_end, subscription_status, referred_by, referral_credited').eq('id', userId).maybeSingle();
       if (!user) return res.json({ received: true });
       const patch = stripeEv.accountPatch(sub, new Date(), user.subscription_period_end);
       if (patch) {
@@ -280,6 +283,7 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json', limit: '1
         patch.stripe_subscription_id = sub.id;
         patch.payment_provider = 'stripe';
         if (patch.subscription_status === 'active') patch.subscription_tier = TIER;
+        await referral.creditConversionIfNew(user, patch);
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
       }
@@ -292,13 +296,14 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json', limit: '1
       // that ever isn't true for some edge case Stripe adds later.
       const sub = event.type === 'customer.subscription.deleted' ? { ...obj, status: 'canceled' } : obj;
       const { data: user } = await supabase.from('users')
-        .select('id, subscription_period_end')
+        .select('id, subscription_period_end, subscription_status, referred_by, referral_credited')
         .eq('stripe_subscription_id', sub.id).maybeSingle();
       if (!user) return res.json({ received: true });   // not one of ours, or already unlinked
       const patch = stripeEv.accountPatch(sub, new Date(), user.subscription_period_end);
       if (patch) {
         if (patch.subscription_status === 'active') patch.subscription_tier = TIER;
         if (patch.subscription_status === 'canceled') patch.subscription_tier = 'none';
+        await referral.creditConversionIfNew(user, patch);
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
         // See the identical PayPal-branch comment above -- same policy, same

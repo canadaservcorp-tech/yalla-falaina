@@ -331,6 +331,17 @@
       <button id="totpEnableBtn" class="ghost" data-i18n="totpEnableBtn">Enable two-factor authentication</button>
       <div id="totpMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
     </div>
+    <div id="referralPane" style="margin-top:16px">
+      <h2 data-i18n="referralHeading">Invite a friend</h2>
+      <p class="hint" data-i18n="referralHint">Share your personal link. When someone signs up and subscribes, it shows up here.</p>
+      <div class="row">
+        <a id="referralWhatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
+        <a id="referralFacebook" href="#" target="_blank" rel="noopener">Facebook</a>
+        <a id="referralTelegram" href="#" target="_blank" rel="noopener">Telegram</a>
+        <button id="referralCopy" class="ghost" data-i18n="shareCopy">Copy link</button>
+      </div>
+      <p id="referralStats" style="color:var(--text-dim);font-size:13px;"></p>
+    </div>
   </div>
 </main>
 
@@ -376,6 +387,12 @@
 <script>
   const $ = id => document.getElementById(id);
   const tokenKey = 'yf_token';
+  // Whoever's link brought this visitor here (routes/auth.js resolves it at
+  // signup time; a missing/unknown code is silently ignored server-side, so
+  // it's safe to pass through unchecked). Read once at load — the value
+  // persists in the URL for the whole visit even after other query params
+  // (?sub=, ?lang=) get scrubbed off elsewhere on this page.
+  const refCode = (new URLSearchParams(location.search).get('ref') || '').trim();
   let history = [], conversationId = null;
 
   // Hicham's ask: closing the app (or the browser) and reopening it must not
@@ -434,7 +451,7 @@
   // ---------- continue with Google ----------
   $('googleBtn').onclick = () => {
     track('login_start', { method: 'google' });
-    location.href = '/api/auth/google';
+    location.href = '/api/auth/google' + (refCode ? '?ref=' + encodeURIComponent(refCode) : '');
   };
 
   // Coming back from Google: the URL carries a two-minute handoff token, never
@@ -612,7 +629,7 @@
       const r = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name: $('name').value.trim(), preferredLanguage: $('prefLang').value,
           preferredCountry: $('prefCountry').value.trim(), sector: $('sector').value.trim(),
-          confirmAge: true, acceptTerms: true }) });
+          confirmAge: true, acceptTerms: true, referralCode: refCode || undefined }) });
       const d = await r.json();
       // d.message stays English (see the language note above) — but d.error
       // now goes through apiError() first, which maps the response's `code`
@@ -717,6 +734,7 @@
     refreshSub();
     refreshCv();
     refreshTotpStatus();
+    refreshReferral();
     const resumed = await resumeConversation();
     if (!resumed) addMessage('system', t('welcomeSystemMessage'));
   }
@@ -796,6 +814,38 @@
   $('cvDownloadPdf').onclick = () => downloadCv('pdf');
   $('cvDownloadDocx').onclick = () => downloadCv('docx');
   $('cvSubscribePrompt').onclick = () => { $('paywall').style.display = 'block'; };
+
+  // ---------- invite a friend (referral link) ----------
+  // Mirrors the anonymous shareBar() below, but with a personal link (routes/
+  // referral.js lazily mints a code on first call) and a live conversion
+  // count read straight from referral_conversions -- no reward amount is
+  // shown here on purpose, see lib/referral.js's top comment.
+  async function refreshReferral() {
+    try {
+      const r = await fetch('/api/referral/mine', { headers: headers() });
+      if (!r.ok) { $('referralStats').textContent = t('referralLoadError'); return; }
+      const d = await r.json();
+      const url = location.origin + '/?ref=' + encodeURIComponent(d.code);
+      const text = t('shareText');
+      const links = {
+        referralWhatsapp: 'https://wa.me/?text=' + encodeURIComponent(text + ' ' + url),
+        referralFacebook: 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url),
+        referralTelegram: 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text),
+      };
+      for (const id in links) {
+        $(id).href = links[id];
+        $(id).onclick = () => track('share', { method: id.replace('referral', '').toLowerCase(), content_type: 'referral' });
+      }
+      $('referralCopy').onclick = async () => {
+        try { await navigator.clipboard.writeText(url); } catch (e) { return; }
+        const btn = $('referralCopy');
+        btn.textContent = t('shareCopied');
+        setTimeout(() => { btn.textContent = t('shareCopy'); }, 2000);
+        track('share', { method: 'copy', content_type: 'referral' });
+      };
+      $('referralStats').textContent = t('referralConversions', { n: d.conversions });
+    } catch { $('referralStats').textContent = t('referralLoadError'); }
+  }
 
   // ---------- two-factor authentication (queued item 4) ----------
   // Every endpoint here (GET /totp/status, POST /totp/setup|confirm|disable)

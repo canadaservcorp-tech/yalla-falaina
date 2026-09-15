@@ -318,3 +318,39 @@ test('POST /google/totp-verify refuses a banned account, and re-checks 2FA is st
   assert.equal(r.status, 401);
   assert.equal((await r.json()).code, 'ERR_INVALID_TOKEN');
 });
+
+// ---------- referral attribution (a ?ref= has to survive the round trip to Google and back) ----------
+
+test('?ref= on the entry point is carried into the signed state', async () => {
+  const r = await fetch(h.base + '/api/auth/google?ref=abc-123', noRedirect);
+  const state = new URL(r.headers.get('location')).searchParams.get('state');
+  assert.equal(jwt.verify(state, SECRET).r, 'ABC123', 'cleaned to the same shape resolveCode compares against');
+});
+
+test('a first-time Google seeker referred by a valid code gets referred_by set', async () => {
+  const restore = stubGoogle();
+  h.mock.__queue('users',
+    { data: null, error: null },        // no google_sub match
+    { data: null, error: null },        // no email match either -> new account
+    { data: { id: 3 }, error: null },   // resolveCode('REFCODE') matches referrer id 3
+  );
+  h.mock.__setOp('users', 'insert', { data: { id: 51, email: 'seeker@gmail.com', name: 'Amina B.', role: 'seeker' }, error: null });
+  try {
+    const startR = await fetch(h.base + '/api/auth/google?ref=refcode', noRedirect);
+    const state = new URL(startR.headers.get('location')).searchParams.get('state');
+    await fetch(h.base + `/api/auth/google/callback?code=abc&state=${state}`, noRedirect);
+    const [insert] = h.mock.__writes('users', 'insert');
+    assert.equal(insert.payload.referred_by, 3);
+  } finally { restore(); }
+});
+
+test('a first-time Google seeker with no/unmatched referral code signs up referrer-less', async () => {
+  const restore = stubGoogle();
+  h.mock.__set('users', { data: null, error: null }); // every users read (google_sub, email, resolveCode) misses
+  h.mock.__setOp('users', 'insert', { data: { id: 52, email: 'seeker@gmail.com', name: 'Amina B.', role: 'seeker' }, error: null });
+  try {
+    await fetch(h.base + `/api/auth/google/callback?code=abc&state=${await startState()}`, noRedirect);
+    const [insert] = h.mock.__writes('users', 'insert');
+    assert.equal(insert.payload.referred_by, null);
+  } finally { restore(); }
+});
