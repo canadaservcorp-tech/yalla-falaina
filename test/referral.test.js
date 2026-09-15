@@ -77,50 +77,53 @@ test('resolveCode returns null for an unmatched, blank, or non-string code — n
   assert.equal(await referral.resolveCode({ evil: true }), null);
 });
 
-// ---------- lib/referral.js: grantReferralBonus ----------
-// The reward mechanic itself (creditConversionIfNew calling this on a fresh
-// conversion) gets full HTTP-level coverage in test/referral-crediting.test.js,
-// same as the crediting logic it sits next to. These are the pure stacking
-// rules that would be tedious to re-derive through a whole webhook each time.
+// ---------- lib/referral.js: creditConversionIfNew ----------
+// The reward mechanic runs through schema.sql's record_referral_conversion()
+// RPC — one transaction covering the ledger insert AND the referrer's +30d
+// extension, so nothing below inspects intermediate writes the way the old
+// read-modify-write tests did. Full HTTP-level webhook coverage lives in
+// test/referral-crediting.test.js; these cover the hook's own edge cases.
 
-test('grantReferralBonus grants BONUS_DAYS from now when the referrer has no existing bonus', async () => {
-  const before = Date.now();
-  h.mock.__set('users', { data: { bonus_access_until: null }, error: null });
-  await referral.grantReferralBonus(7);
-  const [update] = h.mock.__writes('users', 'update');
-  const grantedMs = new Date(update.payload.bonus_access_until).getTime();
-  assert.ok(grantedMs >= before + referral.BONUS_DAYS * 86400000 - 1000, 'should be ~BONUS_DAYS out from now, not from epoch/zero');
+const referred = (over = {}) => ({
+  id: 9, referred_by: 7, referral_credited: false, subscription_status: 'inactive', ...over,
 });
 
-test('grantReferralBonus stacks on top of an existing FUTURE bonus rather than resetting it', async () => {
-  const currentUntil = new Date(Date.now() + 10 * 86400000); // 10 days still remaining
-  h.mock.__set('users', { data: { bonus_access_until: currentUntil.toISOString() }, error: null });
-  await referral.grantReferralBonus(8);
-  const [update] = h.mock.__writes('users', 'update');
-  const grantedMs = new Date(update.payload.bonus_access_until).getTime();
-  const expected = currentUntil.getTime() + referral.BONUS_DAYS * 86400000;
-  assert.ok(Math.abs(grantedMs - expected) < 1000, 'a second referral should extend from the current expiry, not from today');
+test('a fresh conversion credits through the atomic RPC with the referrer, referred id and BONUS_DAYS', async () => {
+  h.mock.__setRpc('record_referral_conversion', { data: true, error: null });
+  const patch = { subscription_status: 'active' };
+  await referral.creditConversionIfNew(referred(), patch);
+  const [call] = h.mock.__rpcCalls('record_referral_conversion');
+  assert.equal(call.args.p_referrer_id, 7);
+  assert.equal(call.args.p_referred_id, 9);
+  assert.equal(call.args.p_days, referral.BONUS_DAYS);
+  assert.equal(patch.referral_credited, true);
 });
 
-test('grantReferralBonus does NOT stack on a bonus that already expired in the past -- extends from now instead', async () => {
-  const expiredUntil = new Date(Date.now() - 5 * 86400000); // expired 5 days ago
-  const before = Date.now();
-  h.mock.__set('users', { data: { bonus_access_until: expiredUntil.toISOString() }, error: null });
-  await referral.grantReferralBonus(9);
-  const [update] = h.mock.__writes('users', 'update');
-  const grantedMs = new Date(update.payload.bonus_access_until).getTime();
-  assert.ok(grantedMs >= before + referral.BONUS_DAYS * 86400000 - 1000, 'an already-expired bonus must not push the new grant further out');
+test('an already-recorded conversion (RPC false — a webhook retry) still marks credited but never pays twice', async () => {
+  h.mock.__setRpc('record_referral_conversion', { data: false, error: null });
+  const patch = { subscription_status: 'active' };
+  await referral.creditConversionIfNew(referred(), patch);
+  assert.equal(patch.referral_credited, true);
 });
 
-test('grantReferralBonus never throws when the lookup or the write fails -- a reward hiccup must not break the caller', async () => {
-  h.mock.__set('users', { data: null, error: { message: 'db down' } });
-  await assert.doesNotReject(() => referral.grantReferralBonus(10));
-  assert.equal(h.mock.__writes('users', 'update').length, 0, 'never writes after a failed lookup');
+test('an RPC failure leaves referral_credited UNSET so the webhook retry can finish the grant', async () => {
+  h.mock.__setRpc('record_referral_conversion', { data: null, error: { message: 'db down' } });
+  const patch = { subscription_status: 'active' };
+  await assert.doesNotReject(() => referral.creditConversionIfNew(referred(), patch));
+  assert.equal(patch.referral_credited, undefined, 'a failed grant must not consume the one-time credit flag');
+});
 
-  h.mock.__reset();
-  h.mock.__set('users', { data: { bonus_access_until: null }, error: null });
-  h.mock.__setOp('users', 'update', { error: { message: 'write failed' } });
-  await assert.doesNotReject(() => referral.grantReferralBonus(11));
+test('crediting never runs for renewals, already-credited accounts, or accounts with no referrer', async () => {
+  for (const u of [
+    referred({ subscription_status: 'active' }),            // renewal, not a fresh conversion
+    referred({ referral_credited: true }),                  // already credited once
+    referred({ referred_by: null }),                        // organic signup
+  ]) {
+    const patch = { subscription_status: 'active' };
+    await referral.creditConversionIfNew(u, patch);
+    assert.equal(patch.referral_credited, undefined);
+  }
+  assert.equal(h.mock.__rpcCalls('record_referral_conversion').length, 0);
 });
 
 // ---------- routes/referral.js ----------

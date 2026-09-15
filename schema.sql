@@ -450,4 +450,34 @@ alter table public.concierge_conversations enable row level security;
 alter table public.concierge_messages enable row level security;
 alter table public.daily_usage enable row level security;
 alter table public.referral_conversions enable row level security;
+
+-- The conversion ledger insert AND the referrer's reward land in ONE
+-- transaction (called from lib/referral.js's creditConversionIfNew): a
+-- separate "insert, then read-modify-write bonus_access_until" pair can
+-- split — the ledger commits, the grant dies, and the ledger's UNIQUE
+-- referred_id then makes every webhook retry return early so the reward is
+-- lost forever. It also fixes the lost-update race: two conversions
+-- completing together would otherwise read the same bonus_access_until and
+-- overwrite each other's +30d — inside one function the referrer row's
+-- update lock serializes them, so each conversion stacks its own p_days.
+-- Returns true when this call recorded (and paid) the conversion, false
+-- when the ledger already had it (a retry — the first call already paid).
+create or replace function public.record_referral_conversion(p_referrer_id bigint, p_referred_id bigint, p_days integer)
+returns boolean
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_rows integer;
+begin
+  insert into public.referral_conversions (referrer_id, referred_id)
+  values (p_referrer_id, p_referred_id)
+  on conflict (referred_id) do nothing;
+  get diagnostics v_rows = row_count;
+  if v_rows = 0 then return false; end if;
+  update public.users
+    set bonus_access_until = greatest(coalesce(bonus_access_until, now()), now()) + make_interval(days => p_days)
+    where id = p_referrer_id;
+  return true;
+end;
+$$;
 alter table public.push_subscriptions enable row level security;
