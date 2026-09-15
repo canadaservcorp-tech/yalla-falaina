@@ -19,7 +19,12 @@ afterEach(() => { global.fetch = origFetch; delete process.env.STT_API_KEY; });
 
 // Voice notes are a subscriber perk (lib/voiceNotes.js: tier 'none' = 0/day),
 // so every test that reaches the provider path needs a paid-tier user row.
-const SUB = { subscription_tier: 'basic' };
+// Both fields matter: lib/access.js#effectiveTier only honors subscription_tier
+// when subscription_status is genuinely 'active' (schema.sql only ever sets
+// subscription_tier to a real value alongside subscription_status='active' —
+// see routes/subscription.js's webhook patches), so a fixture with the tier
+// but not the status would no longer reflect a reachable real-world row.
+const SUB = { subscription_status: 'active', subscription_tier: 'basic' };
 // The concierge rate limiter is per-IP — give each call its own visitor.
 let visitor = 0;
 const post = (token, body, type = 'audio/webm', duration = '5') => fetch(h.base + '/api/voice/transcribe', {
@@ -134,6 +139,28 @@ test('transcribe: a non-subscriber gets 429 ERR_VOICE_LIMIT, provider never call
   let called = false;
   stubProvider(async () => { called = true; });
   const token = actor(h, { id: 910 });   // no subscription_tier -> 'none' -> 0/day
+  const r = await post(token, Buffer.from('bytes'));
+  assert.equal(r.status, 429);
+  assert.equal((await r.json()).code, 'ERR_VOICE_LIMIT');
+  assert.equal(called, false);
+});
+
+test('transcribe: a live referral bonus grants the subscriber quota with no real subscription at all', async () => {
+  process.env.STT_API_KEY = 'test-key';
+  stubProvider(async () => ({ ok: true, text: async () => 'marhaba' }));
+  const future = new Date(Date.now() + 5 * 86400000).toISOString();
+  // subscription_tier stays 'none' -- access should come entirely from the bonus.
+  const token = actor(h, { id: 912, extra: { subscription_tier: 'none', bonus_access_until: future } });
+  const r = await post(token, Buffer.from('bytes'));
+  assert.equal(r.status, 200);
+});
+
+test('transcribe: an expired referral bonus still gets 429 ERR_VOICE_LIMIT like any other non-subscriber', async () => {
+  process.env.STT_API_KEY = 'test-key';
+  let called = false;
+  stubProvider(async () => { called = true; });
+  const past = new Date(Date.now() - 5 * 86400000).toISOString();
+  const token = actor(h, { id: 913, extra: { subscription_tier: 'none', bonus_access_until: past } });
   const r = await post(token, Buffer.from('bytes'));
   assert.equal(r.status, 429);
   assert.equal((await r.json()).code, 'ERR_VOICE_LIMIT');

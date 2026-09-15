@@ -12,6 +12,7 @@ const { sendEmail } = require('../lib/email');
 const paginate = require('../lib/paginate');
 
 const BUCKET = process.env.DOCUMENTS_BUCKET || 'documents';
+const RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // the 30-day window itself — needed to extend it past a live bonus
 const WARN_BEFORE_MS = 7 * 24 * 60 * 60 * 1000; // warn a week out — "never a surprise"
 
 const WARN_SUBJECT = 'Your Yalla Nsafer profile will be deleted soon';
@@ -54,7 +55,7 @@ async function run() {
   // have a retention deadline set at once than that cap allows.
   const { data: due, error } = await paginate.fetchAllPages((from, to) =>
     supabase.from('users')
-      .select('id, email, data_retention_deadline, retention_warned_at')
+      .select('id, email, data_retention_deadline, retention_warned_at, bonus_access_until')
       .eq('subscription_status', 'canceled')
       .not('data_retention_deadline', 'is', null)
       .range(from, to));
@@ -62,7 +63,13 @@ async function run() {
 
   let warned = 0, deleted = 0;
   for (const u of due || []) {
-    const deadline = new Date(u.data_retention_deadline).getTime();
+    // A live referral bonus is real access (lib/access.js): the 30-day
+    // retention window runs from when access ACTUALLY ends, not when billing
+    // did. If a subscription lapsed while bonus_access_until still extends
+    // the account, deletion waits for bonus expiry + the same 30 days — the
+    // effective deadline is the later of the two.
+    const bonusDeadline = u.bonus_access_until ? new Date(u.bonus_access_until).getTime() + RETENTION_MS : 0;
+    const deadline = Math.max(new Date(u.data_retention_deadline).getTime(), bonusDeadline);
     if (deadline <= now) {
       // Revalidate immediately before destructive work — a concurrent PayPal
       // activation/renewal can clear the deadline between this list read and
@@ -84,7 +91,7 @@ async function run() {
       if (e) console.error(`retention clear ${u.id}`, e.message); else deleted++;
     } else if (!u.retention_warned_at && deadline - now <= WARN_BEFORE_MS) {
       try {
-        await sendEmail(u.email, WARN_SUBJECT, warnHtml(u.data_retention_deadline));
+        await sendEmail(u.email, WARN_SUBJECT, warnHtml(new Date(deadline).toISOString()));
         await supabase.from('users').update({ retention_warned_at: new Date().toISOString() }).eq('id', u.id);
         warned++;
       } catch (e) { console.error(`retention warn ${u.id}`, e.message); }
