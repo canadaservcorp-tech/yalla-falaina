@@ -52,9 +52,19 @@ router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, 
         cancel_url: `${PUBLIC_URL}/?sub=cancel`,
       },
     });
-    await supabase.from('users').update({ paypal_subscription_id: sub.id }).eq('id', u.id);
+    // checkout_started_at/checkout_reminder_sent_at feed scripts/checkout-reminder.js
+    // (the abandoned-checkout recovery email) — reset together so a NEW
+    // checkout attempt gets its own one-hour clock and can earn its own
+    // reminder even if a previous attempt was abandoned and already reminded.
     const approve = (sub.links || []).find(l => l.rel === 'approve');
     if (!approve) return res.status(500).json({ error: 'PayPal returned no approval link', code: 'ERR_PAYMENT_UNAVAILABLE' });
+    // Stamp only after we KNOW the user got a real checkout link — a PayPal
+    // failure that 500s above must not look like an abandoned checkout to
+    // scripts/checkout-reminder.js.
+    await supabase.from('users').update({
+      paypal_subscription_id: sub.id,
+      checkout_started_at: new Date().toISOString(), checkout_reminder_sent_at: null,
+    }).eq('id', u.id);
     res.json({ success: true, url: approve.href });
   } catch (e) { console.error('paypal checkout', e); res.status(500).json({ error: 'Could not start checkout', code: 'ERR_PAYMENT_UNAVAILABLE' }); }
 });
@@ -62,12 +72,13 @@ router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, 
 // ---------- Stripe ----------
 
 // Start a subscription via Stripe Checkout — returns the hosted checkout URL.
-// Unlike the PayPal flow above, nothing is written to `users` here: a
-// Checkout Session in `subscription` mode doesn't create the actual
-// subscription until the customer completes payment, so there is no
+// Unlike the PayPal flow above, no subscription-identity field is written to
+// `users` here: a Checkout Session in `subscription` mode doesn't create the
+// actual subscription until the customer completes payment, so there is no
 // subscription id yet to store. The session's `client_reference_id` (the
 // user's own id) is how the webhook below links the eventual subscription
-// back to this account once it exists.
+// back to this account once it exists. checkout_started_at IS written below,
+// purely as a timestamp for the abandoned-checkout reminder.
 router.post('/stripe/checkout', authenticate, sec.requireActiveUser, sec.limits.write, async (req, res) => {
   if (!stripe.configured() || !STRIPE_PRICE) return res.status(500).json({ error: 'Stripe not configured', code: 'ERR_PAYMENT_UNAVAILABLE' });
   try {
@@ -81,6 +92,12 @@ router.post('/stripe/checkout', authenticate, sec.requireActiveUser, sec.limits.
       cancel_url: `${PUBLIC_URL}/?sub=cancel`,
     });
     if (!session.url) return res.status(500).json({ error: 'Stripe returned no checkout URL', code: 'ERR_PAYMENT_UNAVAILABLE' });
+    // Unlike the PayPal branch above, there is still no subscription id to
+    // store here — but checkout_started_at only needs a timestamp, so the
+    // abandoned-checkout reminder (scripts/checkout-reminder.js) can track a
+    // Stripe attempt the same way, even though the actual subscription
+    // hasn't been created yet.
+    await supabase.from('users').update({ checkout_started_at: new Date().toISOString(), checkout_reminder_sent_at: null }).eq('id', u.id);
     res.json({ success: true, url: session.url });
   } catch (e) { console.error('stripe checkout', e); res.status(500).json({ error: 'Could not start checkout', code: 'ERR_PAYMENT_UNAVAILABLE' }); }
 });
@@ -249,6 +266,10 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
       if (patch) {
         if (subId && !isRenewal) patch.paypal_subscription_id = subId;
         if (patch.subscription_status === 'active') patch.subscription_tier = TIER;
+        // A real activation resolves whatever checkout was in flight - clear
+        // it so scripts/checkout-reminder.js never emails someone who just
+        // finished subscribing (see routes/subscription.js's checkout routes).
+        if (patch.subscription_status === 'active') patch.checkout_started_at = null;
         if (patch.subscription_status === 'canceled') patch.subscription_tier = 'none';
         await referral.creditConversionIfNew(user, patch);
         sec.dropUserFromCache(String(user.id));
@@ -306,6 +327,10 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json', limit: '1
         patch.stripe_subscription_id = sub.id;
         patch.payment_provider = 'stripe';
         if (patch.subscription_status === 'active') patch.subscription_tier = TIER;
+        // A real activation resolves whatever checkout was in flight - clear
+        // it so scripts/checkout-reminder.js never emails someone who just
+        // finished subscribing (see routes/subscription.js's checkout routes).
+        if (patch.subscription_status === 'active') patch.checkout_started_at = null;
         await referral.creditConversionIfNew(user, patch);
         sec.dropUserFromCache(String(user.id));
         await supabase.from('users').update(patch).eq('id', user.id);
@@ -325,6 +350,10 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json', limit: '1
       const patch = stripeEv.accountPatch(sub, new Date(), user.subscription_period_end);
       if (patch) {
         if (patch.subscription_status === 'active') patch.subscription_tier = TIER;
+        // A real activation resolves whatever checkout was in flight - clear
+        // it so scripts/checkout-reminder.js never emails someone who just
+        // finished subscribing (see routes/subscription.js's checkout routes).
+        if (patch.subscription_status === 'active') patch.checkout_started_at = null;
         if (patch.subscription_status === 'canceled') patch.subscription_tier = 'none';
         await referral.creditConversionIfNew(user, patch);
         sec.dropUserFromCache(String(user.id));

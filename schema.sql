@@ -43,12 +43,21 @@
 -- Migrating onto "Continue with Google" (routes/auth.js's /google/* endpoints):
 --   alter table public.users add column if not exists google_sub text unique;
 --
+-- Migrating an ALREADY-DEPLOYED project onto the abandoned-checkout recovery
+-- email (scripts/checkout-reminder.js): two new columns, both null by
+-- default (nothing to backfill - a row with no checkout in flight simply
+-- never matches the reminder job's query):
+--   alter table public.users
+--     add column if not exists checkout_started_at timestamptz,
+--     add column if not exists checkout_reminder_sent_at timestamptz;
+--
 -- Migrating an ALREADY-DEPLOYED project onto the unverified-signup nudge
 -- email (scripts/verify-reminder.js): one new column, null by default -
 -- nothing to backfill, an already-verified account simply never matches the
 -- reminder job's query:
 --   alter table public.users add column if not exists verify_reminder_sent_at timestamptz;
 --
+
 -- Migrating an ALREADY-DEPLOYED project onto web push notifications
 -- (lib/webPush.js, routes/push.js, lib/jobAlerts.js's new-job-match hook in
 -- lib/jobsIngest.js): just run the push_subscriptions create table statement
@@ -93,6 +102,8 @@ create table if not exists public.users (
   subscription_cancel_at timestamptz,            -- paid-until date a cancellation keeps
   data_retention_deadline timestamptz,           -- profile/intake data deleted after this (30 days post-lapse, per policy)
   retention_warned_at timestamptz,               -- set once the pre-deletion warning email has been sent
+  checkout_started_at timestamptz,               -- set when /checkout or /stripe/checkout is called, cleared once a webhook actually activates the subscription (scripts/checkout-reminder.js)
+  checkout_reminder_sent_at timestamptz,         -- set once the one-time abandoned-checkout email has gone out for the CURRENT checkout_started_at; cleared whenever a new checkout attempt starts
   terms_accepted_at timestamptz,
   terms_version text,
   signup_source text,
