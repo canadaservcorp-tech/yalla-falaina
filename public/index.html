@@ -134,6 +134,8 @@
   /* Share bar: word of mouth is the cheapest channel we have, and the
      og:image card (lib/seo.js) only pays off if links actually get shared. */
   #shareBar { margin-top: 8px; }
+  /* lighter than --accent: 12px text needs ~4.5:1 on the dark card for AA */
+  #gccGuideLinks a { color: #8fbde0; }
   #shareBar .lbl { display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; }
   #shareBar .row { display: flex; gap: 6px; flex-wrap: wrap; }
   #shareBar a, #shareBar button { font-size: 12px; padding: 5px 10px; border-radius: 999px;
@@ -283,6 +285,16 @@
     <div class="row"><button id="authGo" data-i18n="tabSignIn">Sign in</button></div>
     <div id="authMsg"></div>
     <button id="resendVerify" style="display:none;background:none;border:none;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13px" data-i18n="resendVerifyLink">Resend verification email</button>
+    <!-- Inside the scrolling card, not the fixed #ctaAside: a fixed bar tall
+         enough for these links overlaps the form's own fields on ~320-390px
+         screens. -->
+    <div id="gccGuideLinks" style="font-size:12px;line-height:1.8;margin-top:14px">
+      <span class="lbl" style="display:block;color:var(--text-dim);font-size:11px;margin-bottom:4px" data-i18n="gccGuidesHeading">Working in the Gulf</span>
+      <a href="/work-in-uae" data-i18n="workInUaeLink">Working in the UAE</a> ·
+      <a href="/work-in-saudi-arabia" data-i18n="workInSaudiLink">Working in Saudi Arabia</a> ·
+      <a href="/work-in-qatar" data-i18n="workInQatarLink">Working in Qatar</a> ·
+      <a href="/work-in-kuwait" data-i18n="workInKuwaitLink">Working in Kuwait</a>
+    </div>
   </div>
 </div>
 
@@ -618,8 +630,24 @@
     $('paywallText').textContent = t('paywallText', { price: subPrice });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-ph')); });
     document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
+    // Server-rendered internal links can't see the chosen language — pin it on
+    // so a guide opened from a ?lang=fr session doesn't fall back to geo.
+    document.querySelectorAll('#gccGuideLinks a').forEach(a => { a.href = a.getAttribute('href').split('?')[0] + '?lang=' + currentLang; });
   }
   applyLang();
+
+  // The fixed #ctaAside's height varies with language, viewport, and whether
+  // the contact form is open — the signup card's scroll clearance is
+  // measured, not guessed, or its own bottom content sits under the bar on
+  // small screens. Above the 720px breakpoint the stylesheet's padding wins
+  // (the inline value is removed so it can't fight the media query).
+  const smallScreen = matchMedia('(max-width: 720px)');
+  const padForBar = () => {
+    $('authWrap').style.paddingBottom = smallScreen.matches ? ($('ctaAside').offsetHeight + 16) + 'px' : '';
+  };
+  new ResizeObserver(padForBar).observe($('ctaAside'));
+  smallScreen.addEventListener('change', padForBar);
+  padForBar();
 
   // The credibility counter — animated, but honest: it counts the REAL rows
   // in the jobs feed, not a made-up number. Hidden entirely when the feed

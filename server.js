@@ -15,6 +15,7 @@ const stripeLib = require('./lib/stripe');
 const transcribeLib = require('./lib/transcribe');
 const webPush = require('./lib/webPush');
 const expressEntryPage = require('./lib/expressEntryPage');
+const gccGuides = require('./lib/gccGuides');
 
 const need = ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const k of need) if (!process.env[k]) { console.error(`FATAL: missing env ${k}`); process.exit(1); }
@@ -64,6 +65,28 @@ app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', ind
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
 
+// Real, crawlable GCC work-sponsorship guide pages (lib/gccGuides.js) --
+// registered ahead of the catch-all below, same pattern and reasoning as
+// /express-entry-draws: static, sourced content with zero client JS, and
+// zero DB dependency (unlike the draws page, this content isn't ingested
+// from anywhere -- it's static reference data).
+// The guide pages exist in en/fr/ar only (lib/gccGuides.js has no hi copy —
+// same "original over invented translation" rule as the news ticker's Hindi
+// fallback), so the route's language set is narrower than seo.LANGS.
+const GUIDE_LANGS = ['en', 'fr', 'ar'];
+for (const country of gccGuides.COUNTRIES) {
+  app.get(`/${country.slug}`, (req, res) => {
+    const asked = GUIDE_LANGS.includes(req.query.lang) ? req.query.lang : null;
+    const lang = asked || geo.pickLang(req, GUIDE_LANGS) || 'en';
+    const head = seo.head(`/${country.slug}`, lang, asked || 'en');
+    // Only the ?lang-pinned response is a stable shared-cache entry — a bare
+    // URL's language comes from the visitor's geo/Accept-Language, so caching
+    // it publicly would serve the first visitor's language to everyone else.
+    res.set('Cache-Control', asked ? 'public, max-age=3600' : 'private, no-cache');
+    res.type('html').send(gccGuides.renderPage({ country, lang, head }));
+  });
+}
+
 // A real, crawlable page (lib/expressEntryPage.js), not another view of the
 // SPA shell -- registered ahead of the catch-all below so it isn't swallowed
 // by it. No inline script at all, so no CSP nonce is needed here.
@@ -75,7 +98,7 @@ app.get('/express-entry-draws', async (req, res) => {
   // Real, shared content (unlike the per-visitor SPA shell below) -- safe to
   // cache briefly at the edge/browser; news_items only changes on the news
   // ingest schedule (lib/scheduler.js), not per request.
-  res.set('Cache-Control', 'public, max-age=300');
+  res.set('Cache-Control', asked ? 'public, max-age=300' : 'private, no-cache');
   res.type('html').send(expressEntryPage.renderPage({ lang, draws, head }));
 });
 
