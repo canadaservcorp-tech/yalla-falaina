@@ -73,6 +73,7 @@
       subActiveCanceled: 'Basic — active until {date} (canceled, will not renew)',
       checkoutPending: '…',
       checkoutUnavailable: 'Checkout unavailable',
+      checkoutCancelled: 'Checkout cancelled — no charge was made. You can subscribe any time.',
       unverifiedFlagLabel: 'unverified listing — verify independently',
       // Live-test finding ("seed jobs presented as real"): flags a
       // routes/concierge.js demoJob()-redacted fixture/placeholder listing
@@ -197,6 +198,7 @@
       subActiveCanceled: "Basique — actif jusqu'au {date} (annulé, ne sera pas renouvelé)",
       checkoutPending: '…',
       checkoutUnavailable: 'Paiement indisponible',
+      checkoutCancelled: "Paiement annulé — aucun montant n'a été débité. Vous pouvez vous abonner à tout moment.",
       unverifiedFlagLabel: 'annonce non vérifiée — à vérifier vous-même',
       demoFlagLabel: 'annonce de démonstration — pas une offre réelle',
       cvHeading: 'Votre CV',
@@ -317,6 +319,7 @@
       subActiveCanceled: 'الباقة الأساسية — نشطة حتى {date} (تم الإلغاء، لن تتجدد)',
       checkoutPending: '…',
       checkoutUnavailable: 'الدفع غير متاح',
+      checkoutCancelled: 'تم إلغاء الدفع — لم يتم خصم أي مبلغ. يمكنك الاشتراك في أي وقت.',
       unverifiedFlagLabel: 'إعلان غير موثّق — يُرجى التحقق بنفسك',
       demoFlagLabel: 'إعلان تجريبي — ليست فرصة حقيقية',
       cvHeading: 'سيرتك الذاتية',
@@ -437,6 +440,7 @@
       subActiveCanceled: 'बेसिक — {date} तक सक्रिय (रद्द, नवीनीकरण नहीं होगा)',
       checkoutPending: '…',
       checkoutUnavailable: 'चेकआउट उपलब्ध नहीं',
+      checkoutCancelled: 'चेकआउट रद्द — कोई शुल्क नहीं लिया गया। आप कभी भी सब्सक्राइब कर सकते हैं।',
       unverifiedFlagLabel: 'असत्यापित लिस्टिंग — स्वयं सत्यापित करें',
       demoFlagLabel: 'डेमो लिस्टिंग — कोई असली नौकरी नहीं',
       cvHeading: 'आपका CV',
