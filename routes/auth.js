@@ -261,10 +261,10 @@ router.get('/google/callback', sec.limits.oauth, async (req, res) => {
     // someone who registered with a password and later clicks the Google
     // button must land in their existing account, not a duplicate.
     let { data: user } = await supabase.from('users')
-      .select('id, email, name, role, banned, google_sub, email_verified').eq('google_sub', sub).maybeSingle();
+      .select('id, email, name, role, banned, google_sub, email_verified, totp_enabled, totp_secret').eq('google_sub', sub).maybeSingle();
     if (!user) {
       const byEmail = await supabase.from('users')
-        .select('id, email, name, role, banned, google_sub, email_verified').eq('email', email).maybeSingle();
+        .select('id, email, name, role, banned, google_sub, email_verified, totp_enabled, totp_secret').eq('email', email).maybeSingle();
       user = byEmail.data || null;
     }
     if (user && user.banned) return fail('blocked');
@@ -311,6 +311,16 @@ router.get('/google/callback', sec.limits.oauth, async (req, res) => {
       }
     }
 
+    // Google only proves the email address. An account that turned on TOTP
+    // did so specifically so a compromised or phished credential elsewhere
+    // (a Google account included) still isn't enough on its own to get in —
+    // /login already enforces exactly this; this path must not quietly skip
+    // it just because the credential being reused this time is Google's.
+    if (user.totp_enabled && user.totp_secret) {
+      const pending = jwt.sign({ id: user.id, purpose: 'google_totp_pending' }, JWT_SECRET, { expiresIn: '5m' });
+      return res.redirect(`${PUBLIC_URL}/?googlePending=${encodeURIComponent(pending)}`);
+    }
+
     await recordLoginResult(user.id, true);
     // The session token is NOT put in the URL. This short-lived handoff is
     // single-purpose and worthless after two minutes; the page trades it for
@@ -338,6 +348,40 @@ router.post('/google/exchange', sec.limits.oauth, async (req, res) => {
     const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '2d' });
     res.json({ success: true, token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
   } catch (e) { console.error('google exchange', e); res.status(500).json({ error: 'Sign-in failed', code: 'ERR_SERVER' }); }
+});
+
+// The 2FA counterpart to /google/exchange: reached only when the callback
+// above found totp_enabled and routed here instead of issuing a handoff
+// straight away. Same account-lockout accounting as /login's own TOTP
+// branch (schema.sql's record_login_result()) -- a wrong code here counts
+// against the account exactly like a wrong code at the password form would.
+router.post('/google/totp-verify', sec.limits.oauth, async (req, res) => {
+  try {
+    let claims;
+    try { claims = jwt.verify(String(req.body.pending || ''), JWT_SECRET); }
+    catch (e) { return res.status(401).json({ error: 'Sign-in link expired, please try again', code: 'ERR_INVALID_TOKEN' }); }
+    if (claims.purpose !== 'google_totp_pending')
+      return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+
+    const { data: user } = await supabase.from('users')
+      .select('id, email, name, role, banned, totp_enabled, totp_secret').eq('id', claims.id).maybeSingle();
+    if (!user || user.banned) return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+    // 2FA could have been turned off in the few minutes since the callback
+    // issued this pending token -- re-check rather than trust the token's
+    // own premise, same caution as everywhere else a claim rides in a JWT.
+    if (!user.totp_enabled || !user.totp_secret) return res.status(401).json({ error: 'Invalid token', code: 'ERR_INVALID_TOKEN' });
+
+    const code = typeof req.body.totpToken === 'string' ? req.body.totpToken.trim() : '';
+    if (!code) return res.status(401).json({ error: 'Authentication code required', code: 'ERR_TOTP_REQUIRED' });
+    if (!totp.verifyTOTP(user.totp_secret, code)) {
+      await recordLoginResult(user.id, false);
+      return res.status(401).json({ error: 'Invalid authentication code', code: 'ERR_INVALID_TOTP' });
+    }
+
+    await recordLoginResult(user.id, true);
+    const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '2d' });
+    res.json({ success: true, token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  } catch (e) { console.error('google totp-verify', e); res.status(500).json({ error: 'Sign-in failed', code: 'ERR_SERVER' }); }
 });
 
 // ---------- two-factor authentication (TOTP, RFC 6238) ----------
