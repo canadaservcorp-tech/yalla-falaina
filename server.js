@@ -13,6 +13,7 @@ const analytics = require('./lib/analytics');
 const paypal = require('./lib/paypal');
 const stripeLib = require('./lib/stripe');
 const transcribeLib = require('./lib/transcribe');
+const expressEntryPage = require('./lib/expressEntryPage');
 
 const need = ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const k of need) if (!process.env[k]) { console.error(`FATAL: missing env ${k}`); process.exit(1); }
@@ -61,6 +62,21 @@ app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', ind
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
+
+// A real, crawlable page (lib/expressEntryPage.js), not another view of the
+// SPA shell -- registered ahead of the catch-all below so it isn't swallowed
+// by it. No inline script at all, so no CSP nonce is needed here.
+app.get('/express-entry-draws', async (req, res) => {
+  const asked = seo.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, seo.LANGS) || 'en';
+  const draws = await expressEntryPage.loadDraws();
+  const head = seo.head('/express-entry-draws', lang, asked || 'en');
+  // Real, shared content (unlike the per-visitor SPA shell below) -- safe to
+  // cache briefly at the edge/browser; news_items only changes on the news
+  // ingest schedule (lib/scheduler.js), not per request.
+  res.set('Cache-Control', 'public, max-age=300');
+  res.type('html').send(expressEntryPage.renderPage({ lang, draws, head }));
+});
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/subscription', require('./routes/subscription'));
