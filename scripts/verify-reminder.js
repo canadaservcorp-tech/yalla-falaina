@@ -60,7 +60,19 @@ async function run() {
       const link = `${PUBLIC_URL}/api/auth/verify?token=${verify_token}&id=${u.id}`;
       try {
         await sendEmail(u.email, SUBJECT, html(link));
-        await supabase.from('users').update({ verify_reminder_sent_at: new Date().toISOString() }).eq('id', u.id);
+        // The email is already delivered, so a failed marker write must NOT
+        // fall into the token-restore path below — the new link is live in an
+        // inbox. Check the update's error (Supabase reports it rather than
+        // throwing), retry once, and log loud if it still fails: an unmarked
+        // row would otherwise get a duplicate nudge + token rotation on every
+        // 6h run, invalidating the link each time.
+        const { error: markErr } = await supabase.from('users')
+          .update({ verify_reminder_sent_at: new Date().toISOString() }).eq('id', u.id);
+        if (markErr) {
+          const { error: retryErr } = await supabase.from('users')
+            .update({ verify_reminder_sent_at: new Date().toISOString() }).eq('id', u.id);
+          console.error(`verify reminder mark ${u.id}`, markErr.message, retryErr ? `retry: ${retryErr.message}` : '(retry ok)');
+        }
         sent++;
       } catch (sendErr) {
         console.error(`verify reminder send ${u.id}`, sendErr.message);
