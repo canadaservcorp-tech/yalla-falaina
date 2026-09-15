@@ -30,3 +30,36 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match(e.request).then(hit => hit || caches.match('/')))
   );
 });
+
+// ---------- web push (lib/webPush.js sends these; routes/push.js manages the subscription) ----------
+// The payload is plain JSON ({ title, body, url }) -- see lib/jobAlerts.js,
+// the only sender today. A malformed/empty payload (should never happen from
+// our own server, but a push service delivering a stale or truncated message
+// is not impossible) falls back to a generic notification rather than
+// throwing and silently showing nothing.
+self.addEventListener('push', e => {
+  let data = { title: 'Yalla Nsafer', body: 'You have a new update.', url: '/' };
+  try { if (e.data) data = { ...data, ...e.data.json() }; } catch (err) { /* keep the fallback */ }
+  e.waitUntil(self.registration.showNotification(data.title, {
+    body: data.body,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: data.url || '/' },
+  }));
+});
+
+// Focuses an already-open tab on this origin instead of always opening a new
+// one -- a seeker who already has the app open should land back in it, not
+// end up with a second tab.
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = e.notification.data && e.notification.data.url ? e.notification.data.url : '/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientsList => {
+      for (const c of clientsList) {
+        if (new URL(c.url).origin === self.location.origin && 'focus' in c) return c.focus();
+      }
+      return self.clients.openWindow(target);
+    })
+  );
+});

@@ -13,6 +13,7 @@ const analytics = require('./lib/analytics');
 const paypal = require('./lib/paypal');
 const stripeLib = require('./lib/stripe');
 const transcribeLib = require('./lib/transcribe');
+const webPush = require('./lib/webPush');
 
 const need = ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const k of need) if (!process.env[k]) { console.error(`FATAL: missing env ${k}`); process.exit(1); }
@@ -74,6 +75,7 @@ app.use('/api/news', require('./routes/news'));      // immigration-news ticker 
 app.use('/api/voice', require('./routes/voice'));    // chat voice notes -> transcript -> /api/concierge
 app.use('/api/admin/informal-listings', require('./routes/admin-informal-listings'));
 app.use('/api/admin/news', require('./routes/admin-news'));
+app.use('/api/push', require('./routes/push'));
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either.
 // Step 7 (deployment prep) — paypal/email are configuration checks, same as
@@ -89,6 +91,7 @@ app.get('/api/health', (_req, res) => res.json({
   email: Boolean(process.env.RESEND_API_KEY),
   voice: transcribeLib.configured(),
   google: require('./lib/googleOAuth').configured(),
+  push: webPush.configured(),
 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 // the SPA is a single file, so give crawlers per-route <head> metadata on the way out
