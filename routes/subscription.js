@@ -55,12 +55,15 @@ router.post('/checkout', authenticate, sec.requireActiveUser, sec.limits.write, 
     // (the abandoned-checkout recovery email) — reset together so a NEW
     // checkout attempt gets its own one-hour clock and can earn its own
     // reminder even if a previous attempt was abandoned and already reminded.
+    const approve = (sub.links || []).find(l => l.rel === 'approve');
+    if (!approve) return res.status(500).json({ error: 'PayPal returned no approval link', code: 'ERR_PAYMENT_UNAVAILABLE' });
+    // Stamp only after we KNOW the user got a real checkout link — a PayPal
+    // failure that 500s above must not look like an abandoned checkout to
+    // scripts/checkout-reminder.js.
     await supabase.from('users').update({
       paypal_subscription_id: sub.id,
       checkout_started_at: new Date().toISOString(), checkout_reminder_sent_at: null,
     }).eq('id', u.id);
-    const approve = (sub.links || []).find(l => l.rel === 'approve');
-    if (!approve) return res.status(500).json({ error: 'PayPal returned no approval link', code: 'ERR_PAYMENT_UNAVAILABLE' });
     res.json({ success: true, url: approve.href });
   } catch (e) { console.error('paypal checkout', e); res.status(500).json({ error: 'Could not start checkout', code: 'ERR_PAYMENT_UNAVAILABLE' }); }
 });
