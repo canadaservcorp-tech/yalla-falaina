@@ -43,6 +43,12 @@
 -- Migrating onto "Continue with Google" (routes/auth.js's /google/* endpoints):
 --   alter table public.users add column if not exists google_sub text unique;
 --
+-- Migrating an ALREADY-DEPLOYED project onto the unverified-signup nudge
+-- email (scripts/verify-reminder.js): one new column, null by default -
+-- nothing to backfill, an already-verified account simply never matches the
+-- reminder job's query:
+--   alter table public.users add column if not exists verify_reminder_sent_at timestamptz;
+--
 -- Migrating an ALREADY-DEPLOYED project onto web push notifications
 -- (lib/webPush.js, routes/push.js, lib/jobAlerts.js's new-job-match hook in
 -- lib/jobsIngest.js): just run the push_subscriptions create table statement
@@ -92,6 +98,7 @@ create table if not exists public.users (
   failed_login_count integer not null default 0, -- consecutive failed logins; reset to 0 on success (record_login_result())
   locked_until timestamptz,                      -- set once failed_login_count crosses the threshold; null when not locked
   google_sub text unique,                        -- Google account id for "Continue with Google"; null for password-only accounts
+  verify_reminder_sent_at timestamptz,            -- set once the one-time unverified-signup nudge email has gone out (scripts/verify-reminder.js); cleared implicitly once email_verified flips true, since the job's own query stops matching that row
   referral_code text unique,                     -- this user's own shareable code; minted lazily on first GET /api/referral/mine
   referred_by bigint references public.users(id),-- who referred this account (captured at signup; null if none/unknown code)
   referral_credited boolean not null default false, -- true once referred_by's referrer has been credited once for THIS account — guards against double-crediting across a cancel/resubscribe cycle
