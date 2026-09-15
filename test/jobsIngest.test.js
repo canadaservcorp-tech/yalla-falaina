@@ -31,6 +31,7 @@ afterEach(() => {
   delete process.env.JOB_API_LOCATION;
   delete process.env.JOB_API_COUNTRIES;
   delete process.env.JOB_API_LOCATIONS;
+  delete process.env.JOOBLE_API_KEY;
 });
 
 // ---------- trackFor ----------
@@ -518,4 +519,48 @@ test('refresh returns 0 and logs for an unknown provider, without touching the d
   const n = await refresh();
   assert.equal(n, 0);
   assert.equal(mock.__writes('jobs').length, 0);
+});
+
+// ---------- fetchJoobleSupplement (secondary Gulf feed) ----------
+
+test('fetchJoobleSupplement returns nothing without a key or locations', async () => {
+  const { fetchJoobleSupplement } = freshModule();
+  assert.deepEqual(await fetchJoobleSupplement(), []);
+  process.env.JOOBLE_API_KEY = 'jk2';
+  delete require.cache[MOD_PATH];
+  const mod2 = require('../lib/jobsIngest');
+  assert.deepEqual(await mod2.fetchJoobleSupplement(), []);
+});
+
+test('fetchJoobleSupplement queries every JOB_API_LOCATIONS entry with the supplement key', async () => {
+  process.env.JOOBLE_API_KEY = 'jk2';
+  process.env.JOB_API_LOCATIONS = 'United Arab Emirates,Saudi Arabia';
+  const { fetchJoobleSupplement } = freshModule();
+  const sent = [];
+  globalThis.fetch = async (url, opts) => {
+    sent.push({ url: String(url), body: JSON.parse(opts.body) });
+    return new Response(JSON.stringify({
+      jobs: [{ id: 1, title: 'Site Engineer', company: 'Acme', location: 'Dubai, United Arab Emirates', link: 'https://example.test/1' }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const rows = await fetchJoobleSupplement();
+  assert.equal(sent.length, 2);
+  assert.match(sent[0].url, /jooble\.org\/api\/jk2$/);
+  assert.deepEqual(sent.map(s => s.body.location), ['United Arab Emirates', 'Saudi Arabia']);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].country, 'United Arab Emirates');
+  assert.equal(rows[0].track, 'gcc');
+});
+
+test('fetchJoobleSupplement keeps the surviving locations when one call fails', async () => {
+  process.env.JOOBLE_API_KEY = 'jk2';
+  process.env.JOB_API_LOCATIONS = 'United Arab Emirates,Saudi Arabia';
+  const { fetchJoobleSupplement } = freshModule();
+  globalThis.fetch = async (url, opts) => {
+    if (JSON.parse(opts.body).location === 'United Arab Emirates') return new Response('x', { status: 500 });
+    return new Response(JSON.stringify({ jobs: [{ id: 2, title: 'Nurse', company: 'B', location: 'Riyadh', link: 'https://example.test/2' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const rows = await fetchJoobleSupplement();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, 'Nurse');
 });
