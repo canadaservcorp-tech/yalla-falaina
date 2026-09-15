@@ -26,6 +26,33 @@ test('PUT rejects an unsupported preferred_language', async () => {
   assert.equal((await r.json()).code, 'ERR_BAD_INPUT');
 });
 
+// Gulf/Khaleeji Arabic — added alongside Lebanese/Syrian/Egyptian for the
+// Dubai/GCC push (kept in sync by hand across routes/auth.js's LANGUAGES,
+// lib/profileWrite.js's own copy, and routes/concierge.js's intake prompt).
+test('PUT accepts ar-AE (Gulf Arabic) as a valid preferred_language', async () => {
+  h.mock.__set('profiles', { data: { id: 200, preferred_language: 'ar-AE', preferred_country: null, sector: null, role_type: null }, error: null });
+  h.mock.__set('seeker_profiles', { data: null, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp1', is_complete: false }, error: null });
+
+  const r = await put({ preferred_language: 'ar-AE' }, user());
+  assert.equal(r.status, 200);
+  const upserts = h.mock.__writes('profiles', 'upsert');
+  assert.equal(upserts.length, 1);
+  assert.equal(upserts[0].payload.preferred_language, 'ar-AE');
+});
+
+// The signup form's हिन्दी (Hindi) option sends 'hi' — it was offered in the
+// UI before the server allow-lists accepted it, so a Hindi speaker's own
+// stated preference got ERR_BAD_INPUT. Keep them in sync.
+test('PUT accepts hi (Hindi) as a valid preferred_language', async () => {
+  h.mock.__set('profiles', { data: { id: 200, preferred_language: 'hi', preferred_country: null, sector: null, role_type: null }, error: null });
+  h.mock.__set('seeker_profiles', { data: null, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp1', is_complete: false }, error: null });
+
+  const r = await put({ preferred_language: 'hi' }, user());
+  assert.equal(r.status, 200);
+});
+
 test('PUT rejects a non-array JSONB field', async () => {
   const r = await put({ work_history: 'plumber for 10 years' }, user());
   assert.equal(r.status, 400);

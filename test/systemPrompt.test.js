@@ -22,6 +22,15 @@ test('the scope guardrail explicitly carves out CV/job/visa/platform questions a
   assert.match(p, /does NOT apply to questions about the user's CV, their job search, their visa or travel-document process/);
 });
 
+test('Gulf/Khaleeji Arabic is named as its own dialect, not folded into Lebanese/Egyptian by default', () => {
+  const p = prompt();
+  assert.match(p, /Gulf\/Khaleeji Arabic/);
+  assert.match(p, /its own register, not a variant of Levantine or Egyptian/);
+  // the dialect hint from the chat's dialectSelect ("Gulf Arabic") should
+  // read straight through into the rendered prompt when set
+  assert.match(buildSystemPrompt({ jobs: [], dialectHint: 'Gulf Arabic' }), /Default hint for this session: Gulf Arabic/);
+});
+
 test('the scope guardrail sits alongside the age gate, not buried after the job-matching rules', () => {
   const p = prompt();
   const ageGateAt = p.indexOf('=== AGE GATE ===');
