@@ -92,6 +92,9 @@ test('BILLING.SUBSCRIPTION.ACTIVATED grants access: status active, tier set, any
   assert.equal(writes[0].payload.subscription_cancel_at, null);
   assert.equal(writes[0].payload.paypal_subscription_id, 'SUB-42');
   assert.equal(writes[0].payload.subscription_period_end, '2026-11-01T00:00:00Z');
+  // A real activation resolves whatever checkout was in flight, so
+  // scripts/checkout-reminder.js never emails someone who just subscribed.
+  assert.equal(writes[0].payload.checkout_started_at, null);
 });
 
 test('BILLING.SUBSCRIPTION.CANCELLED starts the grace period without cutting access or clearing the tier early', async () => {

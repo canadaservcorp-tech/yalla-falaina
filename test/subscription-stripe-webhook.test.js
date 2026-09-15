@@ -66,6 +66,9 @@ test('checkout.session.completed (subscription mode) links the user, fetches the
   assert.equal(patch.stripe_customer_id, 'cus_1');
   assert.equal(patch.stripe_subscription_id, 'sub_new');
   assert.equal(patch.payment_provider, 'stripe');
+  // A real activation resolves whatever checkout was in flight, so
+  // scripts/checkout-reminder.js never emails someone who just subscribed.
+  assert.equal(patch.checkout_started_at, null);
 });
 
 test('checkout.session.completed in payment mode (a one-time purchase, not ours) is ignored', async () => {
@@ -108,6 +111,7 @@ test('customer.subscription.updated (still active, not cancelling) refreshes the
   assert.equal(patch.subscription_status, 'active');
   assert.equal(patch.subscription_tier, 'basic');
   assert.equal(patch.data_retention_deadline, null);
+  assert.equal(patch.checkout_started_at, null);
 });
 
 test('customer.subscription.updated with cancel_at_period_end -> only subscription_cancel_at is written (a GRACE patch, same as PayPal cancellation)', async () => {
