@@ -149,6 +149,34 @@ test('GET /api/cv/export refuses a subscribed seeker with too little collected y
   assert.equal(body.code, 'ERR_CV_NOT_READY');
 });
 
+// ---------- referral bonus access (lib/access.js) ----------
+// A referral-reward bonus (users.bonus_access_until) must open this same hard
+// gate with no real subscription at all -- see lib/access.js and this file's
+// header comment on why the CV export gate has to honor it too.
+const FUTURE_BONUS = new Date(Date.now() + 5 * 86400000).toISOString();
+const PAST_BONUS = new Date(Date.now() - 5 * 86400000).toISOString();
+
+test('GET /api/cv/preview reports subscribed:true for an unsubscribed seeker with a live referral bonus', async () => {
+  const token = caller({ subscription_status: 'inactive', bonus_access_until: FUTURE_BONUS }, READY_PROFILE, READY_SEEKER);
+  const r = await fetch(h.base + '/api/cv/preview', { headers: auth(token) });
+  const body = await r.json();
+  assert.equal(body.subscribed, true);
+});
+
+test('GET /api/cv/export succeeds for an unsubscribed seeker with a live referral bonus -- no real subscription needed', async () => {
+  const token = caller({ subscription_status: 'inactive', bonus_access_until: FUTURE_BONUS }, READY_PROFILE, READY_SEEKER);
+  const r = await fetch(h.base + '/api/cv/export', { headers: exportHeaders(token) });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'application/pdf');
+});
+
+test('GET /api/cv/export still refuses an unsubscribed seeker once their referral bonus has expired', async () => {
+  const token = caller({ subscription_status: 'inactive', bonus_access_until: PAST_BONUS }, READY_PROFILE, READY_SEEKER);
+  const r = await fetch(h.base + '/api/cv/export', { headers: exportHeaders(token) });
+  assert.equal(r.status, 402);
+  assert.equal((await r.json()).code, 'ERR_CV_SUBSCRIPTION_REQUIRED');
+});
+
 test('GET /api/cv/export?format=pdf returns a real PDF, attached, once subscribed and ready', async () => {
   const token = caller({ subscription_status: 'active' }, READY_PROFILE, READY_SEEKER);
   const r = await fetch(h.base + '/api/cv/export?format=pdf', { headers: exportHeaders(token) });

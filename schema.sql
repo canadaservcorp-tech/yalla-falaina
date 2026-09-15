@@ -67,6 +67,11 @@
 --     add column if not exists referred_by bigint references public.users(id),
 --     add column if not exists referral_credited boolean not null default false;
 --   -- then run the referral_conversions create table statement near b2b_partners below.
+--
+-- Migrating an ALREADY-DEPLOYED project onto the referral +1-month bonus
+-- reward (lib/access.js, lib/referral.js's grantReferralBonus()): one new
+-- column, touching no existing row (null = no bonus, same as today):
+--   alter table public.users add column if not exists bonus_access_until timestamptz;
 
 create extension if not exists "uuid-ossp";
 
@@ -105,6 +110,7 @@ create table if not exists public.users (
   referral_code text unique,                     -- this user's own shareable code; minted lazily on first GET /api/referral/mine
   referred_by bigint references public.users(id),-- who referred this account (captured at signup; null if none/unknown code)
   referral_credited boolean not null default false, -- true once referred_by's referrer has been credited once for THIS account — guards against double-crediting across a cancel/resubscribe cycle
+  bonus_access_until timestamptz,                -- referral-reward grant (lib/access.js) — paid-tier access through this date regardless of subscription_status; stacks on repeat referrals, independent of real billing
   created_at timestamptz default now()
 );
 create table if not exists public.banned_emails (   -- blocklist (can't re-subscribe)
@@ -454,4 +460,34 @@ alter table public.concierge_conversations enable row level security;
 alter table public.concierge_messages enable row level security;
 alter table public.daily_usage enable row level security;
 alter table public.referral_conversions enable row level security;
+
+-- The conversion ledger insert AND the referrer's reward land in ONE
+-- transaction (called from lib/referral.js's creditConversionIfNew): a
+-- separate "insert, then read-modify-write bonus_access_until" pair can
+-- split — the ledger commits, the grant dies, and the ledger's UNIQUE
+-- referred_id then makes every webhook retry return early so the reward is
+-- lost forever. It also fixes the lost-update race: two conversions
+-- completing together would otherwise read the same bonus_access_until and
+-- overwrite each other's +30d — inside one function the referrer row's
+-- update lock serializes them, so each conversion stacks its own p_days.
+-- Returns true when this call recorded (and paid) the conversion, false
+-- when the ledger already had it (a retry — the first call already paid).
+create or replace function public.record_referral_conversion(p_referrer_id bigint, p_referred_id bigint, p_days integer)
+returns boolean
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_rows integer;
+begin
+  insert into public.referral_conversions (referrer_id, referred_id)
+  values (p_referrer_id, p_referred_id)
+  on conflict (referred_id) do nothing;
+  get diagnostics v_rows = row_count;
+  if v_rows = 0 then return false; end if;
+  update public.users
+    set bonus_access_until = greatest(coalesce(bonus_access_until, now()), now()) + make_interval(days => p_days)
+    where id = p_referrer_id;
+  return true;
+end;
+$$;
 alter table public.push_subscriptions enable row level security;

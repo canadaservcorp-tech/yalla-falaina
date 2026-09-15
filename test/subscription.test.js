@@ -62,6 +62,41 @@ test('GET /api/subscription/status surfaces provider: stripe for a Stripe subscr
   assert.equal(body.provider, 'stripe');
 });
 
+// ---------- referral bonus access (lib/access.js) ----------
+const FUTURE_BONUS = new Date(Date.now() + 5 * 86400000).toISOString();
+const PAST_BONUS = new Date(Date.now() - 5 * 86400000).toISOString();
+
+test('GET /api/subscription/status reports status:active, tier:basic and bonusAccessUntil for a live referral bonus with no real subscription', async () => {
+  const token = actor(h, { id: 17, role: 'seeker', extra: {
+    subscription_status: 'inactive', subscription_tier: 'none', bonus_access_until: FUTURE_BONUS,
+  } });
+  const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });
+  const body = await res.json();
+  assert.equal(body.status, 'active');
+  assert.equal(body.tier, 'basic');
+  assert.equal(body.bonusAccessUntil, FUTURE_BONUS);
+  assert.equal(body.cancelAt, null, 'a bonus-only account has no real cancellation to report');
+});
+
+test('GET /api/subscription/status reports bonusAccessUntil: null once the referral bonus has expired -- back to inactive/none', async () => {
+  const token = actor(h, { id: 18, role: 'seeker', extra: {
+    subscription_status: 'inactive', subscription_tier: 'none', bonus_access_until: PAST_BONUS,
+  } });
+  const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });
+  const body = await res.json();
+  assert.equal(body.status, 'inactive');
+  assert.equal(body.tier, 'none');
+  assert.equal(body.bonusAccessUntil, null);
+});
+
+test('GET /api/subscription/status reports bonusAccessUntil: null for a real active subscriber, even with no bonus columns set', async () => {
+  const token = actor(h, { id: 19, role: 'seeker', extra: { subscription_status: 'active', subscription_tier: 'basic', bonus_access_until: null } });
+  const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });
+  const body = await res.json();
+  assert.equal(body.status, 'active');
+  assert.equal(body.bonusAccessUntil, null, 'a real subscription is not a bonus and must not be reported as one');
+});
+
 test('an unverified account cannot use authenticated endpoints -> 403', async () => {
   const token = actor(h, { id: 12, role: 'seeker', verified: false });
   const res = await fetch(h.base + '/api/subscription/status', { headers: auth(token) });

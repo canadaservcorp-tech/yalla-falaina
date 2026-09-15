@@ -15,11 +15,12 @@ const { loadCurrent } = require('../lib/profileWrite');
 const { buildCvData, cvReadiness } = require('../lib/cvBuilder');
 const { renderCvPdf } = require('../lib/cvPdf');
 const { renderCvDocx } = require('../lib/cvDocx');
+const access = require('../lib/access');
 const router = express.Router();
 
 async function loadCvContext(userId) {
   const [{ data: user }, { profile, seekerProfile }] = await Promise.all([
-    supabase.from('users').select('id, name, email, phone, subscription_status').eq('id', userId).maybeSingle(),
+    supabase.from('users').select('id, name, email, phone, subscription_status, bonus_access_until').eq('id', userId).maybeSingle(),
     loadCurrent(userId),
   ]);
   return { user, profile, seekerProfile };
@@ -44,7 +45,7 @@ router.get('/preview', authenticate, sec.requireActiveUser, async (req, res) => 
         certifications: data.certifications.length,
         languages: data.languages.length,
       },
-      subscribed: user?.subscription_status === 'active',
+      subscribed: access.hasAccess(user),
     });
   } catch (e) {
     console.error('cv preview', e);
@@ -56,11 +57,11 @@ router.get('/export', sec.limits.cv, authenticate, sec.requireActiveUser, async 
   try {
     const { user, profile, seekerProfile } = await loadCvContext(req.user.id);
     if (!user) return res.status(403).json({ error: 'Account not found', code: 'ERR_NOT_FOUND' });
-    // The hard gate -- see file header. Deliberately checks the real
-    // subscription_status column, not the concierge's paywallOn()/inPreview
-    // machinery, so this stays enforced even before Hicham flips
-    // PAYWALL_ENFORCED=true for the rest of the app.
-    if (user.subscription_status !== 'active')
+    // The hard gate -- see file header. Deliberately checks real access via
+    // lib/access.js (a real subscription OR a referral bonus grant), not the
+    // concierge's paywallOn()/inPreview machinery, so this stays enforced
+    // even before Hicham flips PAYWALL_ENFORCED=true for the rest of the app.
+    if (!access.hasAccess(user))
       return res.status(402).json({ error: 'Subscribe to download your CV', upgrade: true, code: 'ERR_CV_SUBSCRIPTION_REQUIRED' });
 
     const format = req.query.format === 'docx' ? 'docx' : 'pdf';

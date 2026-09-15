@@ -151,6 +151,21 @@ test('BILLING.SUBSCRIPTION.CANCELLED (the grace period starting, access still ac
   assert.equal(h.mock.__writes('document_uploads', 'delete').length, 0);
 });
 
+test('EXPIRED during a live referral bonus does NOT delete voice notes — billing canceled, access still paid', async () => {
+  // lib/access.js keeps this account paid-tier via bonus_access_until, so the
+  // notes stay until scripts/profile-retention.js sweeps them with the rest
+  // of the profile data once access truly ends.
+  h.mock.__set('users', { data: {
+    id: 83, subscription_period_end: null,
+    bonus_access_until: new Date(Date.now() + 10 * 86400000).toISOString(),
+  }, error: null });
+  h.mock.__set('document_uploads', { data: [{ id: 'v1', storage_path: 'voice_note/1.webm' }], error: null });
+  const r = await webhook({ event_type: 'BILLING.SUBSCRIPTION.EXPIRED', resource: { id: 'SUB-83', custom_id: '83' } });
+  assert.equal(r.status, 200);
+  await new Promise(res => setImmediate(res));
+  assert.equal(h.mock.__writes('document_uploads', 'delete').length, 0);
+});
+
 test('BILLING.SUBSCRIPTION.ACTIVATED (renewal/reactivation) does NOT delete voice notes', async () => {
   h.mock.__set('users', { data: { id: 82, subscription_period_end: null }, error: null });
   h.mock.__set('document_uploads', { data: [{ id: 'v1', storage_path: 'voice_note/1.webm' }], error: null });
