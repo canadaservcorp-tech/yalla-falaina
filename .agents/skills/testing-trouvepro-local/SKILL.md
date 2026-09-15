@@ -16,14 +16,62 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
   allow public SPA, health, SEO endpoints, consent validation, and unauthenticated
   401 checks only. They do not provide a database. Shared rate-limit storage may
   fall back to memory; do not count that as database connectivity.
+- For local-only testing, inherited Supabase secrets may point at production even
+  when there is no .env file. Tool-level environment overrides may be superseded
+  by secret bindings. Before opening the first page, set overrides in the actual
+  child-process environment and verify the listening server's effective DB URL
+  is loopback/nonproduction and JOBS is off (print booleans, never credentials).
+  Public landing-page news requests can still read the database; avoiding login
+  alone is not sufficient isolation.
 - Keyless concierge demo still requires a real authenticated account and database.
   `JOB_API_PROVIDER=seed npm run jobs:refresh` persists bundled jobs through Supabase.
   Do not claim demo replies/job cards or authenticated 402/paywall passed from health
   flags or static markup alone.
+- For public SEO/share-card checks, restart the server after shell edits: server.js
+  reads public/index.html once at boot. Inspect the actual HTTP head for each
+  locale, not just client DOM or helper output. With PUBLIC_URL unset, use port
+  3000 to exercise the localhost default. Decode the served image and compare
+  dimensions/MIME/bytes to the asset; local checks do not prove social crawler
+  reachability or cached previews on external platforms.
+- SEO injection precedes nonce stamping. Check every served script nonce against
+  that response's CSP and verify nonces differ between requests. Observe browser
+  exceptions and CSP errors across locale navigation; verbose DOM recommendations
+  (such as password inputs outside a form) are not console errors.
+- Google OAuth public-UI testing can use the isolated loopback database setup.
+  The button appears only when health reports `google:true`; configure both
+  GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the local process, never log values.
+  Keep PUBLIC_URL local. The configured Google client may authorize only production:
+  a local redirect_uri_mismatch does not prove production failure. Do not change
+  PUBLIC_URL to production or register callbacks without explicit authorization.
+  Test `?lang=en|fr|ar&googleError=failed|blocked` and bogus `?google=garbage`;
+  assert translated errors, removal of Google params, preservation of lang,
+  absence of a session token, and functioning auth controls on those same loads.
+  Observe exceptions continuously: a translated shell alone can hide aborted init.
+  With placeholder Supabase, `/api/news` can return HTTP500; disclose that setup
+  limitation separately from OAuth 401s and actual JS/CSP exceptions.
 - Test UI language separately from chat dialect: header EN/FR/عربي links translate
   chrome and set document direction, while the dialect dropdown sets input and
   non-system bubble direction. Verify opposite-direction pairs and existing bubbles
   after a mid-conversation dialect change; system messages should inherit UI direction.
+- Geo-first-page testing needs a bare URL with no lang query and a fresh visitor:
+  the client automatically stores yf_lang after its first render. Clear that
+  preference only for fresh-visitor cases, then set country request headers via a
+  persistent CDP session or browser-context extraHTTPHeaders before navigation.
+  Test returning visitors by clicking a language link, navigating back to bare /,
+  and reloading with the conflicting country header still applied. Check visible
+  translations and direction, not only server lang: metadata may retain the geo
+  language while stored preference changes the client UI. Verify served-language
+  metadata separately from canonical language, and compare sequential responses
+  with the same Accept-Language and different countries. Local origin isolation
+  does not establish shared/CDN cache safety; inspect cache policy and Vary inputs.
+- For Hindi or another newly added script, check actual pixels before recording:
+  correct DOM strings can still render as missing-glyph boxes on minimal Linux.
+  Use `fc-list :lang=hi` to check Devanagari support. If absent, install a suitable
+  font (e.g. Ubuntu `fonts-lohit-deva`, or extract its TTF into
+  `~/.local/share/fonts`), run `fc-cache -f`, and restart Chrome before recapturing
+  evidence. This is runner setup, not proof that the application's translations
+  are wrong. Hindi UI (`hi`) remains LTR; the chat dialect option uses `Hindi`,
+  while signup preferred language uses `hi`.
 - Language persistence requires same-tab navigation without `?lang` (including a
   payment-return-shaped URL), not merely reloading a URL that still has `?lang`.
   Exercise this while signed in too, and send another message afterward. A translated
@@ -32,7 +80,8 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
   checks but must be reported as a workaround, not a passing reload test.
 - Register UI requires both checkboxes independently; backend requires boolean `true`,
   not string `"true"`, for both `confirmAge` and `acceptTerms`.
-- Yalla stores its JWT in sessionStorage, unlike the old TrouvePro localStorage flow.
+- Check the current build's JWT storage: older Yalla builds used sessionStorage;
+  the Google OAuth build uses localStorage key `yf_token`.
   Preserve the same JWT_SECRET across local server restarts to keep browser login
   while switching PAYWALL_ENFORCED or removing ANTHROPIC_API_KEY.
 - Resend test credentials can reject example.com recipients. Registration should
@@ -43,16 +92,90 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
 - An inactive account may see the Basic banner even with PAYWALL_ENFORCED=false.
   Prove enforcement by observing the UI-originated concierge HTTP 402 and unchanged
   daily_usage, not merely by seeing the banner.
+- On newer builds, `PAYWALL_ENFORCED=false` intentionally hides purchase controls
+  and the preview gate. Verify UI against the actual health/API flag; do not count
+  four free matching replies as proof of the enabled three-reply paywall.
+- For explicitly authorized local display-only paywall previews without Supabase,
+  `PAYWALL_ENFORCED=true` alone may not expose the banner: appMain is hidden until
+  `enter()`. A deliberately invalid local-only `yf_token` marker can exercise the
+  existing returning-session entry path without mocking banner text or backend
+  responses. Verify current behavior first; backend calls should reject the marker.
+  Label all evidence as a UI preview, disclose expected 401s/news500s, and do not
+  claim authenticated subscriber-state gating or payment correctness. Never use
+  this setup on production; clear the marker after testing.
+  For country prices, compare the actual served `data-sub-price` attribute to the
+  visible banner, then switch `?lang=` under the same country header to prove
+  currency follows country rather than UI language. Do not click payment buttons.
+- Distinguish `users.free_preview_used` from `daily_usage.units_used`. With
+  enforcement disabled, the preview counter should not increment, but completed
+  profiles still consume the daily tier quota. Read current `lib/usage.js` limits,
+  exercise the last allowed turn and first rejected turn, and verify the rejected
+  request does not add usage or a persisted user-message audit row.
+- With enforcement enabled, also compare the daily quota to FREE_PREVIEW_LIMIT
+  (unset currently defaults to eight). A smaller daily quota can stop matching
+  before the lifetime preview boundary. Do not reset counters to hide that
+  conflict; report HTTP429 ERR_QUOTA separately from HTTP402 ERR_PAYWALL.
+- For an authorized exact Gmail-plus smoke account, report emailSent separately
+  from inbox arrival/rendering (user-only). If authorized to read the token,
+  use scoped users REST reads and visit the real `/api/auth/verify?token=...&id=...`
+  link without logging the token; check email_verified and token clearing.
+  Retain user and unapproved PayPal object only when explicitly requested for
+  payment follow-up; never approve, log in, pay, or cancel on the user's behalf.
+- Production email verification requires an inbox you can inspect, `emailSent:true`,
+  and an actual delivered link. Health `email:true` only means a key is configured.
+  A real disposable inbox may still be rejected by Resend sender-domain restrictions.
+- With explicit authorization only, initiate checkout through a same-browser
+  authenticated API request when purchase controls are intentionally hidden.
+  A live PayPal approval URL proves checkout creation, not login, payment or returns.
+  Human-verification challenges may prevent login. Manually visiting success/cancel
+  URLs is only a routing smoke test, never proof of provider-configured redirects.
+- For subscriber-control inspection on production, change only the authorized
+  disposable user's status, open Cancel and dismiss Never mind while observing
+  zero cancellation requests. Never call the real provider cancellation endpoint
+  without specific authorization. Delete/restore the exact fixture afterward.
+- To inspect cancellation grace periods, retain active status and set future
+  `subscription_cancel_at` and `subscription_period_end` on only the authorized
+  disposable account. A status-only active fixture does not exercise grace.
+  Check ending-versus-renewing copy and Resume controls independently; a missing
+  cancellation timestamp in the status response can make grace look like renewal.
+- Start CDP Log/Runtime observation before the first app navigation for full-pass
+  console coverage. Separate expected quota HTTP errors from app exceptions and
+  third-party mailbox/payment errors. Sanitize URLs in exception stack descriptions
+  too, since provider approval tokens can appear there even if navigation URLs
+  themselves have been sanitized.
+- Public informal listings are independent of user foreign keys. Track the exact
+  submission ID and unique contact/title, assert `review_status=pending`, and delete
+  that row explicitly during cleanup. Preserve and compare the seed-job snapshot.
 - Seed Canada matches have no honesty flags. A Ghana shawarma/cook query exercises
   informal_unverified and honesty badges. Seed postings are fixtures, not verified
   live vacancies; do not describe successful model calls as proof of job validity.
 - For exact-user cleanup, resolve conversation IDs by concierge_conversations.profile_id,
-  then delete daily_usage → concierge_messages (by conversation_id) →
-  concierge_conversations → profiles → users. Re-query each scoped table; keep jobs.
+  then delete daily_usage (profile_id) → concierge_messages (by conversation_id) →
+  concierge_conversations → seeker_profiles (profile_id) → profiles → users.
+  Re-query each scoped table; keep jobs.
+- For live conversational intake, inspect browser-originated responses and database
+  state after each turn. A clean prose summary is not proof of extraction or
+  completeness. Check profiles plus seeker_profiles, missing fields, explicit
+  confirmation timing, daily_usage, and user-message units_charged (free intake = 0).
+- To verify a block-only stripping fallback with the real model, ask for only its
+  mandatory machine-readable update with no prose before explicit confirmation.
+  A temporary server fetch observer can record only block presence, stripped prose
+  length, status, and stop_reason without changing the response or logging raw data.
+  Require observed block-only shape plus clean API/UI/stored assistant content;
+  absence of visible markers alone does not establish that the fallback ran.
+- When testing lenient model-extraction normalization, extend the shape-only
+  observer with field names and types (array/string/null/object), never raw values.
+  Pair the upstream type with the persisted database type to establish that
+  normalization was actually exercised. Check whether missing-list labels were
+  incorrectly emitted as JSON keys (for example sector_or_role_type rather than
+  sector or role_type); a prose acknowledgement does not prove a valid key landed.
 - If Chrome reports a missing X display, check `$DISPLAY` and Xvfb before restarting
   Chrome. Match the virtual screen dimensions to the full browser window (for example
   `Xvfb :0 -screen 0 1600x1122x24`), maximize with `wmctrl`, and inspect a recording
   frame for clipping before sharing evidence.
+- If `wmctrl` cannot identify the active window, use CDP `Browser.getWindowForTarget`
+  and `Browser.setWindowBounds` with `windowState: "maximized"`; still inspect the
+  actual recording frame because viewport screenshots omit browser chrome.
 
 ### Devin Secrets Needed — Yalla Nsafer
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for the Yalla Nsafer project,
@@ -241,6 +364,11 @@ SafeSearch rates `adult` **or `racy`** as `LIKELY`/`VERY_LIKELY`.
   browser; don't try to mint a fresh one.
 
 ## Devin Secrets Needed
+Google OAuth local public-UI checks need `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` as process configuration to expose the button; authorized
+Railway variables may supply them. No Google account password is needed when
+testing stops before login. A successful local account flow additionally requires
+an authorized isolated Supabase environment.
 `SUPABASE_ACCESS_TOKEN` (Supabase Management API — required for the prod SQL helper above).
 Production/deploy work would need `RAILWAY_API_TOKEN`. Nothing is needed for purely local testing;
 earlier live-account testing used mail-verified accounts under `canada.servcorp+...@gmail.com`.

@@ -48,6 +48,17 @@
 -- lib/jobsIngest.js): just run the push_subscriptions create table statement
 -- near b2b_partners below — it references no existing column, so nothing
 -- else needs to change.
+--
+-- Migrating an ALREADY-DEPLOYED project onto referral tracking (lib/referral.js,
+-- routes/referral.js, and the conversion-crediting hook in routes/subscription.js's
+-- webhook handlers): three new users columns plus the referral_conversions ledger
+-- table further down this file — nothing here touches an existing row (every
+-- account starts with no code, no referrer, and not-yet-credited):
+--   alter table public.users
+--     add column if not exists referral_code text unique,
+--     add column if not exists referred_by bigint references public.users(id),
+--     add column if not exists referral_credited boolean not null default false;
+--   -- then run the referral_conversions create table statement near b2b_partners below.
 
 create extension if not exists "uuid-ossp";
 
@@ -81,6 +92,9 @@ create table if not exists public.users (
   failed_login_count integer not null default 0, -- consecutive failed logins; reset to 0 on success (record_login_result())
   locked_until timestamptz,                      -- set once failed_login_count crosses the threshold; null when not locked
   google_sub text unique,                        -- Google account id for "Continue with Google"; null for password-only accounts
+  referral_code text unique,                     -- this user's own shareable code; minted lazily on first GET /api/referral/mine
+  referred_by bigint references public.users(id),-- who referred this account (captured at signup; null if none/unknown code)
+  referral_credited boolean not null default false, -- true once referred_by's referrer has been credited once for THIS account — guards against double-crediting across a cancel/resubscribe cycle
   created_at timestamptz default now()
 );
 create table if not exists public.banned_emails (   -- blocklist (can't re-subscribe)
@@ -401,6 +415,23 @@ create table if not exists public.push_subscriptions (
   created_at timestamptz not null default now()
 );
 create index if not exists push_subscriptions_user_idx on public.push_subscriptions(user_id);
+
+-- Referral conversion ledger — one row per referred account that ever
+-- reached a genuine inactive/never-active -> active subscription transition
+-- (written by routes/subscription.js's PayPal/Stripe webhook handlers, never
+-- by the client). `referred_id` is UNIQUE: a given referred account can only
+-- ever convert once, which is what `users.referral_credited` guards against
+-- re-inserting on a later cancel/resubscribe cycle. Deliberately just a
+-- record of WHO converted, not a reward mechanic — no discount or extended
+-- period is auto-applied here; crediting the referrer with anything is a
+-- manual decision for the account owner until a reward is chosen.
+create table if not exists public.referral_conversions (
+  id bigserial primary key,
+  referrer_id bigint not null references public.users(id),
+  referred_id bigint not null references public.users(id) unique,
+  created_at timestamptz not null default now()
+);
+create index if not exists referral_conversions_referrer_idx on public.referral_conversions(referrer_id);
 
 -- Row Level Security: enabled on every personal table with NO policies — only
 -- the backend's service-role key (never shipped to a client) can read or write

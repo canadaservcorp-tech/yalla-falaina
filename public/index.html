@@ -338,6 +338,17 @@
       <button id="notifyDisableBtn" class="ghost" style="display:none" data-i18n="notifyDisableBtn">Turn off notifications</button>
       <div id="notifyMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
     </div>
+    <div id="referralPane" style="margin-top:16px">
+      <h2 data-i18n="referralHeading">Invite a friend</h2>
+      <p class="hint" data-i18n="referralHint">Share your personal link. When someone signs up and subscribes, it shows up here.</p>
+      <div class="row">
+        <a id="referralWhatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
+        <a id="referralFacebook" href="#" target="_blank" rel="noopener">Facebook</a>
+        <a id="referralTelegram" href="#" target="_blank" rel="noopener">Telegram</a>
+        <button id="referralCopy" class="ghost" data-i18n="shareCopy">Copy link</button>
+      </div>
+      <p id="referralStats" style="color:var(--text-dim);font-size:13px;"></p>
+    </div>
   </div>
 </main>
 
@@ -363,6 +374,7 @@
       <circle cx="17.6" cy="6.4" r="1.3" fill="currentColor" stroke="none"/>
     </svg>
   </a>
+  <a class="ghost" href="/express-entry-draws" data-i18n="expressEntryLink">Latest Express Entry draws</a>
   <div id="shareBar">
     <span class="lbl" data-i18n="shareHeading">Know someone looking? Share Yalla Nsafer</span>
     <div class="row">
@@ -383,6 +395,12 @@
 <script>
   const $ = id => document.getElementById(id);
   const tokenKey = 'yf_token';
+  // Whoever's link brought this visitor here (routes/auth.js resolves it at
+  // signup time; a missing/unknown code is silently ignored server-side, so
+  // it's safe to pass through unchecked). Read once at load — the value
+  // persists in the URL for the whole visit even after other query params
+  // (?sub=, ?lang=) get scrubbed off elsewhere on this page.
+  const refCode = (new URLSearchParams(location.search).get('ref') || '').trim();
   let history = [], conversationId = null;
 
   // Hicham's ask: closing the app (or the browser) and reopening it must not
@@ -508,7 +526,7 @@
   // ---------- continue with Google ----------
   $('googleBtn').onclick = () => {
     track('login_start', { method: 'google' });
-    location.href = '/api/auth/google';
+    location.href = '/api/auth/google' + (refCode ? '?ref=' + encodeURIComponent(refCode) : '');
   };
 
   // Coming back from Google: the URL carries a two-minute handoff token, never
@@ -686,7 +704,7 @@
       const r = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name: $('name').value.trim(), preferredLanguage: $('prefLang').value,
           preferredCountry: $('prefCountry').value.trim(), sector: $('sector').value.trim(),
-          confirmAge: true, acceptTerms: true }) });
+          confirmAge: true, acceptTerms: true, referralCode: refCode || undefined }) });
       const d = await r.json();
       // d.message stays English (see the language note above) — but d.error
       // now goes through apiError() first, which maps the response's `code`
@@ -792,6 +810,7 @@
     refreshCv();
     refreshTotpStatus();
     refreshNotifyStatus();
+    refreshReferral();
     const resumed = await resumeConversation();
     if (!resumed) addMessage('system', t('welcomeSystemMessage'));
   }
@@ -872,6 +891,38 @@
   $('cvDownloadDocx').onclick = () => downloadCv('docx');
   $('cvSubscribePrompt').onclick = () => { $('paywall').style.display = 'block'; };
 
+  // ---------- invite a friend (referral link) ----------
+  // Mirrors the anonymous shareBar() below, but with a personal link (routes/
+  // referral.js lazily mints a code on first call) and a live conversion
+  // count read straight from referral_conversions -- no reward amount is
+  // shown here on purpose, see lib/referral.js's top comment.
+  async function refreshReferral() {
+    try {
+      const r = await fetch('/api/referral/mine', { headers: headers() });
+      if (!r.ok) { $('referralStats').textContent = t('referralLoadError'); return; }
+      const d = await r.json();
+      const url = location.origin + '/?ref=' + encodeURIComponent(d.code);
+      const text = t('shareText');
+      const links = {
+        referralWhatsapp: 'https://wa.me/?text=' + encodeURIComponent(text + ' ' + url),
+        referralFacebook: 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url),
+        referralTelegram: 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text),
+      };
+      for (const id in links) {
+        $(id).href = links[id];
+        $(id).onclick = () => track('share', { method: id.replace('referral', '').toLowerCase(), content_type: 'referral' });
+      }
+      $('referralCopy').onclick = async () => {
+        try { await navigator.clipboard.writeText(url); } catch (e) { return; }
+        const btn = $('referralCopy');
+        btn.textContent = t('shareCopied');
+        setTimeout(() => { btn.textContent = t('shareCopy'); }, 2000);
+        track('share', { method: 'copy', content_type: 'referral' });
+      };
+      $('referralStats').textContent = t('referralConversions', { n: d.conversions });
+    } catch { $('referralStats').textContent = t('referralLoadError'); }
+  }
+
   // ---------- two-factor authentication (queued item 4) ----------
   // Every endpoint here (GET /totp/status, POST /totp/setup|confirm|disable)
   // already existed server-side (routes/auth.js) — TOTP was live, but with
@@ -942,29 +993,62 @@
 
   // Same handler for both providers — PayPal and Stripe differ only in which
   // endpoint starts the checkout, not in how the client waits for or reports it.
-  async function startCheckout(path) {
+  // `provider` exists only to label the funnel events below — no behavior
+  // depends on it, so a caller that omits it just loses the label, never breaks.
+  async function startCheckout(path, provider) {
+    track('checkout_start', { provider });
     $('subMsg').textContent = t('checkoutPending');
     try {
       const r = await fetch(path, { method: 'POST', headers: headers() });
       const d = await r.json();
-      if (d.url) location.href = d.url; else $('subMsg').textContent = apiError(d, t('checkoutUnavailable'));
-    } catch { $('subMsg').textContent = t('checkoutUnavailable'); }
+      if (d.url) { track('checkout_redirect', { provider }); location.href = d.url; }
+      else { track('checkout_result', { provider, result: 'start_failed' }); $('subMsg').textContent = apiError(d, t('checkoutUnavailable')); }
+    } catch { track('checkout_result', { provider, result: 'start_failed' }); $('subMsg').textContent = t('checkoutUnavailable'); }
   }
-  $('subscribeBtn').onclick = () => startCheckout('/api/subscription/checkout');
-  $('subscribeStripeBtn').onclick = () => startCheckout('/api/subscription/stripe/checkout');
+  $('subscribeBtn').onclick = () => startCheckout('/api/subscription/checkout', 'paypal');
+  $('subscribeStripeBtn').onclick = () => startCheckout('/api/subscription/stripe/checkout', 'stripe');
   // Devin's review on PR #56: a single refreshSub() 1.5s after the checkout
   // redirect can still fire before the provider's webhook has actually
   // landed and flipped subscription_status to 'active' -- the mic/paywall
   // then look stale until the seeker reloads by hand. Poll a few times with
   // backoff instead of once, and stop the moment an active status shows up.
+  //
+  // Funnel visibility (the enhancement this comment was added for): until
+  // now there was no way to tell "started checkout" from "actually paid"
+  // from "abandoned it" anywhere but PayPal/Stripe's own dashboards, and
+  // ?sub=cancel -- a return param the server has always sent -- was read by
+  // nobody. checkout_result's 'success_confirmed' vs 'success_pending_timeout'
+  // also separates a real success from a slow webhook, which cancel/abandon
+  // numbers alone can't do.
   async function pollSubAfterCheckout() {
     for (const delay of [1500, 3000, 5000, 8000, 8000]) {
       await new Promise(r => setTimeout(r, delay));
       await refreshSub();
-      if (subActive === true) return;
+      if (subActive === true) { track('checkout_result', { result: 'success_confirmed' }); return; }
     }
+    // The payment almost certainly went through -- the provider already sent
+    // the seeker back to a success URL -- but the webhook hadn't landed
+    // within ~19s of polling. Not a failure to report as one; a real ops
+    // signal (webhook latency/delivery) worth knowing about either way.
+    track('checkout_result', { result: 'success_pending_timeout' });
   }
-  if (new URLSearchParams(location.search).get('sub') === 'success') pollSubAfterCheckout();
+  const subParam = new URLSearchParams(location.search).get('sub');
+  // Same reasoning as finishGoogleSignIn's own URL scrub: drop the one-shot
+  // return param so reloading this page never re-fires the message or the event.
+  const cleanSubParam = () => {
+    try {
+      const params = new URLSearchParams(location.search);
+      params.delete('sub');
+      const q = params.toString();
+      window.history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+    } catch (e) {}
+  };
+  if (subParam === 'success') { cleanSubParam(); pollSubAfterCheckout(); }
+  else if (subParam === 'cancel') {
+    cleanSubParam();
+    track('checkout_result', { result: 'cancel' });
+    $('subMsg').textContent = t('checkoutCancelled');
+  }
   // Covers the case none of the timers above do: a tab backgrounded during
   // the PayPal/Stripe redirect (phone locked, app-switched) that only comes
   // back to life well after polling would have given up.
@@ -998,7 +1082,7 @@
   // already does -- reusing it here is simpler and safer than inventing a
   // second code path for the same outcome.
   $('resumeSubBtn').onclick = async () => {
-    if (subProvider !== 'stripe') { startCheckout('/api/subscription/checkout'); return; }
+    if (subProvider !== 'stripe') { startCheckout('/api/subscription/checkout', 'paypal'); return; }
     $('resumeSubBtn').disabled = true;
     try {
       const r = await fetch('/api/subscription/resume', { method: 'POST', headers: headers() });

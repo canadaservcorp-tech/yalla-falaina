@@ -6,6 +6,7 @@ const supabase = require('../db');
 const { sendEmail } = require('../lib/email');
 const sec = require('../lib/security');
 const totp = require('../lib/totp');
+const referral = require('../lib/referral');
 const { authenticate } = require('../lib/auth-mw');
 const router = express.Router();
 const { JWT_SECRET } = process.env;
@@ -69,12 +70,17 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
       return res.json({ success: true, message: 'Registered — check your email to verify.' });
     }
 
+    // A bad or mistyped referral code must never block registration — an
+    // unmatched code just resolves to null and the account signs up referrer-less.
+    const referred_by = await referral.resolveCode(req.body.referralCode);
+
     const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const verify_token = crypto.randomBytes(32).toString('hex');
     const { data: user, error } = await supabase.from('users')
       .insert({
         email, password_hash, name, phone, role: 'seeker', verify_token, signup_source,
         terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION,
+        referred_by,
       })
       .select('id, email, name, role').single();
     if (error) throw error;
@@ -239,7 +245,14 @@ const google = require('../lib/googleOAuth');
 router.get('/google', sec.limits.oauth, (req, res) => {
   if (!google.configured()) return res.status(503).send('Google sign-in is not configured');
   const source = (sec.clean(req.query.source, 40) || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '') || null;
-  res.redirect(google.authUrl(google.issueState(source ? { s: source } : {})));
+  // A referral code has to survive the round trip to Google and back as part
+  // of the signed state param — there's no request body on the callback leg
+  // to carry it the way /register's referralCode field does.
+  const ref = (sec.clean(req.query.ref, 20) || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
+  const extra = {};
+  if (source) extra.s = source;
+  if (ref) extra.r = ref;
+  res.redirect(google.authUrl(google.issueState(extra)));
 });
 
 router.get('/google/callback', sec.limits.oauth, async (req, res) => {
@@ -286,11 +299,14 @@ router.get('/google/callback', sec.limits.oauth, async (req, res) => {
       // an unguessable random hash so /login can never match, rather than
       // relaxing the column and letting an empty password mean anything.
       const password_hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), BCRYPT_ROUNDS);
+      // Same "a bad code never blocks signup" rule as /register.
+      const referred_by = await referral.resolveCode(state.r);
       const { data: created, error } = await supabase.from('users')
         .insert({
           email, password_hash, name, role: 'seeker', google_sub: sub, email_verified: true,
           signup_source: state.s || 'google',
           terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION,
+          referred_by,
         })
         .select('id, email, name, role').single();
       if (error) throw error;
