@@ -46,21 +46,37 @@ test('the IP database resolves real addresses in the target markets', () => {
 
 test('the served page is Arabic and RTL for an Arabic-reading country', async () => {
   const body = await fetch(h.base + '/', { headers: { 'cf-ipcountry': 'EG' } }).then(r => r.text());
-  assert.match(body, /<html lang="ar" dir="rtl">/);
+  assert.match(body, /<html lang="ar"[^>]*dir="rtl"/);
   assert.match(body, /<title>يلا نسافر/);
 });
 
 test('India lands on the Hindi page', async () => {
   const body = await fetch(h.base + '/', { headers: { 'cf-ipcountry': 'IN' } }).then(r => r.text());
-  assert.match(body, /<html lang="hi">/);
+  assert.match(body, /<html lang="hi"/);
   assert.match(body, /<title>यल्ला नसाफ़िर/);
   assert.doesNotMatch(body, /<html[^>]*dir="rtl"/);
+});
+
+test('the server stamps a local-currency price label for the country', async () => {
+  const cases = { AE: 'AED 92', SA: 'SAR 94', IN: '₹2,100', US: 'USD 25' };
+  for (const [cc, price] of Object.entries(cases)) {
+    const body = await fetch(h.base + '/', { headers: { 'cf-ipcountry': cc } }).then(r => r.text());
+    assert.ok(body.includes(`data-sub-price="${price}"`), `${cc} expected ${price}`);
+  }
+});
+
+test('the paywall copy renders the stamped price through the {price} placeholder', () => {
+  const fs = require('fs');
+  const src = fs.readFileSync(require('path').join(__dirname, '..', 'public', 'i18n.js'), 'utf8');
+  const rows = src.match(/paywallText: '[^']*'|paywallText: "[^"]*"/g);
+  assert.equal(rows.length, 4);
+  for (const r of rows) assert.ok(r.includes('{price}'), `${r} lost the price placeholder`);
 });
 
 test('the geo-picked page still canonicalises to the bare URL', async () => {
   const res = await fetch(h.base + '/', { headers: { 'cf-ipcountry': 'TN' } });
   const body = await res.text();
-  assert.match(body, /<html lang="fr">/);
+  assert.match(body, /<html lang="fr"/);
   const canonical = (body.match(/<link rel="canonical" href="([^"]+)"/) || [])[1];
   assert.ok(canonical && !canonical.includes('lang='), canonical);
   assert.match(res.headers.get('vary') || '', /Accept-Language/i);
@@ -68,9 +84,9 @@ test('the geo-picked page still canonicalises to the bare URL', async () => {
 
 test('an explicit ?lang= overrides the country and owns the canonical', async () => {
   const body = await fetch(h.base + '/?lang=en', { headers: { 'cf-ipcountry': 'EG' } }).then(r => r.text());
-  assert.match(body, /<html lang="en">/);
+  assert.match(body, /<html lang="en"/);
   const body2 = await fetch(h.base + '/?lang=ar', { headers: { 'cf-ipcountry': 'SA' } }).then(r => r.text());
-  assert.match(body2, /<html lang="ar" dir="rtl">/);
+  assert.match(body2, /<html lang="ar"[^>]*dir="rtl"/);
   assert.match(body2, /<link rel="canonical" href="[^"]+\?lang=ar"/);
 });
 
