@@ -231,6 +231,11 @@ test('an incomplete profile enters intake mode instead of being refused, with no
   assert.ok(j.missing.includes('has_passport'));
   assert.match(upstream.body.system, /INTAKE MODE/);
   assert.match(upstream.body.system, /NO JOBS DURING INTAKE/);
+  // Gulf/Khaleeji Arabic (ar-AE) is a real, distinct option the registration
+  // form and profile PUT both accept (routes/auth.js, lib/profileWrite.js) —
+  // the model must be told it's a valid preferred_language value too, or a
+  // Gulf seeker's own stated preference would get rejected on intake extraction.
+  assert.match(upstream.body.system, /preferred_language must be one of[^;]*ar-AE/);
   // intake turns are free — the daily quota is neither checked nor charged,
   // and the logged turn records 0 units rather than the matching cost
   assert.equal(h.mock.__rpcCalls('usage_charge').length, 0);

@@ -316,7 +316,7 @@ const intakeInstructions = (missing) => [
   'Your only task: conversationally collect the missing fields below, in the seeker\'s language, a few questions at a time:',
   `  Missing: ${missing.join(', ')}`,
   'Field meanings: work_history = array of {employer, title, start_date, end_date, description};',
-  'languages = array of {language, level}; preferred_language must be one of ar-LB, ar-SY, ar-EG, ar, fr, en;',
+  'languages = array of {language, level}; preferred_language must be one of ar-LB, ar-SY, ar-EG, ar-AE, ar, fr, hi, en;',
   'sector or role_type = what kind of work they seek; has_passport/has_visa/',
   'has_legal_residency_current_country/has_family_or_host_abroad = booleans (a "no" answer is still an answer);',
   'preferred_country = where they hope to work.',
