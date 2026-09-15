@@ -24,9 +24,9 @@ test('every country has real facts, a title phrase, and an official source link 
     for (const lang of ['en', 'fr', 'ar']) {
       assert.ok(Array.isArray(c.facts[lang]) && c.facts[lang].length > 0, `${c.slug} missing facts for ${lang}`);
       assert.ok(c.title[lang], `${c.slug} missing title phrase for ${lang}`);
-      assert.ok(c.official.label[lang], `${c.slug} missing official source label for ${lang}`);
+      for (const o of [].concat(c.official)) assert.ok(o.label[lang], `${c.slug} missing official source label for ${lang}`);
     }
-    assert.match(c.official.url, /^https:\/\//, `${c.slug} official.url should be a real link`);
+    for (const o of [].concat(c.official)) assert.match(o.url, /^https:\/\//, `${c.slug} official.url should be a real link`);
   }
 });
 
@@ -52,7 +52,7 @@ test('renderPage falls back to the English facts for an unsupported language (e.
 test('renderPage links straight to the real official government source, not a paraphrase', () => {
   for (const c of gccGuides.COUNTRIES) {
     const html = gccGuides.renderPage({ country: c, lang: 'en', head: '<title>x</title>' });
-    assert.match(html, new RegExp(`href="${c.official.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+    for (const o of [].concat(c.official)) assert.match(html, new RegExp(`href="${o.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
   }
 });
 

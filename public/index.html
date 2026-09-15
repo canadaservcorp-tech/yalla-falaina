@@ -283,6 +283,16 @@
     <div class="row"><button id="authGo" data-i18n="tabSignIn">Sign in</button></div>
     <div id="authMsg"></div>
     <button id="resendVerify" style="display:none;background:none;border:none;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13px" data-i18n="resendVerifyLink">Resend verification email</button>
+    <!-- Inside the scrolling card, not the fixed #ctaAside: a fixed bar tall
+         enough for these links overlaps the form's own fields on ~320-390px
+         screens. -->
+    <div id="gccGuideLinks" style="font-size:12px;line-height:1.8;margin-top:14px">
+      <span class="lbl" style="display:block;color:var(--text-dim);font-size:11px;margin-bottom:4px" data-i18n="gccGuidesHeading">Working in the Gulf</span>
+      <a href="/work-in-uae" data-i18n="workInUaeLink">Working in the UAE</a> ·
+      <a href="/work-in-saudi-arabia" data-i18n="workInSaudiLink">Working in Saudi Arabia</a> ·
+      <a href="/work-in-qatar" data-i18n="workInQatarLink">Working in Qatar</a> ·
+      <a href="/work-in-kuwait" data-i18n="workInKuwaitLink">Working in Kuwait</a>
+    </div>
   </div>
 </div>
 
@@ -375,13 +385,6 @@
     </svg>
   </a>
   <a class="ghost" href="/express-entry-draws" data-i18n="expressEntryLink">Latest Express Entry draws</a>
-  <div id="gccGuideLinks" style="font-size:12px;line-height:1.8">
-    <span class="lbl" style="display:block;color:var(--text-dim);font-size:11px;margin-bottom:4px" data-i18n="gccGuidesHeading">Working in the Gulf</span>
-    <a href="/work-in-uae" data-i18n="workInUaeLink">Working in the UAE</a> ·
-    <a href="/work-in-saudi-arabia" data-i18n="workInSaudiLink">Working in Saudi Arabia</a> ·
-    <a href="/work-in-qatar" data-i18n="workInQatarLink">Working in Qatar</a> ·
-    <a href="/work-in-kuwait" data-i18n="workInKuwaitLink">Working in Kuwait</a>
-  </div>
   <div id="shareBar">
     <span class="lbl" data-i18n="shareHeading">Know someone looking? Share Yalla Nsafer</span>
     <div class="row">
