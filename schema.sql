@@ -443,4 +443,5 @@ alter table public.document_uploads enable row level security;
 alter table public.concierge_conversations enable row level security;
 alter table public.concierge_messages enable row level security;
 alter table public.daily_usage enable row level security;
+alter table public.referral_conversions enable row level security;
 alter table public.push_subscriptions enable row level security;
