@@ -331,6 +331,13 @@
       <button id="totpEnableBtn" class="ghost" data-i18n="totpEnableBtn">Enable two-factor authentication</button>
       <div id="totpMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
     </div>
+    <div id="notifyPane" style="margin-top:16px">
+      <h2 data-i18n="notifyHeading">Notifications</h2>
+      <p class="hint" data-i18n="notifyHint">Get a browser notification when a new matching opportunity comes in — no more checking back every day.</p>
+      <button id="notifyEnableBtn" data-i18n="notifyEnableBtn">Turn on notifications</button>
+      <button id="notifyDisableBtn" class="ghost" style="display:none" data-i18n="notifyDisableBtn">Turn off notifications</button>
+      <div id="notifyMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
+    </div>
     <div id="referralPane" style="margin-top:16px">
       <h2 data-i18n="referralHeading">Invite a friend</h2>
       <p class="hint" data-i18n="referralHint">Share your personal link. When someone signs up and subscribes, it shows up here.</p>
@@ -432,6 +439,7 @@
   function renderMic() {
     $('micBtn').style.display = (voiceServerReady && subActive === true) ? '' : 'none';
   }
+  let pushServerReady = false;
   fetch('/api/health').then(r => r.json()).then(d => {
     // Only a real boolean flips the flag — an error/rate-limit body lacks the
     // field and must not silently read as "not enforced" while it is.
@@ -447,7 +455,73 @@
     // The button only appears once the server confirms Google credentials are
     // configured — a visible button that dead-ends on a 503 is worse than none.
     if (d.google === true) $('googleBox').style.display = 'block';
+    pushServerReady = d.push === true;
+    refreshNotifyStatus();
   }).catch(() => {});
+
+  // ---------- installable app / push notifications ----------
+  // The service worker (public/sw.js) already existed for offline/installable
+  // support but was never actually registered anywhere client-side — nothing
+  // this page did ever called navigator.serviceWorker.register(). Push
+  // notifications need an active registration to receive events at all, so
+  // this both finishes that pre-existing gap and is the foundation the
+  // notifyPane below depends on.
+  let swRegistration = null;
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then(reg => { swRegistration = reg; refreshNotifyStatus(); }).catch(() => {});
+  }
+  function urlBase64ToUint8Array(base64) {
+    const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+    const raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+  // Three independent conditions gate the buttons: the server has VAPID keys
+  // configured, this browser supports the Push API at all, and the service
+  // worker has finished registering — all three arrive asynchronously in any
+  // order, hence one render function all three paths call.
+  async function refreshNotifyStatus() {
+    const supported = pushServerReady && swRegistration && 'PushManager' in window && token();
+    if (!supported) { $('notifyEnableBtn').style.display = 'none'; $('notifyDisableBtn').style.display = 'none'; return; }
+    let subscribed = false;
+    try { subscribed = Boolean(await swRegistration.pushManager.getSubscription()); } catch (e) { /* treat as not subscribed */ }
+    $('notifyEnableBtn').style.display = subscribed ? 'none' : 'inline-block';
+    $('notifyDisableBtn').style.display = subscribed ? 'inline-block' : 'none';
+  }
+  $('notifyEnableBtn').onclick = async () => {
+    $('notifyMsg').textContent = '';
+    $('notifyEnableBtn').disabled = true;
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') { $('notifyMsg').textContent = t('notifyPermissionDenied'); return; }
+      const r = await fetch('/api/push/public-key');
+      const d = await r.json();
+      if (!r.ok || !d.key) { $('notifyMsg').textContent = t('notifyUnavailable'); return; }
+      const sub = await swRegistration.pushManager.subscribe({
+        userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(d.key),
+      });
+      const json = sub.toJSON();
+      const saveR = await fetch('/api/push/subscribe', { method: 'POST', headers: headers(),
+        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }) });
+      if (!saveR.ok) { $('notifyMsg').textContent = t('notifyUnavailable'); return; }
+      track('push_subscribe', {});
+      await refreshNotifyStatus();
+    } catch (e) { $('notifyMsg').textContent = t('notifyUnavailable'); }
+    finally { $('notifyEnableBtn').disabled = false; }
+  };
+  $('notifyDisableBtn').onclick = async () => {
+    $('notifyMsg').textContent = '';
+    $('notifyDisableBtn').disabled = true;
+    try {
+      const sub = swRegistration && await swRegistration.pushManager.getSubscription();
+      if (sub) {
+        await fetch('/api/push/subscribe', { method: 'DELETE', headers: headers(), body: JSON.stringify({ endpoint: sub.endpoint }) });
+        await sub.unsubscribe();
+      }
+      track('push_unsubscribe', {});
+      await refreshNotifyStatus();
+    } catch (e) { $('notifyMsg').textContent = t('notifyUnavailable'); }
+    finally { $('notifyDisableBtn').disabled = false; }
+  };
 
   // ---------- continue with Google ----------
   $('googleBtn').onclick = () => {
@@ -735,6 +809,7 @@
     refreshSub();
     refreshCv();
     refreshTotpStatus();
+    refreshNotifyStatus();
     refreshReferral();
     const resumed = await resumeConversation();
     if (!resumed) addMessage('system', t('welcomeSystemMessage'));

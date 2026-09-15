@@ -43,6 +43,12 @@
 -- Migrating onto "Continue with Google" (routes/auth.js's /google/* endpoints):
 --   alter table public.users add column if not exists google_sub text unique;
 --
+-- Migrating an ALREADY-DEPLOYED project onto web push notifications
+-- (lib/webPush.js, routes/push.js, lib/jobAlerts.js's new-job-match hook in
+-- lib/jobsIngest.js): just run the push_subscriptions create table statement
+-- near b2b_partners below — it references no existing column, so nothing
+-- else needs to change.
+--
 -- Migrating an ALREADY-DEPLOYED project onto referral tracking (lib/referral.js,
 -- routes/referral.js, and the conversion-crediting hook in routes/subscription.js's
 -- webhook handlers): three new users columns plus the referral_conversions ledger
@@ -392,6 +398,24 @@ create table if not exists public.b2b_partners (
   created_at timestamptz not null default now()
 );
 
+-- Web push subscriptions (lib/webPush.js, routes/push.js). One row per
+-- browser/device a seeker opted into notifications on -- a person can have
+-- several (phone + laptop), so this is NOT unique on user_id, only on the
+-- endpoint itself (a push service's subscription URL is already unique per
+-- browser instance; re-subscribing the same browser upserts in place rather
+-- than piling up duplicate rows that would each get their own copy of every
+-- notification). lib/webPush.js deletes a row outright once its endpoint
+-- comes back 404/410 -- gone, not worth ever retrying again.
+create table if not exists public.push_subscriptions (
+  id bigserial primary key,
+  user_id bigint not null references public.users(id),
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions(user_id);
+
 -- Referral conversion ledger — one row per referred account that ever
 -- reached a genuine inactive/never-active -> active subscription transition
 -- (written by routes/subscription.js's PayPal/Stripe webhook handlers, never
@@ -419,3 +443,5 @@ alter table public.document_uploads enable row level security;
 alter table public.concierge_conversations enable row level security;
 alter table public.concierge_messages enable row level security;
 alter table public.daily_usage enable row level security;
+alter table public.referral_conversions enable row level security;
+alter table public.push_subscriptions enable row level security;

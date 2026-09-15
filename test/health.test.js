@@ -19,5 +19,6 @@ test('GET /api/health -> 200 with feature booleans only', async () => {
     email: Boolean(process.env.RESEND_API_KEY),
     voice: Boolean(process.env.STT_API_KEY),
     google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    push: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
   });
 });
