@@ -107,7 +107,7 @@ app.get('*', (req, res) => {
   // function replacer: prices in the copy would otherwise be read as $-patterns
   const html = SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang, asked || 'en'))
     .replace('<!--analytics-->', () => analytics.head())
-    .replace(/<html lang="[a-z]+">/, `<html lang="${lang}"${lang === 'ar' ? ' dir="rtl"' : ''}>`);
+    .replace(/<html lang="[a-z]+">/, `<html lang="${lang}"${lang === 'ar' ? ' dir="rtl"' : ''} data-sub-price="${geo.priceLabel(req)}">`);
   res.type('html').send(sec.applyNonce(html, res.locals.cspNonce));
 });
 

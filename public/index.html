@@ -280,7 +280,7 @@
 <main id="appMain" style="display:none">
   <div id="chatPane">
     <div id="paywall">
-      <b data-i18n="paywallText">Basic — $25/month. The concierge is a subscriber feature: real matched opportunities, logged answers, daily fair-use quota.</b>
+      <b id="paywallText">Basic — $25/month. The concierge is a subscriber feature: real matched opportunities, logged answers, daily fair-use quota.</b>
       <p class="hint" data-i18n="retentionNote">If you cancel, you keep access until the end of the paid period, then have 30 days to come back with everything as you left it. After that, your profile and intake details are permanently deleted — your account itself stays.</p>
       <button id="subscribeBtn" data-i18n="subscribeBtn">Subscribe with PayPal</button>
       <button id="subscribeStripeBtn" data-i18n="subscribeStripeBtn">Pay by card (Stripe)</button>
@@ -497,6 +497,10 @@
   function applyLang() {
     document.documentElement.setAttribute('dir', i18n.isRTL(currentLang) ? 'rtl' : 'ltr');
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+    // The price tag is stamped on <html> by the server from the visitor's
+    // country (lib/geo.js) — a display label only; checkout still charges USD.
+    const subPrice = document.documentElement.getAttribute('data-sub-price') || 'USD 25';
+    $('paywallText').textContent = t('paywallText', { price: subPrice });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-ph')); });
     document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
   }
