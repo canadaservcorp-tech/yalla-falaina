@@ -867,29 +867,62 @@
 
   // Same handler for both providers — PayPal and Stripe differ only in which
   // endpoint starts the checkout, not in how the client waits for or reports it.
-  async function startCheckout(path) {
+  // `provider` exists only to label the funnel events below — no behavior
+  // depends on it, so a caller that omits it just loses the label, never breaks.
+  async function startCheckout(path, provider) {
+    track('checkout_start', { provider });
     $('subMsg').textContent = t('checkoutPending');
     try {
       const r = await fetch(path, { method: 'POST', headers: headers() });
       const d = await r.json();
-      if (d.url) location.href = d.url; else $('subMsg').textContent = apiError(d, t('checkoutUnavailable'));
-    } catch { $('subMsg').textContent = t('checkoutUnavailable'); }
+      if (d.url) { track('checkout_redirect', { provider }); location.href = d.url; }
+      else { track('checkout_result', { provider, result: 'start_failed' }); $('subMsg').textContent = apiError(d, t('checkoutUnavailable')); }
+    } catch { track('checkout_result', { provider, result: 'start_failed' }); $('subMsg').textContent = t('checkoutUnavailable'); }
   }
-  $('subscribeBtn').onclick = () => startCheckout('/api/subscription/checkout');
-  $('subscribeStripeBtn').onclick = () => startCheckout('/api/subscription/stripe/checkout');
+  $('subscribeBtn').onclick = () => startCheckout('/api/subscription/checkout', 'paypal');
+  $('subscribeStripeBtn').onclick = () => startCheckout('/api/subscription/stripe/checkout', 'stripe');
   // Devin's review on PR #56: a single refreshSub() 1.5s after the checkout
   // redirect can still fire before the provider's webhook has actually
   // landed and flipped subscription_status to 'active' -- the mic/paywall
   // then look stale until the seeker reloads by hand. Poll a few times with
   // backoff instead of once, and stop the moment an active status shows up.
+  //
+  // Funnel visibility (the enhancement this comment was added for): until
+  // now there was no way to tell "started checkout" from "actually paid"
+  // from "abandoned it" anywhere but PayPal/Stripe's own dashboards, and
+  // ?sub=cancel -- a return param the server has always sent -- was read by
+  // nobody. checkout_result's 'success_confirmed' vs 'success_pending_timeout'
+  // also separates a real success from a slow webhook, which cancel/abandon
+  // numbers alone can't do.
   async function pollSubAfterCheckout() {
     for (const delay of [1500, 3000, 5000, 8000, 8000]) {
       await new Promise(r => setTimeout(r, delay));
       await refreshSub();
-      if (subActive === true) return;
+      if (subActive === true) { track('checkout_result', { result: 'success_confirmed' }); return; }
     }
+    // The payment almost certainly went through -- the provider already sent
+    // the seeker back to a success URL -- but the webhook hadn't landed
+    // within ~19s of polling. Not a failure to report as one; a real ops
+    // signal (webhook latency/delivery) worth knowing about either way.
+    track('checkout_result', { result: 'success_pending_timeout' });
   }
-  if (new URLSearchParams(location.search).get('sub') === 'success') pollSubAfterCheckout();
+  const subParam = new URLSearchParams(location.search).get('sub');
+  // Same reasoning as finishGoogleSignIn's own URL scrub: drop the one-shot
+  // return param so reloading this page never re-fires the message or the event.
+  const cleanSubParam = () => {
+    try {
+      const params = new URLSearchParams(location.search);
+      params.delete('sub');
+      const q = params.toString();
+      window.history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+    } catch (e) {}
+  };
+  if (subParam === 'success') { cleanSubParam(); pollSubAfterCheckout(); }
+  else if (subParam === 'cancel') {
+    cleanSubParam();
+    track('checkout_result', { result: 'cancel' });
+    $('subMsg').textContent = t('checkoutCancelled');
+  }
   // Covers the case none of the timers above do: a tab backgrounded during
   // the PayPal/Stripe redirect (phone locked, app-switched) that only comes
   // back to life well after polling would have given up.
@@ -923,7 +956,7 @@
   // already does -- reusing it here is simpler and safer than inventing a
   // second code path for the same outcome.
   $('resumeSubBtn').onclick = async () => {
-    if (subProvider !== 'stripe') { startCheckout('/api/subscription/checkout'); return; }
+    if (subProvider !== 'stripe') { startCheckout('/api/subscription/checkout', 'paypal'); return; }
     $('resumeSubBtn').disabled = true;
     try {
       const r = await fetch('/api/subscription/resume', { method: 'POST', headers: headers() });
