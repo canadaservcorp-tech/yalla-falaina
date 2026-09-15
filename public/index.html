@@ -634,6 +634,19 @@
   }
   applyLang();
 
+  // The fixed #ctaAside's height varies with language, viewport, and whether
+  // the contact form is open — the signup card's scroll clearance is
+  // measured, not guessed, or its own bottom content sits under the bar on
+  // small screens. Above the 720px breakpoint the stylesheet's padding wins
+  // (the inline value is removed so it can't fight the media query).
+  const smallScreen = matchMedia('(max-width: 720px)');
+  const padForBar = () => {
+    $('authWrap').style.paddingBottom = smallScreen.matches ? ($('ctaAside').offsetHeight + 16) + 'px' : '';
+  };
+  new ResizeObserver(padForBar).observe($('ctaAside'));
+  smallScreen.addEventListener('change', padForBar);
+  padForBar();
+
   // The credibility counter — animated, but honest: it counts the REAL rows
   // in the jobs feed, not a made-up number. Hidden entirely when the feed
   // reports nothing rather than showing "0+".
