@@ -15,6 +15,7 @@ const stripeLib = require('./lib/stripe');
 const transcribeLib = require('./lib/transcribe');
 const webPush = require('./lib/webPush');
 const expressEntryPage = require('./lib/expressEntryPage');
+const gccGuides = require('./lib/gccGuides');
 
 const need = ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const k of need) if (!process.env[k]) { console.error(`FATAL: missing env ${k}`); process.exit(1); }
@@ -63,6 +64,21 @@ app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', ind
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
+
+// Real, crawlable GCC work-sponsorship guide pages (lib/gccGuides.js) --
+// registered ahead of the catch-all below, same pattern and reasoning as
+// /express-entry-draws: static, sourced content with zero client JS, and
+// zero DB dependency (unlike the draws page, this content isn't ingested
+// from anywhere -- it's static reference data).
+for (const country of gccGuides.COUNTRIES) {
+  app.get(`/${country.slug}`, (req, res) => {
+    const asked = seo.LANGS.includes(req.query.lang) ? req.query.lang : null;
+    const lang = asked || geo.pickLang(req, seo.LANGS) || 'en';
+    const head = seo.head(`/${country.slug}`, lang, asked || 'en');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('html').send(gccGuides.renderPage({ country, lang, head }));
+  });
+}
 
 // A real, crawlable page (lib/expressEntryPage.js), not another view of the
 // SPA shell -- registered ahead of the catch-all below so it isn't swallowed
