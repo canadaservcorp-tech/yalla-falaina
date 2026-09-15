@@ -1,8 +1,9 @@
 // POST /api/subscription/stripe/checkout — the Stripe analog of the existing
 // PayPal /checkout route. Unlike PayPal's version, this route must NOT write
-// to `users` at all (see routes/subscription.js's comment: a Checkout Session
-// doesn't create the subscription until payment completes), so these tests
-// also confirm that.
+// any subscription-identity field to `users` (see routes/subscription.js's
+// comment: a Checkout Session doesn't create the subscription until payment
+// completes) -- it DOES write checkout_started_at, purely as a timestamp for
+// scripts/checkout-reminder.js's abandoned-checkout email.
 process.env.STRIPE_PRICE_ID = 'price_test_basic_monthly';
 
 const { test, after, beforeEach } = require('node:test');
@@ -18,10 +19,9 @@ beforeEach(() => { stripe.__reset(); h.mock.__reset(); });
 
 const checkout = token => fetch(h.base + '/api/subscription/stripe/checkout', { method: 'POST', headers: auth(token) });
 
-test('starts a Stripe Checkout session and returns its url, without writing to users', async () => {
+test('starts a Stripe Checkout session and returns its url, writing only checkout_started_at (no subscription id yet)', async () => {
   stripe.__reply('/checkout/sessions', { id: 'cs_test_1', url: 'https://checkout.stripe.test/pay/cs_test_1' });
   const token = actor(h, { id: 30, role: 'seeker', extra: { email: 'seeker@example.com' } });
-  const writesBefore = h.mock.__writes('users', 'update').length;
 
   const res = await checkout(token);
   assert.equal(res.status, 200);
@@ -36,7 +36,10 @@ test('starts a Stripe Checkout session and returns its url, without writing to u
   assert.equal(calls[0].params.customer_email, 'seeker@example.com');
   assert.deepEqual(calls[0].params.line_items, [{ price: 'price_test_basic_monthly', quantity: 1 }]);
 
-  assert.equal(h.mock.__writes('users', 'update').length, writesBefore, 'no subscription id exists yet at this point — nothing should be written');
+  const [update] = h.mock.__writes('users', 'update');
+  assert.deepEqual(Object.keys(update.payload).sort(), ['checkout_reminder_sent_at', 'checkout_started_at']);
+  assert.ok(Date.parse(update.payload.checkout_started_at) > 0);
+  assert.equal(update.payload.checkout_reminder_sent_at, null);
 });
 
 test('a Stripe API failure -> 500 ERR_PAYMENT_UNAVAILABLE', async () => {
