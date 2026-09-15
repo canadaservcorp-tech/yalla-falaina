@@ -24,6 +24,7 @@ const ev = require('../lib/subscription-events');
 const stripeEv = require('../lib/stripe-events');
 const voiceNotes = require('../lib/voiceNotes');
 const referral = require('../lib/referral');
+const access = require('../lib/access');
 const router = express.Router();
 
 const PLAN = process.env.PAYPAL_PLAN_ID || '';
@@ -88,25 +89,42 @@ router.post('/stripe/checkout', authenticate, sec.requireActiveUser, sec.limits.
 
 router.get('/status', authenticate, sec.requireActiveUser, async (req, res) => {
   const { data } = await supabase.from('users')
-    .select('subscription_status, subscription_tier, subscription_period_end, subscription_cancel_at, payment_provider')
+    .select('subscription_status, subscription_tier, subscription_period_end, subscription_cancel_at, payment_provider, bonus_access_until')
     .eq('id', req.user.id).maybeSingle();
+  // A referral bonus (lib/access.js) can grant access with no real
+  // subscription at all — reported as 'active' here so the paywall banner
+  // and mic button behave exactly like a real subscriber's, plus a separate
+  // bonusAccessUntil field so the client CAN say "free access until {date}"
+  // rather than implying a real, renewing subscription exists.
+  const status = access.hasAccess(data) ? 'active' : (data?.subscription_status || 'inactive');
   res.json({
     success: true,
-    status: data?.subscription_status || 'inactive',
-    tier: data?.subscription_tier || 'none',
+    status,
+    // access.effectiveTier — not a hand-rolled `subscription_tier || 'basic'`
+    // — because a bonus-only account can have subscription_tier literally
+    // 'none' on file (the column default) while still deserving 'basic': the
+    // hand-rolled version would read that stored 'none' as truthy and report
+    // no access at all despite hasAccess() being true just above.
+    tier: access.effectiveTier(data),
     periodEnd: data?.subscription_period_end || null,
     // A canceled subscription stays subscription_status = 'active' until the
     // paid period actually ends (POST /cancel below is cancel_at_period_end,
     // not immediate) — the client needs this to tell "will renew" from
     // "already canceled, just counting down" apart; without it, "active"
     // alone reads the same for both, and a canceled subscriber sees a banner
-    // that falsely says it will auto-renew.
+    // that falsely says it will auto-renew. Only a REAL subscription can have
+    // this set, so a bonus-only "active" correctly reports no cancellation.
     cancelAt: data?.subscription_cancel_at || null,
     // Which rail this subscription is on — POST /resume below needs to know
     // client-side whether "Resume" can flip cancel_at_period_end back off on
     // this same Stripe subscription, or must start a brand-new PayPal one
     // instead (see /resume's own comment for why those aren't symmetric).
     provider: data?.payment_provider === 'stripe' ? 'stripe' : 'paypal',
+    // Present only while a bonus grant is what's actually providing access
+    // (or still running out the clock after a real cancellation) — lets the
+    // client show "free access from referrals until {date}" instead of a
+    // generic "active" message that would wrongly imply billing is happening.
+    bonusAccessUntil: access.bonusActive(data) ? data.bonus_access_until : null,
   });
 });
 

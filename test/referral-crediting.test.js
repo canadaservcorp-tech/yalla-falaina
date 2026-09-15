@@ -64,9 +64,19 @@ test('PayPal: a first-time activation for a referred account credits the referre
   assert.equal(conversions.length, 1);
   assert.deepEqual(conversions[0].payload, { referrer_id: 7, referred_id: 42 });
 
-  const [update] = h.mock.__writes('users', 'update');
-  assert.equal(update.payload.subscription_status, 'active');
-  assert.equal(update.payload.referral_credited, true);
+  // Two separate users.update writes land: grantReferralBonus's own
+  // read-modify-write on the REFERRER's bonus_access_until (see
+  // lib/referral.js), and the webhook's own patch on the REFERRED account
+  // (subscription_status/referral_credited) -- find each by its shape rather
+  // than assuming array order.
+  const writes = h.mock.__writes('users', 'update');
+  assert.equal(writes.length, 2, 'both the bonus grant and the activation patch should have written');
+  const activation = writes.find(w => 'subscription_status' in w.payload);
+  assert.equal(activation.payload.subscription_status, 'active');
+  assert.equal(activation.payload.referral_credited, true);
+  const bonusGrant = writes.find(w => 'bonus_access_until' in w.payload);
+  assert.ok(bonusGrant, 'the referrer should have been granted a bonus for this fresh conversion');
+  assert.ok(new Date(bonusGrant.payload.bonus_access_until) > new Date(), 'the grant should be in the future');
 });
 
 test('PayPal: a renewal payment for an already-active referred account never re-credits', async () => {
@@ -133,8 +143,12 @@ test('Stripe: checkout.session.completed for a referred first-time subscriber cr
   const conversions = h.mock.__writes('referral_conversions', 'insert');
   assert.equal(conversions.length, 1);
   assert.deepEqual(conversions[0].payload, { referrer_id: 9, referred_id: 50 });
-  const [update] = h.mock.__writes('users', 'update');
-  assert.equal(update.payload.referral_credited, true);
+  // Same two-write shape as the PayPal case above -- find by payload shape.
+  const writes = h.mock.__writes('users', 'update');
+  const activation = writes.find(w => 'referral_credited' in w.payload);
+  assert.equal(activation.payload.referral_credited, true);
+  const bonusGrant = writes.find(w => 'bonus_access_until' in w.payload);
+  assert.ok(bonusGrant, 'the referrer should have been granted a bonus for this fresh conversion');
 });
 
 test('Stripe: customer.subscription.updated reactivating a lapsed referred account credits once', async () => {

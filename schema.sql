@@ -59,6 +59,11 @@
 --     add column if not exists referred_by bigint references public.users(id),
 --     add column if not exists referral_credited boolean not null default false;
 --   -- then run the referral_conversions create table statement near b2b_partners below.
+--
+-- Migrating an ALREADY-DEPLOYED project onto the referral +1-month bonus
+-- reward (lib/access.js, lib/referral.js's grantReferralBonus()): one new
+-- column, touching no existing row (null = no bonus, same as today):
+--   alter table public.users add column if not exists bonus_access_until timestamptz;
 
 create extension if not exists "uuid-ossp";
 
@@ -95,6 +100,7 @@ create table if not exists public.users (
   referral_code text unique,                     -- this user's own shareable code; minted lazily on first GET /api/referral/mine
   referred_by bigint references public.users(id),-- who referred this account (captured at signup; null if none/unknown code)
   referral_credited boolean not null default false, -- true once referred_by's referrer has been credited once for THIS account — guards against double-crediting across a cancel/resubscribe cycle
+  bonus_access_until timestamptz,                -- referral-reward grant (lib/access.js) — paid-tier access through this date regardless of subscription_status; stacks on repeat referrals, independent of real billing
   created_at timestamptz default now()
 );
 create table if not exists public.banned_emails (   -- blocklist (can't re-subscribe)

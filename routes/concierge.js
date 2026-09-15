@@ -9,6 +9,7 @@ const supabase = require('../db');
 const { authenticate } = require('../lib/auth-mw');
 const sec = require('../lib/security');
 const usage = require('../lib/usage');
+const access = require('../lib/access');
 const { retrieveJobs } = require('../lib/yf/matching');
 const { buildSystemPrompt } = require('../lib/yf/systemPrompt');
 const { computeCompleteness } = require('../lib/profileCompleteness');
@@ -480,10 +481,13 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // Intake mode itself is not paywalled — completing the profile is the
     // useful next step whether or not a subscription is active yet.
     const { data: user } = await supabase.from('users')
-      .select('id, subscription_status, subscription_tier, free_preview_used')
+      .select('id, subscription_status, subscription_tier, bonus_access_until, free_preview_used')
       .eq('id', req.user.id).maybeSingle();
     if (!user) return res.status(403).json({ error: 'Account not found', code: 'ERR_NOT_FOUND' });
-    const active = user.subscription_status === 'active';
+    // access.hasAccess also honors a referral-reward bonus grant
+    // (users.bonus_access_until) — see lib/access.js's own comment for why
+    // that isn't just folded into subscription_status/subscription_tier.
+    const active = access.hasAccess(user);
     // The first FREE_PREVIEW_LIMIT matching turns run — teased, not blocked —
     // before the hard paywall kicks in; intake-mode turns (isComplete false)
     // are already unpaywalled above this and never touch the counter.
@@ -496,7 +500,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // conversation can run 10-15 exchanges before a subscriber gets value — it
     // must not count against the cap). The 429 check and usage.charge only run
     // on the matching path below.
-    const tier = active ? (user.subscription_tier || 'basic') : 'none';
+    const tier = access.effectiveTier(user);
     if (isComplete) {
       const quota = await usage.checkQuota(user.id, tier, usage.COST.text);
       if (!quota.allowed)

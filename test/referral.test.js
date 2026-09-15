@@ -77,6 +77,52 @@ test('resolveCode returns null for an unmatched, blank, or non-string code — n
   assert.equal(await referral.resolveCode({ evil: true }), null);
 });
 
+// ---------- lib/referral.js: grantReferralBonus ----------
+// The reward mechanic itself (creditConversionIfNew calling this on a fresh
+// conversion) gets full HTTP-level coverage in test/referral-crediting.test.js,
+// same as the crediting logic it sits next to. These are the pure stacking
+// rules that would be tedious to re-derive through a whole webhook each time.
+
+test('grantReferralBonus grants BONUS_DAYS from now when the referrer has no existing bonus', async () => {
+  const before = Date.now();
+  h.mock.__set('users', { data: { bonus_access_until: null }, error: null });
+  await referral.grantReferralBonus(7);
+  const [update] = h.mock.__writes('users', 'update');
+  const grantedMs = new Date(update.payload.bonus_access_until).getTime();
+  assert.ok(grantedMs >= before + referral.BONUS_DAYS * 86400000 - 1000, 'should be ~BONUS_DAYS out from now, not from epoch/zero');
+});
+
+test('grantReferralBonus stacks on top of an existing FUTURE bonus rather than resetting it', async () => {
+  const currentUntil = new Date(Date.now() + 10 * 86400000); // 10 days still remaining
+  h.mock.__set('users', { data: { bonus_access_until: currentUntil.toISOString() }, error: null });
+  await referral.grantReferralBonus(8);
+  const [update] = h.mock.__writes('users', 'update');
+  const grantedMs = new Date(update.payload.bonus_access_until).getTime();
+  const expected = currentUntil.getTime() + referral.BONUS_DAYS * 86400000;
+  assert.ok(Math.abs(grantedMs - expected) < 1000, 'a second referral should extend from the current expiry, not from today');
+});
+
+test('grantReferralBonus does NOT stack on a bonus that already expired in the past -- extends from now instead', async () => {
+  const expiredUntil = new Date(Date.now() - 5 * 86400000); // expired 5 days ago
+  const before = Date.now();
+  h.mock.__set('users', { data: { bonus_access_until: expiredUntil.toISOString() }, error: null });
+  await referral.grantReferralBonus(9);
+  const [update] = h.mock.__writes('users', 'update');
+  const grantedMs = new Date(update.payload.bonus_access_until).getTime();
+  assert.ok(grantedMs >= before + referral.BONUS_DAYS * 86400000 - 1000, 'an already-expired bonus must not push the new grant further out');
+});
+
+test('grantReferralBonus never throws when the lookup or the write fails -- a reward hiccup must not break the caller', async () => {
+  h.mock.__set('users', { data: null, error: { message: 'db down' } });
+  await assert.doesNotReject(() => referral.grantReferralBonus(10));
+  assert.equal(h.mock.__writes('users', 'update').length, 0, 'never writes after a failed lookup');
+
+  h.mock.__reset();
+  h.mock.__set('users', { data: { bonus_access_until: null }, error: null });
+  h.mock.__setOp('users', 'update', { error: { message: 'write failed' } });
+  await assert.doesNotReject(() => referral.grantReferralBonus(11));
+});
+
 // ---------- routes/referral.js ----------
 
 test('GET /api/referral/mine mints a code on first use and reports the conversion count', async () => {
