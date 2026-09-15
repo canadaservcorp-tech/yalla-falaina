@@ -19,6 +19,7 @@ const { authenticate } = require('../lib/auth-mw');
 const sec = require('../lib/security');
 const supabase = require('../db');
 const voiceNotes = require('../lib/voiceNotes');
+const access = require('../lib/access');
 const { transcribe, configured, baseLanguage, MAX_BYTES } = require('../lib/transcribe');
 const router = express.Router();
 
@@ -50,10 +51,12 @@ router.post('/transcribe', sec.limits.concierge, authenticate, sec.requireActive
     // voice-note cap, and their language as the STT hint (far better than
     // autodetect on a short, code-switched phone recording).
     const [{ data: user }, { data: profile }] = await Promise.all([
-      supabase.from('users').select('subscription_tier').eq('id', req.user.id).maybeSingle(),
+      supabase.from('users').select('subscription_status, subscription_tier, bonus_access_until').eq('id', req.user.id).maybeSingle(),
       supabase.from('profiles').select('preferred_language').eq('id', req.user.id).maybeSingle(),
     ]);
-    const quota = await voiceNotes.checkVoiceNoteQuota(req.user.id, (user && user.subscription_tier) || 'none');
+    // access.effectiveTier honors a referral-reward bonus grant the same way
+    // routes/concierge.js and routes/cv.js do — see lib/access.js.
+    const quota = await voiceNotes.checkVoiceNoteQuota(req.user.id, access.effectiveTier(user));
     if (!quota.allowed)
       return res.status(429).json({
         error: `Daily voice-note limit reached (${quota.limit} per day)`, code: 'ERR_VOICE_LIMIT',

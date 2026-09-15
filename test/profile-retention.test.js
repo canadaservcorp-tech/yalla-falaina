@@ -70,6 +70,29 @@ test('a deadline inside the warning window sends the email once', async () => {
   assert.equal(mock.__writes('profiles', 'delete').length, 0);
 });
 
+test('a live referral bonus defers deletion to bonus expiry + 30d — billing canceled is not access ended', async () => {
+  // lapse+30d already passed, but bonus_access_until is still 10 days out:
+  // lib/access.js keeps this account paying-tier until then, so the profile
+  // must survive (the deletion window only starts when access truly ends).
+  mock.__set('users', { data: [{
+    id: 20, email: 'bonus@x.com', data_retention_deadline: inDays(-5), retention_warned_at: null,
+    bonus_access_until: inDays(10),
+  }], error: null });
+  const r = await run();
+  assert.equal(r.deleted, 0);
+  assert.equal(r.warned, 0, 'not even the warning yet — the effective deadline is still ~40 days out');
+  assert.equal(mock.__writes('profiles', 'delete').length, 0);
+});
+
+test('a bonus that already lapsed long ago does not postpone an already-due deadline', async () => {
+  mock.__set('users', { data: [{
+    id: 21, email: 'gone2@x.com', data_retention_deadline: inDays(-5), retention_warned_at: inDays(-20),
+    bonus_access_until: inDays(-100),
+  }], error: null });
+  const r = await run();
+  assert.equal(r.deleted, 1);
+});
+
 test('already-warned and far-out deadlines are left alone', async () => {
   mock.__set('users', { data: [
     { id: 9, email: 'a@x.com', data_retention_deadline: inDays(3), retention_warned_at: inDays(-1) },

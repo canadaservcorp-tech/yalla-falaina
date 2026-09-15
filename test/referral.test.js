@@ -77,6 +77,55 @@ test('resolveCode returns null for an unmatched, blank, or non-string code — n
   assert.equal(await referral.resolveCode({ evil: true }), null);
 });
 
+// ---------- lib/referral.js: creditConversionIfNew ----------
+// The reward mechanic runs through schema.sql's record_referral_conversion()
+// RPC — one transaction covering the ledger insert AND the referrer's +30d
+// extension, so nothing below inspects intermediate writes the way the old
+// read-modify-write tests did. Full HTTP-level webhook coverage lives in
+// test/referral-crediting.test.js; these cover the hook's own edge cases.
+
+const referred = (over = {}) => ({
+  id: 9, referred_by: 7, referral_credited: false, subscription_status: 'inactive', ...over,
+});
+
+test('a fresh conversion credits through the atomic RPC with the referrer, referred id and BONUS_DAYS', async () => {
+  h.mock.__setRpc('record_referral_conversion', { data: true, error: null });
+  const patch = { subscription_status: 'active' };
+  await referral.creditConversionIfNew(referred(), patch);
+  const [call] = h.mock.__rpcCalls('record_referral_conversion');
+  assert.equal(call.args.p_referrer_id, 7);
+  assert.equal(call.args.p_referred_id, 9);
+  assert.equal(call.args.p_days, referral.BONUS_DAYS);
+  assert.equal(patch.referral_credited, true);
+});
+
+test('an already-recorded conversion (RPC false — a webhook retry) still marks credited but never pays twice', async () => {
+  h.mock.__setRpc('record_referral_conversion', { data: false, error: null });
+  const patch = { subscription_status: 'active' };
+  await referral.creditConversionIfNew(referred(), patch);
+  assert.equal(patch.referral_credited, true);
+});
+
+test('an RPC failure leaves referral_credited UNSET so the webhook retry can finish the grant', async () => {
+  h.mock.__setRpc('record_referral_conversion', { data: null, error: { message: 'db down' } });
+  const patch = { subscription_status: 'active' };
+  await assert.doesNotReject(() => referral.creditConversionIfNew(referred(), patch));
+  assert.equal(patch.referral_credited, undefined, 'a failed grant must not consume the one-time credit flag');
+});
+
+test('crediting never runs for renewals, already-credited accounts, or accounts with no referrer', async () => {
+  for (const u of [
+    referred({ subscription_status: 'active' }),            // renewal, not a fresh conversion
+    referred({ referral_credited: true }),                  // already credited once
+    referred({ referred_by: null }),                        // organic signup
+  ]) {
+    const patch = { subscription_status: 'active' };
+    await referral.creditConversionIfNew(u, patch);
+    assert.equal(patch.referral_credited, undefined);
+  }
+  assert.equal(h.mock.__rpcCalls('record_referral_conversion').length, 0);
+});
+
 // ---------- routes/referral.js ----------
 
 test('GET /api/referral/mine mints a code on first use and reports the conversion count', async () => {
