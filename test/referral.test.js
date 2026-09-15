@@ -106,10 +106,10 @@ test('an already-recorded conversion (RPC false — a webhook retry) still marks
   assert.equal(patch.referral_credited, true);
 });
 
-test('an RPC failure leaves referral_credited UNSET so the webhook retry can finish the grant', async () => {
+test('an RPC failure THROWS so the webhook answers non-2xx and the provider retries', async () => {
   h.mock.__setRpc('record_referral_conversion', { data: null, error: { message: 'db down' } });
   const patch = { subscription_status: 'active' };
-  await assert.doesNotReject(() => referral.creditConversionIfNew(referred(), patch));
+  await assert.rejects(() => referral.creditConversionIfNew(referred(), patch), /record_referral_conversion/);
   assert.equal(patch.referral_credited, undefined, 'a failed grant must not consume the one-time credit flag');
 });
 

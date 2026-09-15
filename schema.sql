@@ -485,7 +485,12 @@ begin
   get diagnostics v_rows = row_count;
   if v_rows = 0 then return false; end if;
   update public.users
-    set bonus_access_until = greatest(coalesce(bonus_access_until, now()), now()) + make_interval(days => p_days)
+    set bonus_access_until = greatest(coalesce(bonus_access_until, now()), now()) + make_interval(days => p_days),
+        -- A longer deadline deserves a fresh warning: scripts/profile-retention.js
+        -- only warns when retention_warned_at is null, so without this reset a
+        -- bonus granted after the first warning would delete the profile at the
+        -- new, later deadline with no timely notice.
+        retention_warned_at = null
     where id = p_referrer_id;
   return true;
 end;

@@ -122,16 +122,15 @@ test('PayPal: an already-recorded conversion (RPC returns false — the retry pa
   assert.equal(update.payload.referral_credited, true);
 });
 
-test('PayPal: a failed record RPC leaves referral_credited unset — the webhook retry must get another shot at the grant', async () => {
+test('PayPal: a failed record RPC answers 500 so PayPal redelivers — a 200 would lose the reward forever', async () => {
   h.mock.__set('users', {
     data: { id: 47, subscription_period_end: null, subscription_status: 'inactive', referred_by: 7, referral_credited: false },
     error: null,
   });
   h.mock.__setRpc('record_referral_conversion', { data: null, error: { message: 'db down' } });
   const r = await ppWebhook({ event_type: 'BILLING.SUBSCRIPTION.ACTIVATED', resource: { id: 'SUB-47', custom_id: '47' } });
-  assert.equal(r.status, 200);
-  const [update] = h.mock.__writes('users', 'update');
-  assert.equal(update.payload.referral_credited, undefined, 'the failed grant must not be consumed by the credited flag');
+  assert.equal(r.status, 500, 'the reward failure must not be acknowledged — PayPal only retries non-2xx');
+  assert.equal(h.mock.__writes('users', 'update').length, 0, 'the user patch must not commit either — the retried event redoes the whole handler');
 });
 
 // ---------- Stripe ----------
