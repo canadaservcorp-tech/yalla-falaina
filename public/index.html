@@ -625,6 +625,9 @@
     $('paywallText').textContent = t('paywallText', { price: subPrice });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-ph')); });
     document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
+    // Server-rendered internal links can't see the chosen language — pin it on
+    // so a guide opened from a ?lang=fr session doesn't fall back to geo.
+    document.querySelectorAll('#gccGuideLinks a').forEach(a => { a.href = a.getAttribute('href').split('?')[0] + '?lang=' + currentLang; });
   }
   applyLang();
 

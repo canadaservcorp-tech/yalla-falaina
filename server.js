@@ -70,12 +70,19 @@ app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.site
 // /express-entry-draws: static, sourced content with zero client JS, and
 // zero DB dependency (unlike the draws page, this content isn't ingested
 // from anywhere -- it's static reference data).
+// The guide pages exist in en/fr/ar only (lib/gccGuides.js has no hi copy —
+// same "original over invented translation" rule as the news ticker's Hindi
+// fallback), so the route's language set is narrower than seo.LANGS.
+const GUIDE_LANGS = ['en', 'fr', 'ar'];
 for (const country of gccGuides.COUNTRIES) {
   app.get(`/${country.slug}`, (req, res) => {
-    const asked = seo.LANGS.includes(req.query.lang) ? req.query.lang : null;
-    const lang = asked || geo.pickLang(req, seo.LANGS) || 'en';
+    const asked = GUIDE_LANGS.includes(req.query.lang) ? req.query.lang : null;
+    const lang = asked || geo.pickLang(req, GUIDE_LANGS) || 'en';
     const head = seo.head(`/${country.slug}`, lang, asked || 'en');
-    res.set('Cache-Control', 'public, max-age=3600');
+    // Only the ?lang-pinned response is a stable shared-cache entry — a bare
+    // URL's language comes from the visitor's geo/Accept-Language, so caching
+    // it publicly would serve the first visitor's language to everyone else.
+    res.set('Cache-Control', asked ? 'public, max-age=3600' : 'private, no-cache');
     res.type('html').send(gccGuides.renderPage({ country, lang, head }));
   });
 }
@@ -91,7 +98,7 @@ app.get('/express-entry-draws', async (req, res) => {
   // Real, shared content (unlike the per-visitor SPA shell below) -- safe to
   // cache briefly at the edge/browser; news_items only changes on the news
   // ingest schedule (lib/scheduler.js), not per request.
-  res.set('Cache-Control', 'public, max-age=300');
+  res.set('Cache-Control', asked ? 'public, max-age=300' : 'private, no-cache');
   res.type('html').send(expressEntryPage.renderPage({ lang, draws, head }));
 });
 
