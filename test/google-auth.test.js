@@ -9,6 +9,7 @@ process.env.PUBLIC_URL = 'https://www.yallansafir.com';
 const { test, after, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const jwt = require('jsonwebtoken');
+const totp = require('../lib/totp');
 const { getApp } = require('./helpers/appHarness');
 
 const h = getApp();
@@ -193,4 +194,127 @@ test('a banned user holding a valid handoff still gets nothing', async () => {
     body: JSON.stringify({ handoff: jwt.sign({ id: 51, purpose: 'google_handoff' }, SECRET, { expiresIn: '2m' }) }),
   });
   assert.equal(r.status, 401);
+});
+
+// ---------- Google sign-in must not skip an account's own 2FA ----------
+// Google only proves the email address. An account that turned TOTP on did
+// so specifically so a compromised credential elsewhere (a Google account
+// included) still is not enough on its own -- /login already enforces this;
+// the callback must route the same accounts through the same check instead
+// of handing out a handoff straight away just because the credential this
+// time came from Google.
+
+test('an existing account with 2FA on gets a pending token, never a session handoff, straight from Google', async () => {
+  const restore = stubGoogle();
+  const secret = totp.generateSecret();
+  h.mock.__queue('users',
+    { data: null, error: null }, // no google_sub match
+    { data: { id: 9, email: 'seeker@gmail.com', name: 'Amina', role: 'seeker', banned: false,
+      google_sub: null, email_verified: true, totp_enabled: true, totp_secret: secret }, error: null });
+  try {
+    const r = await fetch(h.base + `/api/auth/google/callback?code=abc&state=${await startState()}`, noRedirect);
+    const loc = new URL(r.headers.get('location'));
+    assert.equal(loc.searchParams.has('google'), false, 'must not receive the full-privilege handoff');
+    const pending = loc.searchParams.get('googlePending');
+    assert.ok(pending, 'expected a pending token instead');
+    const claims = jwt.verify(pending, SECRET);
+    assert.equal(claims.purpose, 'google_totp_pending');
+    assert.equal(claims.id, 9);
+    assert.ok(claims.exp - claims.iat <= 300, 'the pending token should expire in minutes, not days');
+    // reaching a 2FA challenge must not itself count as a successful login
+    assert.equal(h.mock.__rpcCalls('record_login_result').length, 0);
+  } finally { restore(); }
+});
+
+test('an account with 2FA off still gets the normal one-step handoff', async () => {
+  const restore = stubGoogle();
+  h.mock.__queue('users',
+    { data: null, error: null },
+    { data: { id: 9, email: 'seeker@gmail.com', name: 'Amina', role: 'seeker', banned: false,
+      google_sub: null, email_verified: true, totp_enabled: false, totp_secret: null }, error: null });
+  try {
+    const r = await fetch(h.base + `/api/auth/google/callback?code=abc&state=${await startState()}`, noRedirect);
+    const loc = new URL(r.headers.get('location'));
+    assert.ok(loc.searchParams.get('google'), 'expected the normal handoff');
+    assert.equal(loc.searchParams.has('googlePending'), false);
+  } finally { restore(); }
+});
+
+test('POST /google/totp-verify with the right code exchanges a pending token for a real session, and records the login', async () => {
+  const secret = totp.generateSecret();
+  h.mock.__set('users', { data: { id: 9, email: 'seeker@gmail.com', name: 'Amina', role: 'seeker',
+    banned: false, totp_enabled: true, totp_secret: secret }, error: null });
+  const pending = jwt.sign({ id: 9, purpose: 'google_totp_pending' }, SECRET, { expiresIn: '5m' });
+
+  const r = await fetch(h.base + '/api/auth/google/totp-verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pending, totpToken: totp.generateTOTP(secret) }),
+  });
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  const session = jwt.verify(body.token, SECRET);
+  assert.equal(session.id, 9);
+  assert.equal(session.role, 'seeker');
+  assert.equal(h.mock.__lastRpc('record_login_result').args.p_success, true);
+});
+
+test('POST /google/totp-verify with a wrong code is refused and counts as a failed attempt, same as /login', async () => {
+  const secret = totp.generateSecret();
+  h.mock.__set('users', { data: { id: 9, email: 'seeker@gmail.com', name: 'Amina', role: 'seeker',
+    banned: false, totp_enabled: true, totp_secret: secret }, error: null });
+  const pending = jwt.sign({ id: 9, purpose: 'google_totp_pending' }, SECRET, { expiresIn: '5m' });
+
+  const r = await fetch(h.base + '/api/auth/google/totp-verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pending, totpToken: '000000' }),
+  });
+  assert.equal(r.status, 401);
+  assert.equal((await r.json()).code, 'ERR_INVALID_TOTP');
+  assert.equal(h.mock.__lastRpc('record_login_result').args.p_success, false);
+});
+
+test('POST /google/totp-verify with no code at all asks for one instead of silently failing', async () => {
+  const secret = totp.generateSecret();
+  h.mock.__set('users', { data: { id: 9, email: 'seeker@gmail.com', name: 'Amina', role: 'seeker',
+    banned: false, totp_enabled: true, totp_secret: secret }, error: null });
+  const pending = jwt.sign({ id: 9, purpose: 'google_totp_pending' }, SECRET, { expiresIn: '5m' });
+
+  const r = await fetch(h.base + '/api/auth/google/totp-verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pending }),
+  });
+  assert.equal(r.status, 401);
+  assert.equal((await r.json()).code, 'ERR_TOTP_REQUIRED');
+});
+
+test('POST /google/totp-verify refuses a handoff token (wrong purpose), an expired pending token, and garbage', async () => {
+  const secret = totp.generateSecret();
+  h.mock.__set('users', { data: { id: 9, email: 'seeker@gmail.com', name: 'Amina', role: 'seeker',
+    banned: false, totp_enabled: true, totp_secret: secret }, error: null });
+  const code = totp.generateTOTP(secret);
+  const post = pending => fetch(h.base + '/api/auth/google/totp-verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pending, totpToken: code }),
+  });
+  assert.equal((await post(jwt.sign({ id: 9, purpose: 'google_handoff' }, SECRET, { expiresIn: '2m' }))).status, 401);
+  assert.equal((await post(jwt.sign({ id: 9, purpose: 'google_totp_pending' }, SECRET, { expiresIn: '-1s' }))).status, 401);
+  assert.equal((await post('garbage')).status, 401);
+});
+
+test('POST /google/totp-verify refuses a banned account, and re-checks 2FA is still on rather than trusting the token', async () => {
+  const pending = jwt.sign({ id: 9, purpose: 'google_totp_pending' }, SECRET, { expiresIn: '5m' });
+
+  h.mock.__set('users', { data: { id: 9, email: 'seeker@gmail.com', name: 'Amina', role: 'seeker',
+    banned: true, totp_enabled: true, totp_secret: totp.generateSecret() }, error: null });
+  assert.equal((await fetch(h.base + '/api/auth/google/totp-verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pending, totpToken: '123456' }),
+  })).status, 401);
+
+  // 2FA turned off in the meantime (e.g. via /totp/disable) since the pending
+  // token was issued -- the token's own premise is not enough on its own.
+  h.mock.__set('users', { data: { id: 9, email: 'seeker@gmail.com', name: 'Amina', role: 'seeker',
+    banned: false, totp_enabled: false, totp_secret: null }, error: null });
+  const r = await fetch(h.base + '/api/auth/google/totp-verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pending, totpToken: '123456' }),
+  });
+  assert.equal(r.status, 401);
+  assert.equal((await r.json()).code, 'ERR_INVALID_TOKEN');
 });

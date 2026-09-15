@@ -438,6 +438,7 @@
   function finishGoogleSignIn() {
     const params = new URLSearchParams(location.search);
     const handoff = params.get('google');
+    const pending = params.get('googlePending');
     const err = params.get('googleError');
     // window.history explicitly: `history` at this scope is the chat array.
     // Only the Google parameters are dropped -- ?lang= is what the server used
@@ -445,6 +446,7 @@
     const clean = () => {
       try {
         params.delete('google');
+        params.delete('googlePending');
         params.delete('googleError');
         const q = params.toString();
         window.history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
@@ -453,6 +455,18 @@
     if (err) {
       clean();
       $('authMsg').textContent = err === 'blocked' ? t('googleBlocked') : t('googleFailed');
+      return;
+    }
+    if (pending) {
+      // This account has TOTP on. Google only proved the email, so the same
+      // authenticator code /login already requires is still required here --
+      // authGo() checks googlePendingToken first (see there) instead of
+      // sending the (empty) email/password fields still showing on screen.
+      clean();
+      setMode('login');
+      googlePendingToken = pending;
+      $('totpRow').style.display = 'block';
+      $('authMsg').textContent = t('googleTotpRequired');
       return;
     }
     if (!handoff) return;
@@ -508,8 +522,15 @@
 
   // ---------- auth ----------
   let mode = 'login';
+  // Set only while the "Continue with Google" path is waiting on a 2FA code
+  // for an account that has TOTP enabled (see finishGoogleSignIn) -- while
+  // set, authGo() verifies this instead of running the normal email/password
+  // request. Switching tabs abandons that half-finished sign-in, same as
+  // navigating away from it would.
+  let googlePendingToken = null;
   function setMode(m) {
     mode = m;
+    googlePendingToken = null;
     $('tabLogin').className = m === 'login' ? 'on' : '';
     $('tabRegister').className = m === 'register' ? 'on' : '';
     $('authTitle').textContent = m === 'login' ? t('authTitleWelcome') : t('authTitleCreate');
@@ -545,6 +566,21 @@
   async function authGo() {
     $('authMsg').textContent = '';
     $('resendVerify').style.display = 'none';
+    // Finishing a Google sign-in that a TOTP-enabled account paused mid-way
+    // (see finishGoogleSignIn) -- the email/password fields on screen are not
+    // part of this request at all, only the code just typed into totpRow.
+    if (googlePendingToken) {
+      const totpToken = $('totpToken').value.trim();
+      const r = await fetch('/api/auth/google/totp-verify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pending: googlePendingToken, totpToken }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { $('authMsg').textContent = apiError(d, t('googleFailed')); return; }
+      googlePendingToken = null;
+      localStorage.setItem(tokenKey, d.token);
+      track('login', { method: 'google' });
+      enter();
+      return;
+    }
     const email = $('email').value.trim(), password = $('password').value;
     if (mode === 'register') {
       if (!$('confirmAge').checked) return $('authMsg').textContent = t('errAgeGate');
