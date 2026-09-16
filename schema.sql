@@ -126,6 +126,20 @@
 --   alter table public.study_opportunities add column if not exists duration_note text;
 --   alter table public.study_opportunity_submissions add column if not exists duration_note text;
 --   -- then run the cost_of_living_notes create table statement near country_risk_notes below.
+--
+-- Migrating an ALREADY-DEPLOYED project onto the medical-treatment/travel
+-- vertical (lib/yf/medicalMatching.js, lib/documentExtract.js) -- Hicham's
+-- third seeker track alongside work and study: someone who needs a specific
+-- medical treatment/surgery abroad, wants to know where it's actually
+-- available (explicitly including Cuba, South Korea, Russia -- countries
+-- that can differ hugely on price), an approximate cost if a real published
+-- figure exists, and a real hospital/clinic to contact. One new profiles
+-- column (same "weighting/context signal, never a hard filter" discipline)
+-- plus two new tables:
+--   alter table public.profiles add column if not exists seeking_treatment boolean not null default false;
+--   -- then run the medical_intake_requests and medical_treatment_providers
+--   -- create table statements below (medical_intake_requests near
+--   -- seeker_profiles; medical_treatment_providers near cost_of_living_notes).
 
 create extension if not exists "uuid-ossp";
 
@@ -254,7 +268,7 @@ create table if not exists public.profiles (
   phone_verified boolean not null default false,
   city text,
   country text,
-  preferred_language text, -- 'ar-LB' | 'ar-SY' | 'ar-EG' | 'ar' | 'fr' | 'en'
+  preferred_language text, -- 'ar-LB' | 'ar-SY' | 'ar-EG' | 'ar-AE' | 'ar' | 'fr' | 'hi' | 'en' | 'tr'
   preferred_country text,  -- weighting signal only, never a hard filter (4.3)
   preferred_city text,     -- same discipline as preferred_country, for community/accommodation matching
   sector text,
@@ -266,8 +280,40 @@ create table if not exists public.profiles (
   seeking_study boolean not null default false,
   target_degree_level text,   -- e.g. 'undergraduate' | 'graduate' | 'phd' | 'language_program' | 'vocational'
   target_field_of_study text,
+  -- Medical-treatment/travel vertical (lib/yf/medicalMatching.js): same
+  -- additive-signal discipline as seeking_study above -- a pure job-seeker
+  -- or student profile is unaffected. The actual request (what treatment,
+  -- medical history, uploaded reports) lives in medical_intake_requests,
+  -- not here, since it's richer than two short strings and can be updated
+  -- or added to over time.
+  seeking_treatment boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- A seeker's own request for help finding a medical treatment/procedure
+-- abroad -- distinct from study_opportunity_submissions (which is someone
+-- ELSE submitting a listing for review): this is the seeker's own data
+-- about themselves, so it's a direct insert, not a moderation queue. One
+-- profile can have more than one row over time (a new need, a follow-up);
+-- lib/yf/medicalMatching.js's retrieval only ever reads the most recent one.
+-- required_treatment is deliberately what the SEEKER OR THEIR OWN DOCTOR has
+-- already named (Section 6.1-style discipline carried into systemPrompt.js:
+-- the concierge never diagnoses or infers a treatment from symptoms/lab
+-- values itself) -- extracted_report_text is raw OCR/PDF-extracted text from
+-- an uploaded report (document_uploads, kind='medical_report'|'lab_report'),
+-- kept here as plain text ONLY so the concierge can keyword-match it against
+-- medical_treatment_providers, never to reason about lab values medically.
+create table if not exists public.medical_intake_requests (
+  id uuid primary key default uuid_generate_v4(),
+  profile_id bigint not null references public.profiles(id) on delete cascade,
+  required_treatment text not null, -- e.g. "total hip replacement" -- as stated by the seeker or their doctor
+  medical_history_note text,        -- free text, seeker's own words -- never interpreted as a diagnosis
+  extracted_report_text text,       -- raw text pulled from an uploaded PDF/image report, for keyword matching only
+  status text not null default 'pending', -- 'pending' | 'reviewed' | 'referred' | 'closed' -- reviewed by a human coordinator, not this app's own logic
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists medical_intake_requests_profile_idx on public.medical_intake_requests(profile_id);
 
 -- Structured CV/profile data — the output of any of the four intake paths
 -- (upload, free text, conversational Q&A, voice — Section 10). Raw uploaded
@@ -306,7 +352,7 @@ create table if not exists public.seeker_profiles (
 create table if not exists public.document_uploads (
   id uuid primary key default uuid_generate_v4(),
   profile_id bigint not null references public.profiles(id) on delete cascade,
-  kind text not null, -- 'cv' | 'voice_note' | 'screenshot' | 'passport_copy'
+  kind text not null, -- 'cv' | 'voice_note' | 'screenshot' | 'passport_copy' | 'medical_report' | 'lab_report'
   storage_path text not null,
   retention_expires_at timestamptz not null,
   created_at timestamptz not null default now()
@@ -700,6 +746,33 @@ create table if not exists public.cost_of_living_notes (
 );
 create index if not exists cost_of_living_notes_country_idx on public.cost_of_living_notes(country);
 
+-- MEDICAL TREATMENT PROVIDERS -- admin-curated hospitals/clinics that treat
+-- specific procedures abroad (Hicham's medical-travel ask). Same "retrieve,
+-- don't recall" discipline as country_risk_notes/cost_of_living_notes: the
+-- concierge may only ever name a hospital, price, or contact that is a real
+-- row here -- it must never invent one, and specialty medical tourism
+-- destinations like Cuba, South Korea, and Russia are exactly the kind of
+-- real, high-value option that would otherwise never get mentioned just
+-- because they're outside the countries this platform already covers for
+-- work/study. No admin UI shipped yet, same as country_risk_notes -- rows
+-- are written directly by an operator until routes/admin-medical-providers.js
+-- exists.
+create table if not exists public.medical_treatment_providers (
+  id uuid primary key default uuid_generate_v4(),
+  country text not null,
+  city text,
+  hospital_name text not null,
+  specialties text not null, -- e.g. "cardiac surgery, orthopedic hip/knee replacement" -- free text, keyword-matched against a seeker's required_treatment
+  price_range_note text,     -- e.g. "$8,000-15,000 USD for a hip replacement, published self-pay rate" -- never a numeric column, same reasoning as cost_of_living_notes.monthly_estimate_note
+  contact_email text,
+  contact_phone text,
+  source_url text,
+  status text not null default 'active', -- 'active' | 'removed'
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists medical_treatment_providers_country_idx on public.medical_treatment_providers(country);
+
 -- Row Level Security: enabled on every personal table with NO policies — only
 -- the backend's service-role key (never shipped to a client) can read or write
 -- them. That is the strongest posture this architecture allows: the Express
@@ -719,6 +792,8 @@ alter table public.accommodation_listings enable row level security;
 alter table public.accommodation_submissions enable row level security;
 alter table public.country_risk_notes enable row level security;
 alter table public.cost_of_living_notes enable row level security;
+alter table public.medical_intake_requests enable row level security;
+alter table public.medical_treatment_providers enable row level security;
 
 -- The conversion ledger insert AND the referrer's reward land in ONE
 -- transaction (called from lib/referral.js's creditConversionIfNew): a
@@ -784,7 +859,8 @@ begin
     'b2b_partners','contact_messages','news_items',
     'study_opportunities','study_opportunity_submissions','community_groups',
     'community_group_submissions','accommodation_listings','accommodation_submissions',
-    'country_risk_notes'
+    'country_risk_notes','cost_of_living_notes','medical_intake_requests',
+    'medical_treatment_providers'
   ] loop
     execute format(
       'create policy %I on public.%I for all to anon, authenticated using (false) with check (false)',

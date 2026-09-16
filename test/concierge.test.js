@@ -255,6 +255,10 @@ test('an incomplete profile enters intake mode instead of being refused, with no
   // the model must be told it's a valid preferred_language value too, or a
   // Gulf seeker's own stated preference would get rejected on intake extraction.
   assert.match(upstream.body.system, /preferred_language must be one of[^;]*ar-AE/);
+  // tr (Turkish) is likewise a real signup/PUT option — the intake contract
+  // must name it too, or a seeker answering 'Türkçe' keeps preferred_language
+  // missing and the gate re-asks forever (Devin Review finding on PR #94).
+  assert.match(upstream.body.system, /preferred_language must be one of[^;]*\btr\b/);
   // intake turns are free — the daily quota is neither checked nor charged,
   // and the logged turn records 0 units rather than the matching cost
   assert.equal(h.mock.__rpcCalls('usage_charge').length, 0);
@@ -538,6 +542,27 @@ test('a "sector_or_role_type" key in the block (the Missing list\'s display name
   assert.equal(h.mock.__writes('concierge_messages', 'insert').length, 2); // sanity: the turn completed normally
 });
 
+test('a "target_degree_level_or_field_of_study" key (the student Missing label, not a real column) is routed to the right target column', async () => {
+  // Same fake-label echo as sector_or_role_type: intake lists the combined
+  // name, the model copies it into the block, and without resolveAlias's
+  // student branch the answer was silently dropped — the student gate then
+  // re-asked the same field every turn forever.
+  const studentProfile = { preferred_language: 'en', preferred_country: 'canada', seeking_study: true,
+    target_degree_level: null, target_field_of_study: null, sector: null, role_type: null };
+  const incompleteSeeker = { id: 'sp-student-alias', is_complete: false, confirmed_by_user: false };
+  for (const [answer, column] of [['masters', 'target_degree_level'], ['computer science', 'target_field_of_study']]) {
+    h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-stu-alias-' + column }, error: null });
+    respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+      `---PROFILE---\n{"target_degree_level_or_field_of_study":"${answer}"}\n---END---\nNoted!` }] } });
+    const r = await ask({ message: 'I want to study ' + answer }, caller({}, incompleteSeeker, studentProfile));
+    assert.equal(r.status, 200);
+    const profWrites = h.mock.__writes('profiles', 'upsert');
+    const intakeWrite = profWrites[profWrites.length - 1].payload;
+    assert.equal(intakeWrite[column], answer, `${answer} should land in ${column}`);
+    assert.ok(!('target_degree_level_or_field_of_study' in intakeWrite), 'the fake field name must never reach the database');
+  }
+});
+
 test('the concierge never claims to have checked the job feed, even if the model says so -- stripped server-side, not just asked for in the prompt', async () => {
   // Regression for a live retest: tightening intakeInstructions' wording did
   // not stop the model claiming this. The server now strips the sentence
@@ -767,17 +792,19 @@ test('an omitted preferredCountry falls back to the profile\'s stored destinatio
   assert.equal(j.jobs[0].country, 'Canada');   // the profile's preferred_country wins the tie, not request order
 });
 
-// ---------- study/community/accommodation/partner/risk/cost-of-living retrieval wiring ----------
+// ---------- study/community/accommodation/partner/risk/cost-of-living/medical retrieval wiring ----------
 // Section 4/5 verticals (international students, travel/community, trusted-
-// partner referral, country risk, cost of living) -- gated behind the exact
-// same isComplete flag jobs already use (routes/concierge.js's own comment
-// above the Promise.all block), never behind profile.seeking_study specifically.
+// partner referral, country risk, cost of living, medical treatment) --
+// gated behind the exact same isComplete flag jobs already use
+// (routes/concierge.js's own comment above the Promise.all block), never
+// behind profile.seeking_study/seeking_treatment specifically.
 
-test('an incomplete profile retrieves none of the six new sources, and none of their context blocks carry real data into the system prompt', async () => {
+test('an incomplete profile retrieves none of the seven new sources, and none of their context blocks carry real data into the system prompt', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-intake' }, error: null });
   h.mock.__set('study_opportunities', { data: [{ id: 's1', kind: 'program', title: 'Should Never Appear', country: 'Canada', status: 'active' }], error: null });
   h.mock.__set('community_groups', { data: [{ id: 'g1', name: 'Should Never Appear', platform: 'facebook', url: 'https://x', country: 'Canada' }], error: null });
   h.mock.__set('cost_of_living_notes', { data: [{ id: 'col1', country: 'Canada', city: null, category: 'overall', monthly_estimate_note: 'Should Never Appear', source_url: null }], error: null });
+  h.mock.__set('medical_intake_requests', { data: { id: 'm1', required_treatment: 'Should Never Appear', medical_history_note: null, extracted_report_text: null }, error: null });
   const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false },
     { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
   assert.equal(r.status, 200);
@@ -785,9 +812,10 @@ test('an incomplete profile retrieves none of the six new sources, and none of t
   assert.match(upstream.body.system, /No study programs or scholarships matched this query/);
   assert.match(upstream.body.system, /No community groups on file for this destination yet/);
   assert.match(upstream.body.system, /No curated cost-of-living note on file for this specific city\/country yet/);
+  assert.match(upstream.body.system, /No medical-travel intake on file for this seeker yet/);
 });
 
-test('a complete profile retrieves and forwards all six new sources into the system prompt', async () => {
+test('a complete profile retrieves and forwards all seven new sources into the system prompt', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-complete' }, error: null });
   h.mock.__set('study_opportunities', { data: [
     { id: 's1', kind: 'scholarship', title: 'Excellence Bourse', institution: 'UQAM', country: 'Canada', city: 'Montréal', status: 'active' },
@@ -807,6 +835,12 @@ test('a complete profile retrieves and forwards all six new sources into the sys
   h.mock.__set('cost_of_living_notes', { data: [
     { id: 'col1', country: 'Canada', city: 'Laval', category: 'overall', monthly_estimate_note: '$1,200-1,800 CAD/month including rent', source_url: null },
   ], error: null });
+  h.mock.__set('medical_intake_requests', {
+    data: { id: 'm1', required_treatment: 'total hip replacement', medical_history_note: 'osteoarthritis', extracted_report_text: null }, error: null,
+  });
+  h.mock.__set('medical_treatment_providers', { data: [
+    { id: 'p1', country: 'South Korea', city: 'Seoul', hospital_name: 'Seoul National University Hospital', specialties: 'orthopedic hip and knee replacement', price_range_note: '$12,000-18,000 USD', contact_email: 'intl@snuh.example', contact_phone: null, source_url: null },
+  ], error: null });
 
   const r = await ask({ message: 'help me plan my move' }, caller());
   assert.equal(r.status, 200);
@@ -816,18 +850,55 @@ test('a complete profile retrieves and forwards all six new sources into the sys
   assert.match(upstream.body.system, /Canada Immigration Experts/);
   assert.match(upstream.body.system, /No widespread scam pattern on file/);
   assert.match(upstream.body.system, /\$1,200-1,800 CAD\/month including rent/);
+  assert.match(upstream.body.system, /total hip replacement/);
+  assert.match(upstream.body.system, /Seoul National University Hospital/);
 });
 
-test('the six new retrieval sources are queried in parallel, not serially -- a DB error in one never blocks the others or fails the turn', async () => {
+test('the seven new retrieval sources are queried in parallel, not serially -- a DB error in one never blocks the others or fails the turn', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-error' }, error: null });
   h.mock.__set('study_opportunities', { data: null, error: { message: 'connection reset' } });
   h.mock.__set('community_groups', { data: [{ id: 'g1', name: 'Still Works', platform: 'facebook', url: 'https://x', country: 'Canada', city: null }], error: null });
   h.mock.__set('cost_of_living_notes', { data: null, error: { message: 'connection reset' } });
+  h.mock.__set('medical_intake_requests', { data: null, error: { message: 'connection reset' } });
   const r = await ask({ message: 'help me plan my move' }, caller());
   assert.equal(r.status, 200);
   assert.match(upstream.body.system, /No study programs or scholarships matched this query/);
   assert.match(upstream.body.system, /Still Works/);
   assert.match(upstream.body.system, /No curated cost-of-living note on file for this specific city\/country yet/);
+  assert.match(upstream.body.system, /No medical-travel intake on file for this seeker yet/);
+});
+
+// ---------- medical-treatment vertical: the dependent second fetch ----------
+// retrieveMedicalProviders can't join the Promise.all batch above -- its
+// query IS medicalIntake's own required_treatment/extracted_report_text --
+// so this covers that dependent fetch specifically.
+
+test('with no medical intake on file, medical providers are never fetched or shown, even if some exist', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-medical-none' }, error: null });
+  h.mock.__set('medical_intake_requests', { data: null, error: null });
+  h.mock.__set('medical_treatment_providers', { data: [
+    { id: 'p1', country: 'Cuba', city: 'Havana', hospital_name: 'Should Never Appear', specialties: 'orthopedics', price_range_note: null, contact_email: null, contact_phone: null, source_url: null },
+  ], error: null });
+  const r = await ask({ message: 'help me plan my move' }, caller());
+  assert.equal(r.status, 200);
+  assert.doesNotMatch(upstream.body.system, /Should Never Appear/);
+  assert.match(upstream.body.system, /No medical-travel intake on file for this seeker yet/);
+});
+
+test('a medical intake\'s required treatment and extracted report text together form the query that matches a curated provider', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-medical-match' }, error: null });
+  h.mock.__set('medical_intake_requests', {
+    data: { id: 'm1', required_treatment: 'cardiac valve replacement', medical_history_note: null, extracted_report_text: 'echocardiogram confirms severe aortic stenosis' },
+    error: null,
+  });
+  h.mock.__set('medical_treatment_providers', { data: [
+    { id: 'p1', country: 'Russia', city: 'Moscow', hospital_name: 'Moscow Cardiac Center', specialties: 'cardiac valve replacement surgery', price_range_note: '$15,000-22,000 USD', contact_email: 'intl@mcc.example', contact_phone: null, source_url: null },
+    { id: 'p2', country: 'Turkey', city: 'Istanbul', hospital_name: 'Istanbul Dental Center', specialties: 'cosmetic dentistry', price_range_note: null, contact_email: null, contact_phone: null, source_url: null },
+  ], error: null });
+  const r = await ask({ message: 'help me plan my move' }, caller());
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /Moscow Cardiac Center/);
+  assert.doesNotMatch(upstream.body.system, /Istanbul Dental Center/); // does not match the stated treatment -- never shown as a fallback
 });
 
 test('a preferredCity from the stored profile (not request body) scopes community and accommodation retrieval', async () => {

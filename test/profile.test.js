@@ -53,6 +53,17 @@ test('PUT accepts hi (Hindi) as a valid preferred_language', async () => {
   assert.equal(r.status, 200);
 });
 
+// Türkçe (Turkish) — added as the platform's fifth UI language (public/i18n.js).
+// Same sync requirement as ar-AE and hi above.
+test('PUT accepts tr (Turkish) as a valid preferred_language', async () => {
+  h.mock.__set('profiles', { data: { id: 200, preferred_language: 'tr', preferred_country: null, sector: null, role_type: null }, error: null });
+  h.mock.__set('seeker_profiles', { data: null, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp1', is_complete: false }, error: null });
+
+  const r = await put({ preferred_language: 'tr' }, user());
+  assert.equal(r.status, 200);
+});
+
 test('PUT rejects a non-array JSONB field', async () => {
   const r = await put({ work_history: 'plumber for 10 years' }, user());
   assert.equal(r.status, 400);

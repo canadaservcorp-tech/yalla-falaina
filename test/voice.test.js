@@ -4,12 +4,13 @@
 // the size cap, and the baseLanguage mapping. The provider call itself is
 // stubbed by overriding global.fetch — the same trick test files use for
 // Resend — with STT_BASE_URL left pointing anywhere since fetch never runs.
-const { test, beforeEach, afterEach } = require('node:test');
+const { test, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const { getApp, actor, auth } = require('./helpers/appHarness');
 const { transcribe, isAllowedType, baseLanguage, MAX_BYTES } = require('../lib/transcribe');
 
 const h = getApp();
+after(() => h.stop());
 const origFetch = global.fetch;
 const PROVIDER = '/audio/transcriptions';
 // Only the provider call is stubbed; the harness's own requests still need the

@@ -13,7 +13,7 @@ const { JWT_SECRET } = process.env;
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
 const BCRYPT_ROUNDS = 12;
 const TERMS_VERSION = '2026-09-08';
-const LANGUAGES = ['ar-LB', 'ar-SY', 'ar-EG', 'ar-AE', 'ar', 'fr', 'hi', 'en'];
+const LANGUAGES = ['ar-LB', 'ar-SY', 'ar-EG', 'ar-AE', 'ar', 'fr', 'hi', 'en', 'tr'];
 // Account-level brute-force lockout (schema.sql's record_login_result()) —
 // keyed on the account, not the IP, specifically to close the gap
 // sec.limits.credentials (IP+email) leaves open: a botnet spraying wrong
@@ -88,17 +88,21 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
     // Section 10 intake fields; preferred country is a weighting signal for
     // matching, never a filter. profile_id is the user id — 1:1 by design.
     //
-    // accountType ('job_seeker' | 'student', default 'job_seeker') is the
-    // signup-time signal behind the "special sign-in for students" the
-    // interface offers (public/index.html's #jobSeekerFields/#studentFields
-    // toggle): both create the same `role: 'seeker'` account (accountType is
-    // not an authorization concept, so it never touches `role`), but a
-    // student signup sets seeking_study true immediately and can carry the
-    // student-specific fields straight in, instead of a job seeker having to
-    // discover and fill them in later via PUT /api/profile. Neither track is
-    // exclusive -- a student can still be matched to jobs later and vice
-    // versa; this only decides which questions the signup form itself asked.
+    // accountType ('job_seeker' | 'student' | 'treatment', default
+    // 'job_seeker') is the signup-time signal behind the "special sign-in"
+    // the interface offers per track (public/index.html's
+    // #jobSeekerFields/#studentFields/#treatmentFields toggle): all three
+    // create the same `role: 'seeker'` account (accountType is not an
+    // authorization concept, so it never touches `role`), but each track
+    // sets its own signal(s) immediately and can carry its own fields
+    // straight in, instead of the seeker having to discover and fill them in
+    // later via PUT /api/profile. No track is exclusive of another -- e.g. a
+    // student can still be matched to jobs later, and immigration guidance
+    // is already part of the job_seeker/work track rather than a separate
+    // account type (Hicham's call) -- this only decides which questions the
+    // signup form itself asked.
     const isStudentSignup = req.body.accountType === 'student';
+    const isTreatmentSignup = req.body.accountType === 'treatment';
     const { error: pErr } = await supabase.from('profiles').insert({
       id: user.id,
       full_name: name,
@@ -112,8 +116,27 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
       seeking_study: isStudentSignup,
       target_degree_level: isStudentSignup ? (sec.clean(req.body.targetDegreeLevel, 40) || null) : null,
       target_field_of_study: isStudentSignup ? (sec.clean(req.body.targetFieldOfStudy, 80) || null) : null,
+      seeking_treatment: isTreatmentSignup,
     });
     if (pErr) console.error('profile create', pErr.message);   // account stands; profile can be completed later
+
+    // A treatment signup can optionally state the required treatment right
+    // on the signup form -- same discipline as medical_intake_requests'
+    // own schema.sql comment: this is the SEEKER's own data about
+    // themselves, so it's a direct insert here, not a moderation queue.
+    // Uploading the actual report(s) still happens afterward, signed in,
+    // via POST /api/medical-intake/documents -- a registration request has
+    // nowhere to carry file bytes.
+    if (isTreatmentSignup) {
+      const requiredTreatment = sec.clean(req.body.requiredTreatment, 300);
+      if (requiredTreatment) {
+        const { error: mErr } = await supabase.from('medical_intake_requests').insert({
+          profile_id: user.id, required_treatment: requiredTreatment,
+          medical_history_note: sec.clean(req.body.medicalHistoryNote, 2000) || null,
+        });
+        if (mErr) console.error('medical intake create at signup', mErr.message); // account stands; can be added via POST /api/medical-intake
+      }
+    }
 
     const link = `${PUBLIC_URL}/api/auth/verify?token=${verify_token}&id=${user.id}`;
     // The account stands even when the email can't be sent (Resend rejects
@@ -135,7 +158,7 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
         await sendEmail(notifyTo, 'New signup — Yalla Nsafer',
           '<p>A new seeker registered:</p><ul>' +
           `<li>Name: ${escapeHtml(name)}</li><li>Email: ${escapeHtml(email)}</li>` +
-          `<li>Account type: ${isStudentSignup ? 'Student' : 'Job seeker'}</li>` +
+          `<li>Account type: ${isStudentSignup ? 'Student' : isTreatmentSignup ? 'Medical treatment' : 'Job seeker'}</li>` +
           (signup_source ? `<li>Source: ${escapeHtml(signup_source)}</li>` : '') +
           `<li>User ID: ${user.id}</li><li>Verification email sent: ${emailSent}</li></ul>`);
       } catch (e) { console.error('register:notify email', e.message); }
