@@ -13,6 +13,7 @@ const analytics = require('./lib/analytics');
 const paypal = require('./lib/paypal');
 const stripeLib = require('./lib/stripe');
 const transcribeLib = require('./lib/transcribe');
+const documentExtract = require('./lib/documentExtract');
 const webPush = require('./lib/webPush');
 const expressEntryPage = require('./lib/expressEntryPage');
 const gccGuides = require('./lib/gccGuides');
@@ -50,6 +51,11 @@ app.use((req, res, next) => {
   // the 128kb one below (lib/transcribe.js enforces the same limit again)
   if (req.originalUrl === '/api/voice/transcribe')
     return express.raw({ type: () => true, limit: transcribeLib.MAX_BYTES })(req, res, next);
+  // a medical/lab report is a PDF or photo, not JSON -- same reasoning as
+  // the voice-note carve-out just above, with document_uploads' own,
+  // larger byte ceiling (lib/documentExtract.js re-enforces it too).
+  if (req.path === '/api/medical-intake/documents') // req.path (not originalUrl) so a ?kind= query string still matches
+    return express.raw({ type: () => true, limit: documentExtract.MAX_DOCUMENT_BYTES })(req, res, next);
   express.json({ limit: '128kb' })(req, res, next);
 });
 app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonical home URL
@@ -121,6 +127,7 @@ app.use('/api/study-opportunities', require('./routes/study-opportunities'));
 app.use('/api/admin/study-opportunities', require('./routes/admin-study-opportunities'));
 app.use('/api/community', require('./routes/community'));               // diaspora groups + accommodation board
 app.use('/api/admin/community', require('./routes/admin-community'));
+app.use('/api/medical-intake', require('./routes/medical-intake'));      // medical-treatment/travel vertical
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either.
 // Step 7 (deployment prep) — paypal/email are configuration checks, same as
@@ -135,6 +142,7 @@ app.get('/api/health', (_req, res) => res.json({
   stripe: stripeLib.configured(),
   email: Boolean(process.env.RESEND_API_KEY),
   voice: transcribeLib.configured(),
+  medicalReportOcr: documentExtract.ocrConfigured(), // PDF text extraction always works; image OCR needs a vendor key
   google: require('./lib/googleOAuth').configured(),
   push: webPush.configured(),
 }));
@@ -169,6 +177,8 @@ app.use((err, _req, res, _next) => {
   // (a long voice note), so it gets a real status + code, not a generic 400.
   if (err.type === 'entity.too.large' && _req.originalUrl === '/api/voice/transcribe')
     return res.status(413).json({ error: 'That recording is too long', code: 'ERR_TOO_LARGE' });
+  if (err.type === 'entity.too.large' && _req.path === '/api/medical-intake/documents')
+    return res.status(413).json({ error: 'That document is too large', code: 'ERR_DOC_TOO_LARGE' });
   res.status(bodyProblem ? 400 : 500).json({ error: bodyProblem ? 'Invalid request body' : 'Internal error' });
 });
 

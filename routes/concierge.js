@@ -17,6 +17,7 @@ const { retrieveAccommodationListings } = require('../lib/yf/accommodationMatchi
 const { retrieveTrustedPartners } = require('../lib/yf/partnerMatching');
 const { retrieveCountryRisks } = require('../lib/yf/riskMatching');
 const { retrieveCostOfLiving } = require('../lib/yf/costOfLivingMatching');
+const { retrieveMedicalIntake, retrieveMedicalProviders } = require('../lib/yf/medicalMatching');
 const flightSearch = require('../lib/flightSearch');
 const hotelSearch = require('../lib/hotelSearch');
 const { buildSystemPrompt } = require('../lib/yf/systemPrompt');
@@ -538,8 +539,10 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // profile.seeking_study specifically (a pure job-seeker profile still
     // benefits from community/accommodation/partner/risk context once
     // complete), only behind the same completeness gate jobs already use.
-    // Fetched in parallel -- six independent reads, no ordering dependency.
-    const [studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving] = isComplete
+    // Fetched in parallel -- seven independent reads, no ordering dependency.
+    // medicalIntake is the seeker's own latest request (or null), not a
+    // search -- see lib/yf/medicalMatching.js's own comment.
+    const [studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving, medicalIntake] = isComplete
       ? await Promise.all([
           retrieveStudyOpportunities({
             query: message, preferredCountry,
@@ -550,8 +553,17 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
           retrieveTrustedPartners({ country: preferredCountry, limit: 3 }),
           retrieveCountryRisks({ country: preferredCountry, limit: 5 }),
           retrieveCostOfLiving({ country: preferredCountry, city: preferredCity, limit: 5 }),
+          retrieveMedicalIntake({ profileId: req.user.id }),
         ])
-      : [[], [], [], [], [], []];
+      : [[], [], [], [], [], [], null];
+    // Depends on medicalIntake above (its required_treatment/extracted
+    // report text IS the search query), so it can't join the parallel batch
+    // -- kept to one extra, cheap await rather than forcing a fake
+    // dependency into Promise.all. Never weighted by preferredCountry (see
+    // retrieveMedicalProviders' own comment on why).
+    const medicalProviders = medicalIntake
+      ? await retrieveMedicalProviders({ query: [medicalIntake.requiredTreatment, medicalIntake.extractedReportText].filter(Boolean).join(' '), limit: 8 })
+      : [];
     // Seed/demo fixture rows (see demoJob above) are redacted before either
     // the model or the client sees them, regardless of preview/subscription
     // status — applied first so a demo job during free preview still gets
@@ -627,6 +639,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     const system = buildSystemPrompt({
       jobs: outJobs, dialectHint: sec.clean(req.body.dialectHint, 40),
       studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving,
+      medicalIntake, medicalProviders,
       travel: { flightsConfigured: flightSearch.configured(), hotelsConfigured: hotelSearch.configured() },
     })
       + (context ? '\n\n' + context : '')

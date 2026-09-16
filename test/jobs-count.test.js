@@ -1,10 +1,11 @@
 // GET /api/jobs/count — the landing page's live feed counter. Public like
 // /api/news: a visitor sees it before signing up.
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const { getApp } = require('./helpers/appHarness');
 
 const h = getApp();
+after(() => h.stop());
 
 test('GET /api/jobs/count returns the real feed count', async () => {
   h.mock.__set('jobs', { data: new Array(42).fill({ id: 1 }), error: null });

@@ -66,6 +66,7 @@ test('every new retrieval source gets its own retrieve-dont-recall section, all 
     '=== RETRIEVE, DON\'T RECALL: TRUSTED PARTNER REFERRALS ===',
     '=== RETRIEVE, DON\'T RECALL: COUNTRY RISK NOTES ===',
     '=== RETRIEVE, DON\'T RECALL: COST OF LIVING ===',
+    '=== RETRIEVE, DON\'T RECALL: MEDICAL TREATMENT PROVIDERS (medical travel) ===',
   ]) assert.ok(p.includes(heading), `expected prompt to include "${heading}"`);
 });
 
@@ -170,6 +171,55 @@ test('the hard-questions list has explicit answers for "how much is covered" and
   assert.match(p, /not from what universities in general typically require/);
 });
 
+// ---------- medical-treatment/travel vertical ----------
+
+test('with no medical intake on file, MEDICAL_INTAKE_CONTEXT says so plainly', () => {
+  const p = prompt();
+  assert.match(p, /No medical-travel intake on file for this seeker yet/);
+  assert.match(p, /No curated hospital\/clinic on file yet that matches this specific treatment/);
+});
+
+test('a real medical intake request is rendered into MEDICAL_INTAKE_CONTEXT, distinct from a diagnosis', () => {
+  const p = buildSystemPrompt({
+    jobs: [], dialectHint: null,
+    medicalIntake: { requiredTreatment: 'total hip replacement', medicalHistoryNote: 'osteoarthritis, right hip', extractedReportText: 'X-ray shows severe joint degeneration' },
+  });
+  assert.match(p, /Required treatment\/procedure \(as stated by the seeker or their own doctor\): total hip replacement/);
+  assert.match(p, /osteoarthritis, right hip/);
+  assert.match(p, /joint degeneration/);
+});
+
+test('a real curated hospital is rendered into MEDICAL_CONTEXT with its price and contact', () => {
+  const p = buildSystemPrompt({
+    jobs: [], dialectHint: null,
+    medicalProviders: [{ hospitalName: 'CIMEQ', country: 'Cuba', city: 'Havana', specialties: 'orthopedic hip and knee replacement', priceRangeNote: '$9,000-12,000 USD, published self-pay rate', contactEmail: 'intl@cimeq.example', contactPhone: '+53...', sourceUrl: null }],
+  });
+  assert.match(p, /CIMEQ/);
+  assert.match(p, /Havana, Cuba/);
+  assert.match(p, /9,000-12,000/);
+  assert.match(p, /intl@cimeq\.example/);
+});
+
+test('the medical vertical states plainly that the model is not a doctor and must never diagnose or interpret lab values', () => {
+  const p = prompt();
+  assert.match(p, /YOU ARE NOT A DOCTOR/);
+  assert.match(p, /[Nn]ever diagnose, interpret lab results or medical images/);
+  assert.match(p, /[Nn]ever guess a likely diagnosis or treatment yourself from symptoms or lab values/);
+});
+
+test('the medical vertical explicitly names Cuba, South Korea, and Russia as real, curatable options, never restricted to "usual" destinations', () => {
+  const p = prompt();
+  assert.match(p, /Cuba, South Korea, and Russia/);
+  assert.match(p, /can differ hugely in price from North America\/Europe for the very same procedure/);
+});
+
+test('the hard-questions list refuses to interpret an uploaded lab result or diagnosis, and redirects a "cheapest hospital" question to MEDICAL_CONTEXT only', () => {
+  const p = prompt();
+  assert.match(p, /restate that you're not a doctor and can't read medical results/);
+  assert.match(p, /Which hospital is cheapest for/);
+  assert.match(p, /what about Cuba, Korea, or Russia for this/);
+});
+
 test('a real trusted partner is rendered into PARTNER_CONTEXT with licence and contact', () => {
   const p = buildSystemPrompt({
     jobs: [], dialectHint: null,
@@ -210,13 +260,14 @@ test('the new verticals are ordered after job facts and before the legal/visa se
   const identityAt = p.indexOf('=== IDENTITY: A SPECIALIST, NOT A GENERAL CHATBOT ===');
   const jobFactsAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: JOB FACTS ===');
   const studyAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: STUDY PROGRAMS & SCHOLARSHIPS (bourse) ===');
+  const medicalAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: MEDICAL TREATMENT PROVIDERS (medical travel) ===');
   const partnerAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: TRUSTED PARTNER REFERRALS ===');
   const riskAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: COUNTRY RISK NOTES ===');
   const legalAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: LEGAL / VISA / CITIZENSHIP / ASYLUM FACTS ===');
-  assert.ok([identityAt, jobFactsAt, studyAt, partnerAt, riskAt, legalAt].every(i => i > -1));
+  assert.ok([identityAt, jobFactsAt, studyAt, medicalAt, partnerAt, riskAt, legalAt].every(i => i > -1));
   assert.ok(identityAt < jobFactsAt);
   assert.ok(jobFactsAt < studyAt);
-  assert.ok(studyAt < partnerAt && partnerAt < riskAt && riskAt < legalAt);
+  assert.ok(studyAt < medicalAt && medicalAt < partnerAt && partnerAt < riskAt && riskAt < legalAt);
 });
 
 test('the hard-questions list covers the "can\'t afford tuition" pivot to scholarships and honest translation gating', () => {

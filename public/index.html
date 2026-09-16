@@ -267,21 +267,28 @@
     </div>
     <div id="regExtra" style="display:none">
       <label data-i18n="labelFullName">Full name</label><input type="text" id="name">
-      <!-- Two different signup tracks, same account (role stays 'seeker' —
-           see routes/auth.js's own comment on why accountType never touches
+      <!-- Three signup tracks, same account (role stays 'seeker' — see
+           routes/auth.js's own comment on why accountType never touches
            role): a job seeker gets sector/role-type questions, a student
-           gets degree-level/field-of-study questions instead. Toggling only
-           swaps which of #jobSeekerFields/#studentFields is visible; nothing
-           here is mutually exclusive server-side. -->
+           gets degree-level/field-of-study questions, and someone needing
+           medical treatment abroad gets a required-treatment question
+           instead (immigration is NOT its own track -- it's already part
+           of the job_seeker/work track, Hicham's call). Toggling only
+           swaps which of #jobSeekerFields/#studentFields/#treatmentFields
+           is visible; nothing here is mutually exclusive server-side. -->
       <label data-i18n="labelAccountType">I am signing up as a...</label>
       <div class="row" id="acctTypeRow">
         <label style="display:inline-flex;align-items:center;gap:6px;margin-inline-end:16px">
           <input type="radio" name="acctType" id="acctTypeJobSeeker" value="job_seeker" checked>
           <span data-i18n="acctTypeJobSeeker">Job seeker</span>
         </label>
-        <label style="display:inline-flex;align-items:center;gap:6px">
+        <label style="display:inline-flex;align-items:center;gap:6px;margin-inline-end:16px">
           <input type="radio" name="acctType" id="acctTypeStudent" value="student">
           <span data-i18n="acctTypeStudent">Student (study abroad)</span>
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px">
+          <input type="radio" name="acctType" id="acctTypeTreatment" value="treatment">
+          <span data-i18n="acctTypeTreatment">Medical treatment abroad</span>
         </label>
       </div>
       <label data-i18n="labelPreferredLanguage">Preferred language</label>
@@ -310,6 +317,13 @@
         </select>
         <label data-i18n="labelTargetFieldOfStudy">Field of study</label>
         <input type="text" id="targetFieldOfStudy" data-i18n-ph="targetFieldOfStudyPlaceholder" placeholder="e.g. computer science, nursing">
+      </div>
+      <div id="treatmentFields" style="display:none">
+        <label><span data-i18n="labelRequiredTreatment">Required treatment/procedure</span> <span style="color:var(--text-dim)" data-i18n="requiredTreatmentNote">(what your own doctor told you that you need — not a diagnosis you're asking us for)</span></label>
+        <input type="text" id="requiredTreatment" data-i18n-ph="requiredTreatmentPlaceholder" placeholder="e.g. total hip replacement">
+        <label data-i18n="labelMedicalHistoryNote">Relevant medical history (optional)</label>
+        <textarea id="medicalHistoryNote" rows="3" data-i18n-ph="medicalHistoryNotePlaceholder" placeholder="e.g. osteoarthritis, right hip, diagnosed 2024"></textarea>
+        <p style="font-size:12px;color:var(--text-dim)" data-i18n="treatmentUploadLaterNote">You can upload your lab/medical reports after signing in, from your account.</p>
       </div>
       <div class="row"><input type="checkbox" id="confirmAge"><label for="confirmAge" style="margin:0" data-i18n="confirmAgeLabel">I confirm I am 18 or older</label></div>
       <div class="row"><input type="checkbox" id="acceptTerms"><label for="acceptTerms" style="margin:0" data-i18n="acceptTermsLabel">I accept the Terms of Use</label>
@@ -359,6 +373,20 @@
         <button id="cvDownloadDocx" class="ghost" data-i18n="cvDownloadWord">Download Word</button>
       </div>
       <button id="cvSubscribePrompt" class="ghost" style="display:none" data-i18n="cvSubscribeToDownload">🔒 Subscribe to download</button>
+    </div>
+    <div id="medicalPane" style="margin-top:16px">
+      <h2 data-i18n="medicalHeading">Medical treatment abroad</h2>
+      <p class="hint" data-i18n="medicalHint">Tell us the treatment/procedure your own doctor said you need, and upload the report(s) that say so — this is not a diagnosis service, we don't read results or suggest treatments ourselves.</p>
+      <p id="medicalStatus" style="color:var(--text-dim);font-size:13px;"></p>
+      <label data-i18n="labelRequiredTreatment">Required treatment/procedure</label>
+      <input type="text" id="medRequiredTreatment" data-i18n-ph="requiredTreatmentPlaceholder" placeholder="e.g. total hip replacement">
+      <label data-i18n="labelMedicalHistoryNote">Relevant medical history (optional)</label>
+      <textarea id="medHistoryNote" rows="3" data-i18n-ph="medicalHistoryNotePlaceholder" placeholder="e.g. osteoarthritis, right hip, diagnosed 2024"></textarea>
+      <div class="row"><button id="medSaveBtn" data-i18n="medicalSaveBtn">Save</button></div>
+      <label data-i18n="medicalUploadLabel">Upload a lab/medical report (PDF)</label>
+      <input type="file" id="medFileInput" accept="application/pdf,image/jpeg,image/png">
+      <div class="row"><button id="medUploadBtn" class="ghost" data-i18n="medicalUploadBtn">Upload report</button></div>
+      <div id="medicalMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
     </div>
     <div id="securityPane" style="margin-top:16px">
       <h2 data-i18n="securityHeading">Account security</h2>
@@ -727,11 +755,14 @@
   // 'seeker' either way), only which questions the form asks up front.
   function updateAcctTypeFields() {
     const isStudent = $('acctTypeStudent').checked;
-    $('jobSeekerFields').style.display = isStudent ? 'none' : 'block';
+    const isTreatment = $('acctTypeTreatment').checked;
+    $('jobSeekerFields').style.display = (isStudent || isTreatment) ? 'none' : 'block';
     $('studentFields').style.display = isStudent ? 'block' : 'none';
+    $('treatmentFields').style.display = isTreatment ? 'block' : 'none';
   }
   $('acctTypeJobSeeker').onchange = updateAcctTypeFields;
   $('acctTypeStudent').onchange = updateAcctTypeFields;
+  $('acctTypeTreatment').onchange = updateAcctTypeFields;
 
   $('resendVerify').onclick = async () => {
     $('resendVerify').disabled = true;
@@ -774,17 +805,20 @@
     if (mode === 'register') {
       if (!$('confirmAge').checked) return $('authMsg').textContent = t('errAgeGate');
       if (!$('acceptTerms').checked) return $('authMsg').textContent = t('errAcceptTerms');
-      // accountType decides which of #jobSeekerFields/#studentFields the
-      // person actually filled in -- routes/auth.js only reads sector for a
-      // job_seeker signup and targetDegreeLevel/targetFieldOfStudy for a
-      // student signup, but sending both is harmless (the unused side is
-      // simply ignored server-side), so this always sends the full set.
-      const accountType = $('acctTypeStudent').checked ? 'student' : 'job_seeker';
+      // accountType decides which of #jobSeekerFields/#studentFields/
+      // #treatmentFields the person actually filled in -- routes/auth.js
+      // only reads sector for a job_seeker signup, targetDegreeLevel/
+      // targetFieldOfStudy for a student signup, and requiredTreatment/
+      // medicalHistoryNote for a treatment signup, but sending all of them
+      // is harmless (the unused ones are simply ignored server-side), so
+      // this always sends the full set.
+      const accountType = $('acctTypeStudent').checked ? 'student' : $('acctTypeTreatment').checked ? 'treatment' : 'job_seeker';
       const r = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name: $('name').value.trim(), preferredLanguage: $('prefLang').value,
           preferredCountry: $('prefCountry').value.trim(), preferredCity: $('prefCity').value.trim(),
           accountType, sector: $('sector').value.trim(),
           targetDegreeLevel: $('targetDegreeLevel').value, targetFieldOfStudy: $('targetFieldOfStudy').value.trim(),
+          requiredTreatment: $('requiredTreatment').value.trim(), medicalHistoryNote: $('medicalHistoryNote').value.trim(),
           confirmAge: true, acceptTerms: true, referralCode: refCode || undefined }) });
       const d = await r.json();
       // d.message stays English (see the language note above) — but d.error
@@ -889,6 +923,7 @@
     $('logoutBtn').style.display = 'inline-block';
     refreshSub();
     refreshCv();
+    refreshMedicalIntake();
     refreshTotpStatus();
     refreshNotifyStatus();
     refreshReferral();
@@ -946,6 +981,59 @@
       $('cvStatus').textContent = !d.ready ? t('cvNotReady') : (d.subscribed ? t('cvReadySubscribed') : t('cvReadyPreview'));
     } catch { /* advisory only, same as refreshSub */ }
   }
+
+  // ---------- medical-treatment/travel intake (routes/medical-intake.js) ----------
+  // Available to every seeker, not gated on how they signed up -- a job
+  // seeker or student can develop a medical-travel need later just as
+  // easily as someone who chose that track at signup (see #treatmentFields'
+  // own comment on why no track is exclusive).
+  async function refreshMedicalIntake() {
+    try {
+      const r = await fetch('/api/medical-intake', { headers: headers() });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.request) {
+        $('medRequiredTreatment').value = d.request.required_treatment || '';
+        $('medHistoryNote').value = d.request.medical_history_note || '';
+        $('medicalStatus').textContent = t('medicalStatusOnFile', { treatment: d.request.required_treatment });
+      } else {
+        $('medicalStatus').textContent = t('medicalStatusNone');
+      }
+    } catch { /* advisory only, same as refreshCv */ }
+  }
+  $('medSaveBtn').onclick = async () => {
+    const requiredTreatment = $('medRequiredTreatment').value.trim();
+    if (!requiredTreatment) { $('medicalMsg').textContent = t('medicalErrTreatmentRequired'); return; }
+    $('medSaveBtn').disabled = true;
+    try {
+      const r = await fetch('/api/medical-intake', { method: 'POST', headers: headers(),
+        body: JSON.stringify({ requiredTreatment, medicalHistoryNote: $('medHistoryNote').value.trim() }) });
+      const d = await r.json().catch(() => ({}));
+      $('medicalMsg').textContent = r.ok ? t('medicalSaved') : apiError(d, t('medicalSaveFailed'));
+      if (r.ok) refreshMedicalIntake();
+    } catch { $('medicalMsg').textContent = t('networkError'); }
+    $('medSaveBtn').disabled = false;
+  };
+  // Raw bytes, not JSON/multipart — server.js routes this exact path through
+  // express.raw() (see its own comment), same shape as the voice-note upload
+  // just below, one file per call.
+  $('medUploadBtn').onclick = async () => {
+    const file = $('medFileInput').files[0];
+    if (!file) { $('medicalMsg').textContent = t('medicalErrFileRequired'); return; }
+    $('medUploadBtn').disabled = true;
+    try {
+      const buf = await file.arrayBuffer();
+      const r = await fetch('/api/medical-intake/documents', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': file.type || 'application/pdf' },
+        body: buf,
+      });
+      const d = await r.json().catch(() => ({}));
+      $('medicalMsg').textContent = r.ok ? (d.message || t('medicalUploadOk')) : apiError(d, t('medicalUploadFailed'));
+      if (r.ok) { $('medFileInput').value = ''; refreshMedicalIntake(); }
+    } catch { $('medicalMsg').textContent = t('networkError'); }
+    $('medUploadBtn').disabled = false;
+  };
+
   // A plain <a href> can't carry the Authorization header the export route
   // needs, so this fetches the file as a blob and hands the browser a
   // temporary object URL to save instead -- the download itself, not just
