@@ -73,6 +73,16 @@ test('a submission can include tuitionNote, fundingCoveragePct, and eligibilityN
   assert.equal(writes[0].payload.eligibility_note, 'Master\'s degree required, IELTS 6.5+');
 });
 
+test('a submission can include durationNote, and it is stored under its own DB column', async () => {
+  const r = await submit({
+    contact: 'c', title: 'Intensive French Program', kind: 'program', country: 'France',
+    durationNote: '6-week intensive',
+  });
+  assert.equal(r.status, 200);
+  const writes = h.mock.__writes('study_opportunity_submissions', 'insert');
+  assert.equal(writes[0].payload.duration_note, '6-week intensive');
+});
+
 test('fundingCoveragePct is optional and stored as null, not 0, when omitted', async () => {
   const r = await submit({ contact: 'c', title: 'Plain program', kind: 'program', country: 'Canada' });
   assert.equal(r.status, 200);
@@ -145,7 +155,7 @@ test('approving a submission carries tuition_note, funding_coverage_pct, and eli
     id: 'a1b2c3d4-0000-4000-8000-000000000025', kind: 'scholarship', title: 'Fully Funded PhD',
     institution: 'ETH Zurich', country: 'Switzerland', degree_level: 'phd', field_of_study: 'materials science',
     tuition_note: 'Full funding plus monthly stipend', funding_coverage_pct: 100,
-    eligibility_note: 'Master\'s degree in a related field, IELTS 6.5+',
+    eligibility_note: 'Master\'s degree in a related field, IELTS 6.5+', duration_note: '4 years full-time',
     deadline: null, description: 'Apply via the department portal.', review_status: 'pending',
   };
   h.mock.__set('study_opportunity_submissions', { data: sub, error: null });
@@ -157,6 +167,7 @@ test('approving a submission carries tuition_note, funding_coverage_pct, and eli
   assert.equal(oppWrites[0].payload.tuition_note, sub.tuition_note);
   assert.equal(oppWrites[0].payload.funding_coverage_pct, 100);
   assert.equal(oppWrites[0].payload.eligibility_note, sub.eligibility_note);
+  assert.equal(oppWrites[0].payload.duration_note, sub.duration_note);
 });
 
 test('rejecting a submission requires a reason and never touches study_opportunities', async () => {

@@ -46,6 +46,7 @@ router.post('/', sec.limits.report, async (req, res) => {
     // an admin_curated row.
     const tuitionNote = sec.clean(req.body.tuitionNote, 500) || null;
     const eligibilityNote = sec.clean(req.body.eligibilityNote, 500) || null;
+    const durationNote = sec.clean(req.body.durationNote, 80) || null;
     const fundingPct = parseFundingCoveragePct(req.body.fundingCoveragePct);
 
     if (!contact || !kind || !title)
@@ -61,7 +62,7 @@ router.post('/', sec.limits.report, async (req, res) => {
     const { error } = await supabase.from('study_opportunity_submissions').insert({
       submitted_by_contact: contact, kind, title, institution, country, city,
       degree_level: degreeLevel, field_of_study: fieldOfStudy, deadline, description,
-      tuition_note: tuitionNote, funding_coverage_pct: fundingPct.value, eligibility_note: eligibilityNote,
+      duration_note: durationNote, tuition_note: tuitionNote, funding_coverage_pct: fundingPct.value, eligibility_note: eligibilityNote,
     });
     if (error) throw error;
     res.json({ success: true, message: "Thanks — we'll review this and post it if it looks good." });

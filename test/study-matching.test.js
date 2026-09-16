@@ -132,3 +132,25 @@ test('every major and both undergraduate and graduate levels are searched the sa
   const results = await retrieveStudyOpportunities({ query: 'nursing financial aid', limit: 5 });
   assert.equal(results.length, 2); // both levels surfaced, neither excluded by level
 });
+
+// ---------- program duration ----------
+
+test('scoreOpportunity() searches durationNote too -- a "2 years" style query can match on program length', () => {
+  const opp = { title: 'MSc Data Science', institution: 'X', country: 'Canada', city: '', degreeLevel: 'graduate', fieldOfStudy: 'data science', requirements: '', eligibilityNote: '', tuitionNote: '', durationNote: 'six-week intensive bootcamp' };
+  assert.ok(scoreOpportunity(opp, ['bootcamp']) > 0, 'durationNote content must be searchable');
+});
+
+test('toPromptOpportunity() carries duration_note through as durationNote, and as an empty string when unset', async () => {
+  mock.__set('study_opportunities', {
+    data: [
+      { id: '1', kind: 'program', title: 'Intensive French Program', institution: 'X', country: 'France', city: '', degree_level: 'language_program', field_of_study: 'french', duration_note: '6-week intensive', tuition_note: null, funding_coverage_pct: null, eligibility_note: '', requirements: '', source_type: 'admin_curated' },
+      { id: '2', kind: 'program', title: 'MBA', institution: 'Y', country: 'Canada', city: '', degree_level: 'graduate', field_of_study: 'business', duration_note: null, tuition_note: null, funding_coverage_pct: null, eligibility_note: '', requirements: '', source_type: 'admin_curated' },
+    ],
+    error: null,
+  });
+  const results = await retrieveStudyOpportunities({ query: 'french business', limit: 5 });
+  const withDuration = results.find(r => r.id === '1');
+  const withoutDuration = results.find(r => r.id === '2');
+  assert.equal(withDuration.durationNote, '6-week intensive');
+  assert.equal(withoutDuration.durationNote, '');
+});

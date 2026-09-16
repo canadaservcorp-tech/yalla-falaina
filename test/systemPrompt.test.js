@@ -65,6 +65,7 @@ test('every new retrieval source gets its own retrieve-dont-recall section, all 
     '=== RETRIEVE, DON\'T RECALL: ACCOMMODATION BOARD',
     '=== RETRIEVE, DON\'T RECALL: TRUSTED PARTNER REFERRALS ===',
     '=== RETRIEVE, DON\'T RECALL: COUNTRY RISK NOTES ===',
+    '=== RETRIEVE, DON\'T RECALL: COST OF LIVING ===',
   ]) assert.ok(p.includes(heading), `expected prompt to include "${heading}"`);
 });
 
@@ -75,6 +76,51 @@ test('with nothing retrieved, every new context block says so plainly instead of
   assert.match(p, /No accommodation-board posts on file for this destination yet/);
   assert.match(p, /No verified trusted partner on file for this situation yet/);
   assert.match(p, /No curated risk note on file for this specific country yet/);
+  assert.match(p, /No curated cost-of-living note on file for this specific city\/country yet/);
+});
+
+// ---------- program duration + cost of living ----------
+
+test('a study opportunity\'s duration is rendered in STUDY_CONTEXT, and says "not specified" when absent', () => {
+  const withDuration = buildSystemPrompt({
+    jobs: [], dialectHint: null,
+    studyOpportunities: [{ kind: 'program', title: 'Intensive French Program', institution: 'X', country: 'France', durationNote: '6-week intensive', tuitionNote: '', eligibilityNote: '', requirements: '', sourceType: 'admin_curated', url: null }],
+  });
+  assert.match(withDuration, /duration: 6-week intensive/);
+
+  const withoutDuration = buildSystemPrompt({
+    jobs: [], dialectHint: null,
+    studyOpportunities: [{ kind: 'program', title: 'MBA', institution: 'Y', country: 'Canada', durationNote: '', tuitionNote: '', eligibilityNote: '', requirements: '', sourceType: 'admin_curated', url: null }],
+  });
+  assert.match(withoutDuration, /duration: not specified/);
+});
+
+test('a real cost-of-living note is rendered into COST_OF_LIVING_CONTEXT with its figure and source', () => {
+  const p = buildSystemPrompt({
+    jobs: [], dialectHint: null,
+    costOfLiving: [{ category: 'overall', city: 'Montreal', country: 'Canada', monthlyEstimateNote: '$1,200-1,800 CAD/month including rent, student budget', sourceUrl: 'https://example.gov/col' }],
+  });
+  assert.match(p, /Montreal, Canada: \$1,200-1,800 CAD\/month including rent, student budget/);
+  assert.match(p, /source: https:\/\/example\.gov\/col/);
+});
+
+test('the cost-of-living section forbids stating a figure from general reputation and applies to job seekers and students alike', () => {
+  const p = prompt();
+  assert.match(p, /job seeker or student alike/);
+  assert.match(p, /"Canada is expensive" is not a fact you may state as data/);
+});
+
+test('the "which universities/countries do you cover" hard question answers honestly that coverage is not restricted to a fixed list', () => {
+  const p = prompt();
+  assert.match(p, /Which universities\/countries do you cover/);
+  assert.match(p, /not restricted to any fixed list of countries \(GCC, USA, Canada, Europe, UK, Turkey, or anywhere else\)/);
+  assert.match(p, /never claim a specific country or university is or isn't covered from general knowledge/);
+});
+
+test('the study-permit vs. work-permit hard question describes the general shape without stating a specific hour limit or wage as fact', () => {
+  const p = prompt();
+  assert.match(p, /confuses a study permit\/student visa with a work permit/);
+  assert.match(p, /do not state a specific hour limit, wage, or eligibility rule as current fact/);
 });
 
 test('a real study opportunity is rendered into STUDY_CONTEXT with its key facts, never leaving a fabricated one implied', () => {

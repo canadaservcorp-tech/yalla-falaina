@@ -117,6 +117,15 @@
 --     add column if not exists tuition_note text,
 --     add column if not exists funding_coverage_pct integer,
 --     add column if not exists eligibility_note text;
+--
+-- Migrating an ALREADY-DEPLOYED project onto program duration
+-- (lib/yf/studyMatching.js's duration_note) and cost-of-living notes
+-- (lib/yf/costOfLivingMatching.js) -- Hicham's ask: seekers/students need to
+-- know how long a program runs and what life costs in that city. One new
+-- nullable column on each study_opportunities table, plus one new table:
+--   alter table public.study_opportunities add column if not exists duration_note text;
+--   alter table public.study_opportunity_submissions add column if not exists duration_note text;
+--   -- then run the cost_of_living_notes create table statement near country_risk_notes below.
 
 create extension if not exists "uuid-ossp";
 
@@ -523,6 +532,7 @@ create table if not exists public.study_opportunities (
   degree_level text, -- 'undergraduate' | 'graduate' | 'phd' | 'language_program' | 'vocational'
   field_of_study text,
   language text, -- language of instruction
+  duration_note text, -- e.g. "2 years full-time", "4 semesters", "6-week intensive" -- free text since programs are measured in years, semesters, or weeks depending on type
   tuition_note text, -- free-text funding description, e.g. "Full tuition waiver + $1,500/month stipend"
   -- Structured companion to tuition_note (Hicham's ask: seekers need a plain
   -- percentage, not just prose, and it must be a real published figure --
@@ -558,9 +568,10 @@ create table if not exists public.study_opportunity_submissions (
   city text,
   degree_level text,
   field_of_study text,
-  tuition_note text,          -- same fields as study_opportunities -- a submitter
-  funding_coverage_pct integer, -- (consultant, university, or scholarship sponsor) may already
-  eligibility_note text,      -- know the funding %/admission conditions; admin re-verifies before approval
+  duration_note text,         -- same fields as study_opportunities -- a submitter
+  tuition_note text,          -- (consultant, university, or scholarship sponsor) may already
+  funding_coverage_pct integer, -- know the duration/funding %/admission conditions;
+  eligibility_note text,      -- admin re-verifies before approval
   deadline date,
   description text,
   review_status text not null default 'pending', -- 'pending' | 'approved' | 'rejected'
@@ -664,6 +675,31 @@ create table if not exists public.country_risk_notes (
 );
 create index if not exists country_risk_notes_country_idx on public.country_risk_notes(country);
 
+-- COST OF LIVING NOTES -- admin-curated, published cost-of-living figures per
+-- destination city/country (Hicham's ask: seekers/students need to know what
+-- life actually costs before committing to a country). Same discipline as
+-- country_risk_notes: a specific number here is exactly the kind of fact
+-- Section 6.1 says must never be estimated by the model itself -- monthly
+-- costs vary constantly and a stale confident figure is worse than an honest
+-- "not on file yet." monthly_estimate_note is free text (not a fixed-currency
+-- numeric column) because a real published range ("$1,200-1,800 CAD/month
+-- including rent") is more honest than false numeric precision, and sources
+-- quote in different currencies. No admin UI shipped yet, same as
+-- country_risk_notes -- rows are written directly by an operator until
+-- routes/admin-cost-of-living.js exists.
+create table if not exists public.cost_of_living_notes (
+  id uuid primary key default uuid_generate_v4(),
+  country text not null,
+  city text, -- null = country-wide estimate, same "specific city first, country-wide fallback" pattern as community_groups
+  category text not null, -- 'overall' | 'rent' | 'food' | 'transport' | 'tuition_adjacent' | 'other'
+  monthly_estimate_note text not null, -- e.g. "$1,200-1,800 CAD/month including rent, student budget"
+  source_url text,
+  status text not null default 'active', -- 'active' | 'removed'
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists cost_of_living_notes_country_idx on public.cost_of_living_notes(country);
+
 -- Row Level Security: enabled on every personal table with NO policies — only
 -- the backend's service-role key (never shipped to a client) can read or write
 -- them. That is the strongest posture this architecture allows: the Express
@@ -682,6 +718,7 @@ alter table public.community_group_submissions enable row level security;
 alter table public.accommodation_listings enable row level security;
 alter table public.accommodation_submissions enable row level security;
 alter table public.country_risk_notes enable row level security;
+alter table public.cost_of_living_notes enable row level security;
 
 -- The conversion ledger insert AND the referrer's reward land in ONE
 -- transaction (called from lib/referral.js's creditConversionIfNew): a

@@ -64,3 +64,52 @@ test('the seeker verification email still goes out alongside the notification', 
   const verify = sent.find(m => m.subject === 'Confirm your email — Yalla Nsafer');
   assert.equal(verify.to, 'newbie3@example.invalid');
 });
+
+// ---------- accountType: student vs. job seeker signup ----------
+// accountType is a UI/onboarding-intent signal, never an authorization
+// concept -- both tracks create the same role: 'seeker' account (see
+// routes/auth.js's own comment), so these tests check only the profile
+// fields it maps onto (seeking_study/target_degree_level/target_field_of_study),
+// never `role`.
+
+const registerWithBody = extra => fetch(h.base + '/api/auth/register', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    email: `newbie${n++}@example.invalid`, password: 'longenoughpw1',
+    name: 'New Seeker', role: 'seeker', acceptTerms: true, confirmAge: true,
+    ...extra,
+  }),
+});
+
+test('a student signup sets seeking_study true and stores target degree level and field of study', async () => {
+  const r = await registerWithBody({ accountType: 'student', targetDegreeLevel: 'graduate', targetFieldOfStudy: 'computer science' });
+  assert.equal(r.status, 200);
+  const [profile] = h.mock.__writes('profiles', 'insert');
+  assert.equal(profile.payload.seeking_study, true);
+  assert.equal(profile.payload.target_degree_level, 'graduate');
+  assert.equal(profile.payload.target_field_of_study, 'computer science');
+});
+
+test('a job-seeker signup (default/omitted accountType) leaves seeking_study false and stores no target fields, even if the body includes them', async () => {
+  const r = await registerWithBody({ targetDegreeLevel: 'graduate', targetFieldOfStudy: 'computer science', sector: 'kitchen' });
+  assert.equal(r.status, 200);
+  const [profile] = h.mock.__writes('profiles', 'insert');
+  assert.equal(profile.payload.seeking_study, false);
+  assert.equal(profile.payload.target_degree_level, null);
+  assert.equal(profile.payload.target_field_of_study, null);
+  assert.equal(profile.payload.sector, 'kitchen');
+});
+
+test('accountType never touches the account\'s role -- both tracks create a role: seeker account', async () => {
+  const studentResult = await registerWithBody({ accountType: 'student' });
+  assert.equal(studentResult.status, 200);
+  const [userInsert] = h.mock.__writes('users', 'insert');
+  assert.ok(!('accountType' in (userInsert?.payload || {})), 'accountType must never reach the users table');
+});
+
+test('the operator-notification email states the account type', async () => {
+  process.env.NOTIFY_EMAIL = 'ops@example.invalid';
+  await registerWithBody({ accountType: 'student' });
+  const notify = sent.find(m => m.subject === 'New signup — Yalla Nsafer');
+  assert.match(notify.html, /Account type: Student/);
+});

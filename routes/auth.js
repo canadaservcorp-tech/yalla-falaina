@@ -87,6 +87,18 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
 
     // Section 10 intake fields; preferred country is a weighting signal for
     // matching, never a filter. profile_id is the user id — 1:1 by design.
+    //
+    // accountType ('job_seeker' | 'student', default 'job_seeker') is the
+    // signup-time signal behind the "special sign-in for students" the
+    // interface offers (public/index.html's #jobSeekerFields/#studentFields
+    // toggle): both create the same `role: 'seeker'` account (accountType is
+    // not an authorization concept, so it never touches `role`), but a
+    // student signup sets seeking_study true immediately and can carry the
+    // student-specific fields straight in, instead of a job seeker having to
+    // discover and fill them in later via PUT /api/profile. Neither track is
+    // exclusive -- a student can still be matched to jobs later and vice
+    // versa; this only decides which questions the signup form itself asked.
+    const isStudentSignup = req.body.accountType === 'student';
     const { error: pErr } = await supabase.from('profiles').insert({
       id: user.id,
       full_name: name,
@@ -94,8 +106,12 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
       phone: phone || null,
       preferred_language: LANGUAGES.includes(req.body.preferredLanguage) ? req.body.preferredLanguage : null,
       preferred_country: sec.clean(req.body.preferredCountry, 60) || null,
+      preferred_city: sec.clean(req.body.preferredCity, 80) || null,
       sector: sec.clean(req.body.sector, 80) || null,
       role_type: sec.clean(req.body.roleType, 80) || null,
+      seeking_study: isStudentSignup,
+      target_degree_level: isStudentSignup ? (sec.clean(req.body.targetDegreeLevel, 40) || null) : null,
+      target_field_of_study: isStudentSignup ? (sec.clean(req.body.targetFieldOfStudy, 80) || null) : null,
     });
     if (pErr) console.error('profile create', pErr.message);   // account stands; profile can be completed later
 
@@ -119,6 +135,7 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
         await sendEmail(notifyTo, 'New signup — Yalla Nsafer',
           '<p>A new seeker registered:</p><ul>' +
           `<li>Name: ${escapeHtml(name)}</li><li>Email: ${escapeHtml(email)}</li>` +
+          `<li>Account type: ${isStudentSignup ? 'Student' : 'Job seeker'}</li>` +
           (signup_source ? `<li>Source: ${escapeHtml(signup_source)}</li>` : '') +
           `<li>User ID: ${user.id}</li><li>Verification email sent: ${emailSent}</li></ul>`);
       } catch (e) { console.error('register:notify email', e.message); }
