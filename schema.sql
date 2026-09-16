@@ -755,3 +755,55 @@ begin
 end;
 $$;
 alter table public.push_subscriptions enable row level security;
+
+-- Security Advisor remediation: the backend is service-role-only, so RLS
+-- "enabled, no policies" is the intended posture -- enable it on every
+-- public table and say so explicitly with a deny-all policy for the
+-- client-facing roles, instead of leaving "RLS disabled" on the tables
+-- that predate the pattern.
+
+alter table public.banned_emails enable row level security;
+alter table public.rate_hits enable row level security;
+alter table public.users enable row level security;
+alter table public.jobs enable row level security;
+alter table public.informal_listing_submissions enable row level security;
+alter table public.b2b_partners enable row level security;
+alter table public.contact_messages enable row level security;
+alter table public.news_items enable row level security;
+
+-- Deny-all-by-default policies: documents that anon/authenticated have NO
+-- direct table access (service_role bypasses RLS entirely). Also clears the
+-- "RLS enabled but no policies" lint on the tables that already had RLS.
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'profiles','seeker_profiles','document_uploads','concierge_conversations',
+    'concierge_messages','daily_usage','referral_conversions','push_subscriptions',
+    'banned_emails','rate_hits','users','jobs','informal_listing_submissions',
+    'b2b_partners','contact_messages','news_items',
+    'study_opportunities','study_opportunity_submissions','community_groups',
+    'community_group_submissions','accommodation_listings','accommodation_submissions',
+    'country_risk_notes'
+  ] loop
+    execute format(
+      'create policy %I on public.%I for all to anon, authenticated using (false) with check (false)',
+      'service_role_only', t);
+  end loop;
+end $$;
+
+-- SECURITY DEFINER functions are called by the server with the service key
+-- only; they must not be invocable through the anon/authenticated PostgREST
+-- surface (each would run with definer rights).
+revoke execute on function public.increment_free_preview(bigint) from anon, authenticated, public;
+revoke execute on function public.rate_hit(text, integer, integer) from anon, authenticated, public;
+revoke execute on function public.rate_hits_gc() from anon, authenticated, public;
+revoke execute on function public.record_login_result(bigint, boolean, integer, integer) from anon, authenticated, public;
+revoke execute on function public.record_referral_conversion(bigint, bigint, integer) from anon, authenticated, public;
+revoke execute on function public.usage_charge(bigint, numeric) from anon, authenticated, public;
+grant execute on function public.increment_free_preview(bigint) to service_role;
+grant execute on function public.rate_hit(text, integer, integer) to service_role;
+grant execute on function public.rate_hits_gc() to service_role;
+grant execute on function public.record_login_result(bigint, boolean, integer, integer) to service_role;
+grant execute on function public.record_referral_conversion(bigint, bigint, integer) to service_role;
+grant execute on function public.usage_charge(bigint, numeric) to service_role;
