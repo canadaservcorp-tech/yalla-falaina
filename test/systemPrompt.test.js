@@ -88,6 +88,42 @@ test('a real study opportunity is rendered into STUDY_CONTEXT with its key facts
   assert.match(p, /2027-03-01/);
 });
 
+// ---------- financial aid: a sourced percentage + admission conditions, never conflated ----------
+
+test('a study opportunity with a verified funding percentage states it plainly, distinct from admission conditions', () => {
+  const p = buildSystemPrompt({
+    jobs: [], dialectHint: null,
+    studyOpportunities: [{ kind: 'scholarship', title: 'Fully Funded PhD', institution: 'ETH Zurich', country: 'Switzerland', degreeLevel: 'phd', fieldOfStudy: 'materials science', fundingCoveragePct: 100, tuitionNote: 'plus monthly stipend', eligibilityNote: 'Master\'s degree in a related field, IELTS 6.5+', requirements: 'CV, transcripts, two references', sourceType: 'admin_curated', url: null }],
+  });
+  assert.match(p, /100% of tuition\/cost \(published figure\)/);
+  assert.match(p, /plus monthly stipend/);
+  assert.match(p, /admission conditions:.*Master's degree in a related field, IELTS 6\.5\+/);
+});
+
+test('a study opportunity with no verified percentage says so plainly rather than implying full funding', () => {
+  const p = buildSystemPrompt({
+    jobs: [], dialectHint: null,
+    studyOpportunities: [{ kind: 'program', title: 'MBA', institution: 'X', country: 'Canada', fundingCoveragePct: null, tuitionNote: '', eligibilityNote: '', requirements: '', sourceType: 'admin_curated', url: null }],
+  });
+  assert.match(p, /no verified percentage on file/);
+});
+
+test('the study-vertical guardrail explicitly forbids inventing a funding percentage or admission condition, and says the rule covers every major and every degree level', () => {
+  const p = prompt();
+  assert.match(p, /never estimate, round, or guess one/);
+  assert.match(p, /never describe a program as "fully funded" or "free" \(gratuit\) unless STUDY_CONTEXT says so explicitly/);
+  assert.match(p, /covers every major\/field of study and every degree level equally/);
+  assert.match(p, /do not assume financial aid only exists for certain fields or only at the graduate level/);
+});
+
+test('the hard-questions list has explicit answers for "how much is covered" and "do I qualify", each pointing at STUDY_CONTEXT\'s own per-program fields', () => {
+  const p = prompt();
+  assert.match(p, /is this fully funded \/ gratuit/i);
+  assert.match(p, /Never average, estimate, or infer a percentage from a program's general reputation/);
+  assert.match(p, /what are the admission conditions/i);
+  assert.match(p, /not from what universities in general typically require/);
+});
+
 test('a real trusted partner is rendered into PARTNER_CONTEXT with licence and contact', () => {
   const p = buildSystemPrompt({
     jobs: [], dialectHint: null,

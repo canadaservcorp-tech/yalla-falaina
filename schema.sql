@@ -104,6 +104,19 @@
 -- table (licence_verified=true, status='active') as-is. Risk notes need one
 -- new table:
 --   -- run the country_risk_notes create table statement near b2b_partners below.
+--
+-- Migrating an ALREADY-DEPLOYED project onto the structured financial-aid
+-- percentage + separated admission-conditions fields on study_opportunities/
+-- study_opportunity_submissions (Hicham's ask: a plain, sourced "% of
+-- tuition covered" figure, and admission conditions surfaced distinctly from
+-- funding info): three new nullable columns on each table, no existing row
+-- touched:
+--   alter table public.study_opportunities
+--     add column if not exists funding_coverage_pct integer;
+--   alter table public.study_opportunity_submissions
+--     add column if not exists tuition_note text,
+--     add column if not exists funding_coverage_pct integer,
+--     add column if not exists eligibility_note text;
 
 create extension if not exists "uuid-ossp";
 
@@ -510,10 +523,16 @@ create table if not exists public.study_opportunities (
   degree_level text, -- 'undergraduate' | 'graduate' | 'phd' | 'language_program' | 'vocational'
   field_of_study text,
   language text, -- language of instruction
-  tuition_note text,
-  eligibility_note text,
+  tuition_note text, -- free-text funding description, e.g. "Full tuition waiver + $1,500/month stipend"
+  -- Structured companion to tuition_note (Hicham's ask: seekers need a plain
+  -- percentage, not just prose, and it must be a real published figure --
+  -- never the concierge's own estimate). null = no verified percentage on
+  -- file yet; only ever set from what the institution/scholarship itself has
+  -- actually announced, same discipline as every other retrieved fact here.
+  funding_coverage_pct integer, -- 0-100, % of tuition/cost this covers; 100 = fully funded/"gratuit"
+  eligibility_note text, -- admission conditions: who qualifies (degree prerequisites, language test scores, GPA, etc.) -- NOT the same thing as tuition/funding
   deadline date, -- null = rolling/no fixed deadline
-  requirements text,
+  requirements text, -- documents/steps needed to apply
   source_url text,
   status text not null default 'active', -- 'active' | 'expired' | 'removed'
   raw jsonb,
@@ -539,6 +558,9 @@ create table if not exists public.study_opportunity_submissions (
   city text,
   degree_level text,
   field_of_study text,
+  tuition_note text,          -- same fields as study_opportunities -- a submitter
+  funding_coverage_pct integer, -- (consultant, university, or scholarship sponsor) may already
+  eligibility_note text,      -- know the funding %/admission conditions; admin re-verifies before approval
   deadline date,
   description text,
   review_status text not null default 'pending', -- 'pending' | 'approved' | 'rejected'

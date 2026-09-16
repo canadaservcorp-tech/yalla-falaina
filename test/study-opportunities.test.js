@@ -59,6 +59,42 @@ test('a normal submission is accepted and stored as pending', async () => {
   assert.ok(!('review_status' in writes[0].payload));
 });
 
+// ---------- financial aid: funding coverage percentage + admission conditions ----------
+
+test('a submission can include tuitionNote, fundingCoveragePct, and eligibilityNote, and they are stored under their own DB columns', async () => {
+  const r = await submit({
+    contact: 'c', title: 'Materials Science PhD', kind: 'program', country: 'Germany',
+    tuitionNote: 'Full funding plus stipend', fundingCoveragePct: 100, eligibilityNote: 'Master\'s degree required, IELTS 6.5+',
+  });
+  assert.equal(r.status, 200);
+  const writes = h.mock.__writes('study_opportunity_submissions', 'insert');
+  assert.equal(writes[0].payload.tuition_note, 'Full funding plus stipend');
+  assert.equal(writes[0].payload.funding_coverage_pct, 100);
+  assert.equal(writes[0].payload.eligibility_note, 'Master\'s degree required, IELTS 6.5+');
+});
+
+test('fundingCoveragePct is optional and stored as null, not 0, when omitted', async () => {
+  const r = await submit({ contact: 'c', title: 'Plain program', kind: 'program', country: 'Canada' });
+  assert.equal(r.status, 200);
+  const writes = h.mock.__writes('study_opportunity_submissions', 'insert');
+  assert.equal(writes[0].payload.funding_coverage_pct, null);
+});
+
+test('a fundingCoveragePct outside 0-100, or non-integer, is refused rather than stored garbage', async () => {
+  for (const bad of [-5, 101, 50.5, 'a lot', true]) {
+    const r = await submit({ contact: 'c', title: 'x', kind: 'program', fundingCoveragePct: bad });
+    assert.equal(r.status, 400, `expected ${JSON.stringify(bad)} to be refused`);
+    assert.equal((await r.json()).code, 'ERR_BAD_INPUT');
+  }
+  assert.equal(h.mock.__writes('study_opportunity_submissions', 'insert').length, 0);
+});
+
+test('a prohibited term hidden only in tuitionNote or eligibilityNote is still caught, not just title/institution/description', async () => {
+  const r = await submit({ contact: 'c', title: 'Normal-sounding scholarship', kind: 'scholarship', country: 'Canada', eligibilityNote: 'must be willing to work as an escort' });
+  assert.equal(r.status, 403);
+  assert.equal(h.mock.__writes('study_opportunity_submissions', 'insert').length, 0);
+});
+
 test('a DB error on submit returns a clean 500, not a leaked stack trace', async () => {
   h.mock.__setOp('study_opportunity_submissions', 'insert', { data: null, error: { message: 'connection refused' } });
   const r = await submit({ contact: 'c', title: 't', kind: 'program' });
@@ -102,6 +138,25 @@ test('approving a pending submission creates a study_opportunities row marked co
   assert.equal(oppWrites[0].payload.requirements, sub.description);
   const subWrites = h.mock.__writes('study_opportunity_submissions', 'update');
   assert.equal(subWrites[0].payload.review_status, 'approved');
+});
+
+test('approving a submission carries tuition_note, funding_coverage_pct, and eligibility_note through to the live row, unmodified', async () => {
+  const sub = {
+    id: 'a1b2c3d4-0000-4000-8000-000000000025', kind: 'scholarship', title: 'Fully Funded PhD',
+    institution: 'ETH Zurich', country: 'Switzerland', degree_level: 'phd', field_of_study: 'materials science',
+    tuition_note: 'Full funding plus monthly stipend', funding_coverage_pct: 100,
+    eligibility_note: 'Master\'s degree in a related field, IELTS 6.5+',
+    deadline: null, description: 'Apply via the department portal.', review_status: 'pending',
+  };
+  h.mock.__set('study_opportunity_submissions', { data: sub, error: null });
+  const r = await fetch(h.base + `/api/admin/study-opportunities/${sub.id}/review`, {
+    method: 'POST', headers: admin(), body: JSON.stringify({ decision: 'approved' }),
+  });
+  assert.equal(r.status, 200);
+  const oppWrites = h.mock.__writes('study_opportunities', 'insert');
+  assert.equal(oppWrites[0].payload.tuition_note, sub.tuition_note);
+  assert.equal(oppWrites[0].payload.funding_coverage_pct, 100);
+  assert.equal(oppWrites[0].payload.eligibility_note, sub.eligibility_note);
 });
 
 test('rejecting a submission requires a reason and never touches study_opportunities', async () => {
