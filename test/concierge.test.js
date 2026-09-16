@@ -538,6 +538,27 @@ test('a "sector_or_role_type" key in the block (the Missing list\'s display name
   assert.equal(h.mock.__writes('concierge_messages', 'insert').length, 2); // sanity: the turn completed normally
 });
 
+test('a "target_degree_level_or_field_of_study" key (the student Missing label, not a real column) is routed to the right target column', async () => {
+  // Same fake-label echo as sector_or_role_type: intake lists the combined
+  // name, the model copies it into the block, and without resolveAlias's
+  // student branch the answer was silently dropped — the student gate then
+  // re-asked the same field every turn forever.
+  const studentProfile = { preferred_language: 'en', preferred_country: 'canada', seeking_study: true,
+    target_degree_level: null, target_field_of_study: null, sector: null, role_type: null };
+  const incompleteSeeker = { id: 'sp-student-alias', is_complete: false, confirmed_by_user: false };
+  for (const [answer, column] of [['masters', 'target_degree_level'], ['computer science', 'target_field_of_study']]) {
+    h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-stu-alias-' + column }, error: null });
+    respond = () => ({ status: 200, body: { content: [{ type: 'text', text:
+      `---PROFILE---\n{"target_degree_level_or_field_of_study":"${answer}"}\n---END---\nNoted!` }] } });
+    const r = await ask({ message: 'I want to study ' + answer }, caller({}, incompleteSeeker, studentProfile));
+    assert.equal(r.status, 200);
+    const profWrites = h.mock.__writes('profiles', 'upsert');
+    const intakeWrite = profWrites[profWrites.length - 1].payload;
+    assert.equal(intakeWrite[column], answer, `${answer} should land in ${column}`);
+    assert.ok(!('target_degree_level_or_field_of_study' in intakeWrite), 'the fake field name must never reach the database');
+  }
+});
+
 test('the concierge never claims to have checked the job feed, even if the model says so -- stripped server-side, not just asked for in the prompt', async () => {
   // Regression for a live retest: tightening intakeInstructions' wording did
   // not stop the model claiming this. The server now strips the sentence
