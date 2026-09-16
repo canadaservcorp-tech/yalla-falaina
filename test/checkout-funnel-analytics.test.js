@@ -46,8 +46,8 @@ test('both sub=success and sub=cancel scrub the one-shot param so a reload canno
   assert.match(script, /else if \(subParam === 'cancel'\) \{\s*cleanSubParam\(\);/);
 });
 
-test('checkoutCancelled has a translation in all four UI languages', () => {
+test('checkoutCancelled has a translation in every UI language', () => {
   const i18n = fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n.js'), 'utf8');
   const hits = i18n.match(/checkoutCancelled:/g) || [];
-  assert.equal(hits.length, 4, 'expected en/fr/ar/hi, one checkoutCancelled entry each');
+  assert.equal(hits.length, 5, 'expected en/fr/ar/hi/tr, one checkoutCancelled entry each');
 });

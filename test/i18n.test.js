@@ -11,7 +11,7 @@ const path = require('path');
 const { STRINGS, LANGS, isRTL, t, tErr } = require('../public/i18n.js');
 
 test('all UI languages exist and cover the same key set — no silent drift', () => {
-  assert.deepEqual(LANGS.sort(), ['ar', 'en', 'fr', 'hi']);
+  assert.deepEqual(LANGS.sort(), ['ar', 'en', 'fr', 'hi', 'tr']);
   const enKeys = Object.keys(STRINGS.en).sort();
   for (const lang of LANGS) {
     assert.deepEqual(Object.keys(STRINGS[lang]).sort(), enKeys, `${lang} is missing or has extra keys vs. en`);
@@ -31,6 +31,7 @@ test('t() returns the right language for a known key', () => {
   assert.equal(t('en', 'sendBtn'), 'Send');
   assert.equal(t('fr', 'sendBtn'), 'Envoyer');
   assert.equal(t('ar', 'sendBtn'), 'إرسال');
+  assert.equal(t('tr', 'sendBtn'), 'Gönder');
 });
 
 test('t() falls back to English for an unsupported language code', () => {
@@ -53,6 +54,7 @@ test('isRTL is true only for Arabic', () => {
   assert.equal(isRTL('ar'), true);
   assert.equal(isRTL('en'), false);
   assert.equal(isRTL('fr'), false);
+  assert.equal(isRTL('tr'), false);
   assert.equal(isRTL(undefined), false);
 });
 
@@ -66,6 +68,7 @@ test('tErr() returns the right language for a known code', () => {
   assert.equal(tErr('en', 'ERR_PAYWALL'), 'A subscription is required to use the concierge.');
   assert.match(tErr('fr', 'ERR_PAYWALL'), /abonnement/);
   assert.match(tErr('ar', 'ERR_PAYWALL'), /الاشتراك/);
+  assert.match(tErr('tr', 'ERR_PAYWALL'), /abonelik/);
 });
 
 test('tErr() falls back to English for an unsupported language, and to null for an unknown or missing code', () => {
@@ -75,7 +78,7 @@ test('tErr() falls back to English for an unsupported language, and to null for 
   assert.equal(tErr('en', ''), null);
 });
 
-test('every ERR_ code the seeker-facing routes can actually return has a translation in all 3 languages', () => {
+test('every ERR_ code the seeker-facing routes can actually return has a translation in every language', () => {
   // Scan the real route source rather than hand-maintaining a list here — the
   // point is to catch the next `code: 'ERR_...'` someone adds to the API
   // without ever teaching the client to translate it (exactly the gap this
@@ -97,9 +100,9 @@ test('every ERR_ code the seeker-facing routes can actually return has a transla
   const missing = [...codesInUse].filter(c => !mapped.has(c));
   assert.deepEqual(missing, [], `these API error codes have no translation in public/i18n.js's ERRORS map: ${missing.join(', ')}`);
 
-  // And every mapped code actually resolves in all 3 languages (catches a
-  // typo'd key or a language missing from one entry, same drift concern as
-  // the STRINGS parity test above).
+  // And every mapped code actually resolves in every supported language
+  // (catches a typo'd key or a language missing from one entry, same drift
+  // concern as the STRINGS parity test above).
   for (const code of mapped) {
     for (const lang of LANGS) assert.ok(tErr(lang, code), `${code} has no ${lang} translation`);
   }
