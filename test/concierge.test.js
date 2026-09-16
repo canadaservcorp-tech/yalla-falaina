@@ -766,3 +766,87 @@ test('an omitted preferredCountry falls back to the profile\'s stored destinatio
   assert.equal(r.status, 200);
   assert.equal(j.jobs[0].country, 'Canada');   // the profile's preferred_country wins the tie, not request order
 });
+
+// ---------- study/community/accommodation/partner/risk retrieval wiring ----------
+// Section 4/5 verticals (international students, travel/community, trusted-
+// partner referral, country risk) -- gated behind the exact same isComplete
+// flag jobs already use (routes/concierge.js's own comment above the
+// Promise.all block), never behind profile.seeking_study specifically.
+
+test('an incomplete profile retrieves none of the five new sources, and none of their context blocks carry real data into the system prompt', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-intake' }, error: null });
+  h.mock.__set('study_opportunities', { data: [{ id: 's1', kind: 'program', title: 'Should Never Appear', country: 'Canada', status: 'active' }], error: null });
+  h.mock.__set('community_groups', { data: [{ id: 'g1', name: 'Should Never Appear', platform: 'facebook', url: 'https://x', country: 'Canada' }], error: null });
+  const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false },
+    { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  assert.doesNotMatch(upstream.body.system, /Should Never Appear/);
+  assert.match(upstream.body.system, /No study programs or scholarships matched this query/);
+  assert.match(upstream.body.system, /No community groups on file for this destination yet/);
+});
+
+test('a complete profile retrieves and forwards all five new sources into the system prompt', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-complete' }, error: null });
+  h.mock.__set('study_opportunities', { data: [
+    { id: 's1', kind: 'scholarship', title: 'Excellence Bourse', institution: 'UQAM', country: 'Canada', city: 'Montréal', status: 'active' },
+  ], error: null });
+  h.mock.__set('community_groups', { data: [
+    { id: 'g1', name: 'Laval Lebanese Diaspora', platform: 'facebook', url: 'https://fb.com/x', country: 'Canada', city: 'Laval' },
+  ], error: null });
+  h.mock.__set('accommodation_listings', { data: [
+    { id: 'a1', type: 'roommate', country: 'Canada', city: 'Laval', contact: 'whatsapp +1...', expires_at: null },
+  ], error: null });
+  h.mock.__set('b2b_partners', { data: [
+    { id: 'p1', company_name: 'Canada Immigration Experts', contact_email: 'x@y.com', contact_phone: null, licence_number: 'L9', category: 'immigration_consultant', countries_served: ['Canada'] },
+  ], error: null });
+  h.mock.__set('country_risk_notes', { data: [
+    { id: 'r1', country: 'Canada', category: 'scam_prevalence', risk_level: 'low', summary: 'No widespread scam pattern on file.' },
+  ], error: null });
+
+  const r = await ask({ message: 'help me plan my move' }, caller());
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /Excellence Bourse/);
+  assert.match(upstream.body.system, /Laval Lebanese Diaspora/);
+  assert.match(upstream.body.system, /roommate/);
+  assert.match(upstream.body.system, /Canada Immigration Experts/);
+  assert.match(upstream.body.system, /No widespread scam pattern on file/);
+});
+
+test('the five new retrieval sources are queried in parallel, not serially -- a DB error in one never blocks the others or fails the turn', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-error' }, error: null });
+  h.mock.__set('study_opportunities', { data: null, error: { message: 'connection reset' } });
+  h.mock.__set('community_groups', { data: [{ id: 'g1', name: 'Still Works', platform: 'facebook', url: 'https://x', country: 'Canada', city: null }], error: null });
+  const r = await ask({ message: 'help me plan my move' }, caller());
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /No study programs or scholarships matched this query/);
+  assert.match(upstream.body.system, /Still Works/);
+});
+
+test('a preferredCity from the stored profile (not request body) scopes community and accommodation retrieval', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-city' }, error: null });
+  h.mock.__set('community_groups', { data: [
+    { id: 'g1', name: 'Laval Group', platform: 'facebook', url: 'https://x', country: 'canada', city: 'Laval' },
+    { id: 'g2', name: 'Other City Group', platform: 'facebook', url: 'https://x', country: 'canada', city: 'Vancouver' },
+  ], error: null });
+  const r = await ask({ message: 'help me plan my move' },
+    caller({}, COMPLETE_SEEKER, { ...COMPLETE_PROFILE, preferred_city: 'Laval' }));
+  assert.equal(r.status, 200);
+  // both are the same country, so the JS-side city-priority sort (not a DB
+  // filter -- the mock DB is a passthrough, see test/community-matching.test.js)
+  // should put the city match first.
+  const laval = upstream.body.system.indexOf('Laval Group');
+  const other = upstream.body.system.indexOf('Other City Group');
+  assert.ok(laval > -1 && other > -1 && laval < other);
+});
+
+test('a seeker\'s target degree level and field of study, and their preferred city, are fed into the system prompt as their own stated context', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-profilectx' }, error: null });
+  const r = await ask({ message: 'help me plan my move' }, caller({}, COMPLETE_SEEKER, {
+    ...COMPLETE_PROFILE, preferred_city: 'Laval', seeking_study: true, target_degree_level: 'masters', target_field_of_study: 'computer science',
+  }));
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /Preferred destination city: Laval/);
+  assert.match(upstream.body.system, /Seeking to study abroad: true/);
+  assert.match(upstream.body.system, /Target degree level: masters/);
+  assert.match(upstream.body.system, /Target field of study: computer science/);
+});

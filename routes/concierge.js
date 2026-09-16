@@ -11,6 +11,13 @@ const sec = require('../lib/security');
 const usage = require('../lib/usage');
 const access = require('../lib/access');
 const { retrieveJobs } = require('../lib/yf/matching');
+const { retrieveStudyOpportunities } = require('../lib/yf/studyMatching');
+const { retrieveCommunityGroups } = require('../lib/yf/communityMatching');
+const { retrieveAccommodationListings } = require('../lib/yf/accommodationMatching');
+const { retrieveTrustedPartners } = require('../lib/yf/partnerMatching');
+const { retrieveCountryRisks } = require('../lib/yf/riskMatching');
+const flightSearch = require('../lib/flightSearch');
+const hotelSearch = require('../lib/hotelSearch');
 const { buildSystemPrompt } = require('../lib/yf/systemPrompt');
 const { computeCompleteness } = require('../lib/profileCompleteness');
 const { applyIntake } = require('../lib/profileWrite');
@@ -164,8 +171,12 @@ function profileContext({ profile, seekerProfile }) {
   const add = (label, v) => { if (v !== undefined && v !== null) lines.push(`${label}: ${Array.isArray(v) || typeof v === 'object' ? JSON.stringify(v) : v}`); };
   add('Preferred language', profile?.preferred_language);
   add('Preferred destination country', profile?.preferred_country);
+  add('Preferred destination city', profile?.preferred_city);
   add('Sector', profile?.sector);
   add('Role type', profile?.role_type);
+  add('Seeking to study abroad', profile?.seeking_study);
+  add('Target degree level', profile?.target_degree_level);
+  add('Target field of study', profile?.target_field_of_study);
   if (seekerProfile) {
     if (seekerProfile.work_history?.length) add('Work history', seekerProfile.work_history);
     if (seekerProfile.education?.length) add('Education', seekerProfile.education);
@@ -472,7 +483,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       .limit(1)
       .maybeSingle();
     const { data: profileRow } = await supabase.from('profiles')
-      .select('preferred_language, preferred_country, sector, role_type')
+      .select('preferred_language, preferred_country, preferred_city, sector, role_type, seeking_study, target_degree_level, target_field_of_study')
       .eq('id', req.user.id).maybeSingle();
     const { isComplete, missing } = computeCompleteness({ profile: profileRow, seekerProfile });
 
@@ -512,11 +523,33 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // doesn't send preferredCountry (most won't, every turn) falls back to
     // what the seeker already told the platform during intake, rather than
     // matching as if that answer didn't exist.
+    const preferredCountry = sec.clean(req.body.preferredCountry, 60) || profileRow?.preferred_country || '';
+    const preferredCity = profileRow?.preferred_city || '';
     const jobs = isComplete ? await retrieveJobs({
       query: message,
-      preferredCountry: sec.clean(req.body.preferredCountry, 60) || profileRow?.preferred_country || '',
+      preferredCountry,
       limit: 5,
     }) : [];
+    // Same "no retrieval before the profile gate passes" discipline as jobs
+    // above, extended to every other retrieved-context source added for the
+    // international-students, travel/community, and trusted-partner verticals
+    // (Section 4/5 of the build brief) -- none of these are gated behind
+    // profile.seeking_study specifically (a pure job-seeker profile still
+    // benefits from community/accommodation/partner/risk context once
+    // complete), only behind the same completeness gate jobs already use.
+    // Fetched in parallel -- five independent reads, no ordering dependency.
+    const [studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks] = isComplete
+      ? await Promise.all([
+          retrieveStudyOpportunities({
+            query: message, preferredCountry,
+            degreeLevel: profileRow?.target_degree_level, fieldOfStudy: profileRow?.target_field_of_study, limit: 5,
+          }),
+          retrieveCommunityGroups({ country: preferredCountry, city: preferredCity, limit: 5 }),
+          retrieveAccommodationListings({ country: preferredCountry, city: preferredCity, limit: 5 }),
+          retrieveTrustedPartners({ country: preferredCountry, limit: 3 }),
+          retrieveCountryRisks({ country: preferredCountry, limit: 5 }),
+        ])
+      : [[], [], [], [], []];
     // Seed/demo fixture rows (see demoJob above) are redacted before either
     // the model or the client sees them, regardless of preview/subscription
     // status — applied first so a demo job during free preview still gets
@@ -589,7 +622,11 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     }
 
     const context = profileContext({ profile: profileRow, seekerProfile });
-    const system = buildSystemPrompt({ jobs: outJobs, dialectHint: sec.clean(req.body.dialectHint, 40) })
+    const system = buildSystemPrompt({
+      jobs: outJobs, dialectHint: sec.clean(req.body.dialectHint, 40),
+      studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks,
+      travel: { flightsConfigured: flightSearch.configured(), hotelsConfigured: hotelSearch.configured() },
+    })
       + (context ? '\n\n' + context : '')
       + (isComplete ? '' : '\n\n' + intakeInstructions(missing))
       + (inPreview ? '\n\n' + previewInstructions(freePreviewLimit() - previewUsed - 1) : '')
