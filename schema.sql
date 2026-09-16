@@ -79,6 +79,31 @@
 -- reward (lib/access.js, lib/referral.js's grantReferralBonus()): one new
 -- column, touching no existing row (null = no bonus, same as today):
 --   alter table public.users add column if not exists bonus_access_until timestamptz;
+--
+-- Migrating an ALREADY-DEPLOYED project onto the international-students,
+-- travel-logistics, and diaspora-community verticals (lib/yf/studyMatching.js,
+-- lib/yf/communityMatching.js, lib/yf/accommodationMatching.js,
+-- lib/flightSearch.js, lib/hotelSearch.js, lib/translate.js): four new
+-- profiles columns (weighting/context signals only, never a hard filter —
+-- same discipline as preferred_country) plus six new tables (three
+-- moderated-submission pairs, same two-step pattern as
+-- informal_listing_submissions -> jobs). Nothing here touches an existing
+-- row:
+--   alter table public.profiles
+--     add column if not exists preferred_city text,
+--     add column if not exists seeking_study boolean not null default false,
+--     add column if not exists target_degree_level text,
+--     add column if not exists target_field_of_study text;
+--   -- then run the six create table statements near b2b_partners below
+--   -- (study_opportunities, study_opportunity_submissions, community_groups,
+--   -- community_group_submissions, accommodation_listings, accommodation_submissions).
+--
+-- Migrating an ALREADY-DEPLOYED project onto trusted-partner referrals
+-- (lib/yf/partnerMatching.js) and country risk notes (lib/yf/riskMatching.js):
+-- partner referrals need NO migration -- they read the existing b2b_partners
+-- table (licence_verified=true, status='active') as-is. Risk notes need one
+-- new table:
+--   -- run the country_risk_notes create table statement near b2b_partners below.
 
 create extension if not exists "uuid-ossp";
 
@@ -209,8 +234,16 @@ create table if not exists public.profiles (
   country text,
   preferred_language text, -- 'ar-LB' | 'ar-SY' | 'ar-EG' | 'ar' | 'fr' | 'en'
   preferred_country text,  -- weighting signal only, never a hard filter (4.3)
+  preferred_city text,     -- same discipline as preferred_country, for community/accommodation matching
   sector text,
   role_type text,
+  -- International-students vertical (lib/yf/studyMatching.js): optional,
+  -- additive signals only -- never part of Section 10's required-field gate
+  -- (lib/profileCompleteness.js is untouched by this), so a pure job-seeker
+  -- profile is unaffected.
+  seeking_study boolean not null default false,
+  target_degree_level text,   -- e.g. 'undergraduate' | 'graduate' | 'phd' | 'language_program' | 'vocational'
+  target_field_of_study text,
   created_at timestamptz not null default now()
 );
 
@@ -457,6 +490,158 @@ create table if not exists public.referral_conversions (
 );
 create index if not exists referral_conversions_referrer_idx on public.referral_conversions(referrer_id);
 
+-- STUDY OPPORTUNITIES (international-students vertical) -- same
+-- licensed/curated + informal-submission shape as `jobs`/`informal_listing_submissions`
+-- above, kept as its OWN table rather than folded into `jobs` because the field
+-- shape genuinely differs (a scholarship has a sponsor and a deadline, not an
+-- employer and a salary) and mixing the two would pollute lib/yf/matching.js's
+-- job scorer with rows it was never meant to rank. `kind` distinguishes a
+-- degree/language program from a scholarship/grant within the one table since
+-- both are matched and presented the same way (retrieve, don't recall --
+-- lib/yf/systemPrompt.js's STUDY_CONTEXT block only ever states what's in here).
+create table if not exists public.study_opportunities (
+  id uuid primary key default uuid_generate_v4(),
+  kind text not null, -- 'program' | 'scholarship'
+  source_type text not null default 'admin_curated', -- 'admin_curated' | 'consultant_submission' -- no licensed feed exists yet (Section 9 of the build brief)
+  title text not null, -- program name, or scholarship name
+  institution text, -- university/school name
+  country text not null,
+  city text,
+  degree_level text, -- 'undergraduate' | 'graduate' | 'phd' | 'language_program' | 'vocational'
+  field_of_study text,
+  language text, -- language of instruction
+  tuition_note text,
+  eligibility_note text,
+  deadline date, -- null = rolling/no fixed deadline
+  requirements text,
+  source_url text,
+  status text not null default 'active', -- 'active' | 'expired' | 'removed'
+  raw jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists study_opportunities_country_idx on public.study_opportunities(country);
+create index if not exists study_opportunities_status_idx on public.study_opportunities(status);
+
+-- Public submission queue for study_opportunities -- same two-step
+-- submit-then-admin-review pattern as informal_listing_submissions -> jobs
+-- (routes/study-opportunities.js, routes/admin-study-opportunities.js).
+-- Consultants/travel agencies (b2b_partners above) are the expected submitter,
+-- but this stays open like informal-listings rather than gated to a b2b
+-- account, so a university partner without a formal b2b listing yet can still
+-- submit a program for review.
+create table if not exists public.study_opportunity_submissions (
+  id uuid primary key default uuid_generate_v4(),
+  submitted_by_contact text not null,
+  kind text not null, -- 'program' | 'scholarship'
+  title text not null,
+  institution text,
+  country text,
+  city text,
+  degree_level text,
+  field_of_study text,
+  deadline date,
+  description text,
+  review_status text not null default 'pending', -- 'pending' | 'approved' | 'rejected'
+  rejection_reason text,
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- DIASPORA & COMMUNITY GROUPS -- a curated directory of real, existing
+-- Arabic-speaking community/social-media groups per destination city, so the
+-- concierge can point a seeker to one by name and link instead of inventing a
+-- plausible-sounding one (the exact failure mode Section 6.1's sourcing rule
+-- exists to prevent). Same submit -> admin-review -> live-row shape as study
+-- opportunities and informal listings.
+create table if not exists public.community_groups (
+  id uuid primary key default uuid_generate_v4(),
+  country text not null,
+  city text,
+  platform text not null, -- 'facebook' | 'whatsapp' | 'telegram' | 'instagram' | 'other'
+  name text not null,
+  url text not null,
+  language text,
+  status text not null default 'active', -- 'active' | 'removed'
+  created_at timestamptz not null default now()
+);
+create index if not exists community_groups_country_idx on public.community_groups(country);
+
+create table if not exists public.community_group_submissions (
+  id uuid primary key default uuid_generate_v4(),
+  submitted_by_contact text not null,
+  country text,
+  city text,
+  platform text,
+  name text not null,
+  url text not null,
+  language text,
+  review_status text not null default 'pending',
+  rejection_reason text,
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- ACCOMMODATION BOARD (couch-surfing / roommate / sublet) -- seeker-to-seeker
+-- posts, same free-text-contact + admin-moderation discipline as
+-- informal_listing_submissions (a low-profile poster may have no fixed-format
+-- contact to give beyond a WhatsApp handle), and the same 30-day freshness
+-- window as an approved informal job listing once live -- housing availability
+-- goes stale exactly as fast as an urgent job lead does.
+create table if not exists public.accommodation_listings (
+  id uuid primary key default uuid_generate_v4(),
+  type text not null, -- 'couchsurf' | 'roommate' | 'sublet'
+  country text not null,
+  city text not null,
+  budget_note text,
+  description text,
+  contact text not null, -- carried from the submission -- same "verify independently" caution as any informal_unverified lead
+  status text not null default 'active', -- 'active' | 'expired' | 'removed'
+  expires_at timestamptz,
+  raw jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists accommodation_listings_country_idx on public.accommodation_listings(country);
+create index if not exists accommodation_listings_status_idx on public.accommodation_listings(status);
+
+create table if not exists public.accommodation_submissions (
+  id uuid primary key default uuid_generate_v4(),
+  submitted_by_contact text not null,
+  type text not null,
+  country text not null,
+  city text not null,
+  budget_note text,
+  description text,
+  review_status text not null default 'pending',
+  rejection_reason text,
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- COUNTRY RISK NOTES -- admin-curated, published risk information per
+-- destination country (Hicham's explicit ask: "highlight the risk of every
+-- country, in case exist"). Deliberately a curated table, not something the
+-- concierge reasons about from training data: a wrong or stale risk
+-- assessment is exactly the kind of confident-but-invented claim Section 6.1
+-- exists to prevent, and country risk (scam patterns, safety, visa-process
+-- reliability) genuinely changes over time. No admin UI shipped yet for this
+-- one (see the build brief's Devin handoff) -- rows are written directly by
+-- an operator until routes/admin-country-risk.js exists.
+create table if not exists public.country_risk_notes (
+  id uuid primary key default uuid_generate_v4(),
+  country text not null,
+  category text not null, -- 'scam_prevalence' | 'safety' | 'visa_reliability' | 'legal' | 'other'
+  risk_level text, -- 'low' | 'medium' | 'high' -- free text, not an enum, since nuance matters more than a strict scale here
+  summary text not null,
+  source_url text,
+  status text not null default 'active', -- 'active' | 'removed'
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists country_risk_notes_country_idx on public.country_risk_notes(country);
+
 -- Row Level Security: enabled on every personal table with NO policies — only
 -- the backend's service-role key (never shipped to a client) can read or write
 -- them. That is the strongest posture this architecture allows: the Express
@@ -468,6 +653,13 @@ alter table public.concierge_conversations enable row level security;
 alter table public.concierge_messages enable row level security;
 alter table public.daily_usage enable row level security;
 alter table public.referral_conversions enable row level security;
+alter table public.study_opportunities enable row level security;
+alter table public.study_opportunity_submissions enable row level security;
+alter table public.community_groups enable row level security;
+alter table public.community_group_submissions enable row level security;
+alter table public.accommodation_listings enable row level security;
+alter table public.accommodation_submissions enable row level security;
+alter table public.country_risk_notes enable row level security;
 
 -- The conversion ledger insert AND the referrer's reward land in ONE
 -- transaction (called from lib/referral.js's creditConversionIfNew): a
