@@ -722,7 +722,10 @@ begin
     'profiles','seeker_profiles','document_uploads','concierge_conversations',
     'concierge_messages','daily_usage','referral_conversions','push_subscriptions',
     'banned_emails','rate_hits','users','jobs','informal_listing_submissions',
-    'b2b_partners','contact_messages','news_items'
+    'b2b_partners','contact_messages','news_items',
+    'study_opportunities','study_opportunity_submissions','community_groups',
+    'community_group_submissions','accommodation_listings','accommodation_submissions',
+    'country_risk_notes'
   ] loop
     execute format(
       'create policy %I on public.%I for all to anon, authenticated using (false) with check (false)',
