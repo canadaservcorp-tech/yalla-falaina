@@ -255,6 +255,10 @@ test('an incomplete profile enters intake mode instead of being refused, with no
   // the model must be told it's a valid preferred_language value too, or a
   // Gulf seeker's own stated preference would get rejected on intake extraction.
   assert.match(upstream.body.system, /preferred_language must be one of[^;]*ar-AE/);
+  // tr (Turkish) is likewise a real signup/PUT option — the intake contract
+  // must name it too, or a seeker answering 'Türkçe' keeps preferred_language
+  // missing and the gate re-asks forever (Devin Review finding on PR #94).
+  assert.match(upstream.body.system, /preferred_language must be one of[^;]*\btr\b/);
   // intake turns are free — the daily quota is neither checked nor charged,
   // and the logged turn records 0 units rather than the matching cost
   assert.equal(h.mock.__rpcCalls('usage_charge').length, 0);
