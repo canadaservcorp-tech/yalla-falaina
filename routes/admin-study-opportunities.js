@@ -20,7 +20,7 @@ router.get('/', authenticate, sec.requireActiveUser, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only', code: 'ERR_FORBIDDEN' });
   const status = STATUSES.includes(req.query.status) ? req.query.status : 'pending';
   const { data, error } = await supabase.from('study_opportunity_submissions')
-    .select('id, submitted_by_contact, kind, title, institution, country, city, degree_level, field_of_study, deadline, description, review_status, rejection_reason, reviewed_by, reviewed_at, created_at')
+    .select('id, submitted_by_contact, kind, title, institution, country, city, degree_level, field_of_study, tuition_note, funding_coverage_pct, eligibility_note, deadline, description, review_status, rejection_reason, reviewed_by, reviewed_at, created_at')
     .eq('review_status', status)
     .order('created_at', { ascending: false })
     .limit(200);
@@ -51,7 +51,7 @@ router.post('/:id/review', authenticate, sec.requireActiveUser, async (req, res)
       return res.status(400).json({ error: 'This submission was already reviewed', code: 'ERR_BAD_INPUT' });
 
     if (decision === 'approved') {
-      if (isProhibited(sub.title, sub.institution, sub.description))
+      if (isProhibited(sub.title, sub.institution, sub.description, sub.tuition_note, sub.eligibility_note))
         return res.status(403).json({ error: 'This submission cannot be approved as-is', code: 'ERR_FORBIDDEN' });
       const { error: oErr } = await supabase.from('study_opportunities').insert({
         kind: sub.kind,
@@ -62,6 +62,15 @@ router.post('/:id/review', authenticate, sec.requireActiveUser, async (req, res)
         city: sub.city,
         degree_level: sub.degree_level,
         field_of_study: sub.field_of_study,
+        // Carried straight through from the submitter's own tuition_note/
+        // funding_coverage_pct/eligibility_note -- this admin approval step
+        // IS the verification that makes it safe for the concierge to state
+        // as a published fact (see study_opportunities' own schema.sql
+        // comment on why funding_coverage_pct must only ever be a real,
+        // checked figure).
+        tuition_note: sub.tuition_note,
+        funding_coverage_pct: sub.funding_coverage_pct,
+        eligibility_note: sub.eligibility_note,
         deadline: sub.deadline,
         requirements: sub.description,
         status: 'active',
