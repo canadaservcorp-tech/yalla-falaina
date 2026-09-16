@@ -16,6 +16,7 @@ const { retrieveCommunityGroups } = require('../lib/yf/communityMatching');
 const { retrieveAccommodationListings } = require('../lib/yf/accommodationMatching');
 const { retrieveTrustedPartners } = require('../lib/yf/partnerMatching');
 const { retrieveCountryRisks } = require('../lib/yf/riskMatching');
+const { retrieveCostOfLiving } = require('../lib/yf/costOfLivingMatching');
 const flightSearch = require('../lib/flightSearch');
 const hotelSearch = require('../lib/hotelSearch');
 const { buildSystemPrompt } = require('../lib/yf/systemPrompt');
@@ -537,8 +538,8 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // profile.seeking_study specifically (a pure job-seeker profile still
     // benefits from community/accommodation/partner/risk context once
     // complete), only behind the same completeness gate jobs already use.
-    // Fetched in parallel -- five independent reads, no ordering dependency.
-    const [studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks] = isComplete
+    // Fetched in parallel -- six independent reads, no ordering dependency.
+    const [studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving] = isComplete
       ? await Promise.all([
           retrieveStudyOpportunities({
             query: message, preferredCountry,
@@ -548,8 +549,9 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
           retrieveAccommodationListings({ country: preferredCountry, city: preferredCity, limit: 5 }),
           retrieveTrustedPartners({ country: preferredCountry, limit: 3 }),
           retrieveCountryRisks({ country: preferredCountry, limit: 5 }),
+          retrieveCostOfLiving({ country: preferredCountry, city: preferredCity, limit: 5 }),
         ])
-      : [[], [], [], [], []];
+      : [[], [], [], [], [], []];
     // Seed/demo fixture rows (see demoJob above) are redacted before either
     // the model or the client sees them, regardless of preview/subscription
     // status — applied first so a demo job during free preview still gets
@@ -624,7 +626,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     const context = profileContext({ profile: profileRow, seekerProfile });
     const system = buildSystemPrompt({
       jobs: outJobs, dialectHint: sec.clean(req.body.dialectHint, 40),
-      studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks,
+      studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving,
       travel: { flightsConfigured: flightSearch.configured(), hotelsConfigured: hotelSearch.configured() },
     })
       + (context ? '\n\n' + context : '')

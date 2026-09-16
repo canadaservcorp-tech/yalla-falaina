@@ -767,25 +767,27 @@ test('an omitted preferredCountry falls back to the profile\'s stored destinatio
   assert.equal(j.jobs[0].country, 'Canada');   // the profile's preferred_country wins the tie, not request order
 });
 
-// ---------- study/community/accommodation/partner/risk retrieval wiring ----------
+// ---------- study/community/accommodation/partner/risk/cost-of-living retrieval wiring ----------
 // Section 4/5 verticals (international students, travel/community, trusted-
-// partner referral, country risk) -- gated behind the exact same isComplete
-// flag jobs already use (routes/concierge.js's own comment above the
-// Promise.all block), never behind profile.seeking_study specifically.
+// partner referral, country risk, cost of living) -- gated behind the exact
+// same isComplete flag jobs already use (routes/concierge.js's own comment
+// above the Promise.all block), never behind profile.seeking_study specifically.
 
-test('an incomplete profile retrieves none of the five new sources, and none of their context blocks carry real data into the system prompt', async () => {
+test('an incomplete profile retrieves none of the six new sources, and none of their context blocks carry real data into the system prompt', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-intake' }, error: null });
   h.mock.__set('study_opportunities', { data: [{ id: 's1', kind: 'program', title: 'Should Never Appear', country: 'Canada', status: 'active' }], error: null });
   h.mock.__set('community_groups', { data: [{ id: 'g1', name: 'Should Never Appear', platform: 'facebook', url: 'https://x', country: 'Canada' }], error: null });
+  h.mock.__set('cost_of_living_notes', { data: [{ id: 'col1', country: 'Canada', city: null, category: 'overall', monthly_estimate_note: 'Should Never Appear', source_url: null }], error: null });
   const r = await ask({ message: 'hi' }, caller({}, { is_complete: false, confirmed_by_user: false },
     { preferred_language: null, preferred_country: null, sector: null, role_type: null }));
   assert.equal(r.status, 200);
   assert.doesNotMatch(upstream.body.system, /Should Never Appear/);
   assert.match(upstream.body.system, /No study programs or scholarships matched this query/);
   assert.match(upstream.body.system, /No community groups on file for this destination yet/);
+  assert.match(upstream.body.system, /No curated cost-of-living note on file for this specific city\/country yet/);
 });
 
-test('a complete profile retrieves and forwards all five new sources into the system prompt', async () => {
+test('a complete profile retrieves and forwards all six new sources into the system prompt', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-complete' }, error: null });
   h.mock.__set('study_opportunities', { data: [
     { id: 's1', kind: 'scholarship', title: 'Excellence Bourse', institution: 'UQAM', country: 'Canada', city: 'Montréal', status: 'active' },
@@ -802,6 +804,9 @@ test('a complete profile retrieves and forwards all five new sources into the sy
   h.mock.__set('country_risk_notes', { data: [
     { id: 'r1', country: 'Canada', category: 'scam_prevalence', risk_level: 'low', summary: 'No widespread scam pattern on file.' },
   ], error: null });
+  h.mock.__set('cost_of_living_notes', { data: [
+    { id: 'col1', country: 'Canada', city: 'Laval', category: 'overall', monthly_estimate_note: '$1,200-1,800 CAD/month including rent', source_url: null },
+  ], error: null });
 
   const r = await ask({ message: 'help me plan my move' }, caller());
   assert.equal(r.status, 200);
@@ -810,16 +815,19 @@ test('a complete profile retrieves and forwards all five new sources into the sy
   assert.match(upstream.body.system, /roommate/);
   assert.match(upstream.body.system, /Canada Immigration Experts/);
   assert.match(upstream.body.system, /No widespread scam pattern on file/);
+  assert.match(upstream.body.system, /\$1,200-1,800 CAD\/month including rent/);
 });
 
-test('the five new retrieval sources are queried in parallel, not serially -- a DB error in one never blocks the others or fails the turn', async () => {
+test('the six new retrieval sources are queried in parallel, not serially -- a DB error in one never blocks the others or fails the turn', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-newsources-error' }, error: null });
   h.mock.__set('study_opportunities', { data: null, error: { message: 'connection reset' } });
   h.mock.__set('community_groups', { data: [{ id: 'g1', name: 'Still Works', platform: 'facebook', url: 'https://x', country: 'Canada', city: null }], error: null });
+  h.mock.__set('cost_of_living_notes', { data: null, error: { message: 'connection reset' } });
   const r = await ask({ message: 'help me plan my move' }, caller());
   assert.equal(r.status, 200);
   assert.match(upstream.body.system, /No study programs or scholarships matched this query/);
   assert.match(upstream.body.system, /Still Works/);
+  assert.match(upstream.body.system, /No curated cost-of-living note on file for this specific city\/country yet/);
 });
 
 test('a preferredCity from the stored profile (not request body) scopes community and accommodation retrieval', async () => {
