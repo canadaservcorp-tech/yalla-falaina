@@ -117,6 +117,10 @@ app.use('/api/admin/news', require('./routes/admin-news'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/admin/referrals', require('./routes/admin-referrals'));
+app.use('/api/study-opportunities', require('./routes/study-opportunities'));
+app.use('/api/admin/study-opportunities', require('./routes/admin-study-opportunities'));
+app.use('/api/community', require('./routes/community'));               // diaspora groups + accommodation board
+app.use('/api/admin/community', require('./routes/admin-community'));
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either.
 // Step 7 (deployment prep) — paypal/email are configuration checks, same as

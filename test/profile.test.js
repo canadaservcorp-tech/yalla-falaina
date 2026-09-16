@@ -223,3 +223,52 @@ test('GET on an account with no profile row at all reports everything missing, n
   assert.deepEqual(j.missing.sort(), ['certifications', 'confirmed_by_user', 'education', 'has_family_or_host_abroad', 'has_legal_residency_current_country',
     'has_passport', 'has_visa', 'languages', 'preferred_country', 'preferred_language', 'sector_or_role_type', 'work_history']);
 });
+
+// ---------- new optional signals: international-students + preferred_city ----------
+// These four fields (schema.sql's profiles migration note) are additive-only —
+// they must never appear in Section 10's required-field gate, so none of the
+// completeness assertions above should change once they're set or left unset.
+
+test('PUT accepts preferred_city as a plain optional string', async () => {
+  h.mock.__set('profiles', { data: { id: 200, preferred_language: 'en', preferred_country: 'Canada', preferred_city: 'Laval', sector: null, role_type: null }, error: null });
+  h.mock.__set('seeker_profiles', { data: null, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp1', is_complete: false }, error: null });
+
+  const r = await put({ preferred_city: 'Laval' }, user());
+  assert.equal(r.status, 200);
+  const upserts = h.mock.__writes('profiles', 'upsert');
+  assert.equal(upserts.length, 1);
+  assert.equal(upserts[0].payload.preferred_city, 'Laval');
+});
+
+test('PUT rejects a non-boolean seeking_study', async () => {
+  const r = await put({ seeking_study: 'yes' }, user());
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).code, 'ERR_BAD_INPUT');
+  assert.equal(h.mock.__writes('profiles', 'upsert').length, 0);
+});
+
+test('PUT accepts seeking_study, target_degree_level, and target_field_of_study together', async () => {
+  h.mock.__set('profiles', { data: { id: 200, preferred_language: 'en', preferred_country: null, sector: null, role_type: null, seeking_study: true, target_degree_level: 'masters', target_field_of_study: 'computer science' }, error: null });
+  h.mock.__set('seeker_profiles', { data: null, error: null });
+  h.mock.__setOp('seeker_profiles', 'upsert', { data: { id: 'sp1', is_complete: false }, error: null });
+
+  const r = await put({ seeking_study: true, target_degree_level: 'masters', target_field_of_study: 'computer science' }, user());
+  assert.equal(r.status, 200);
+  const upserts = h.mock.__writes('profiles', 'upsert');
+  assert.equal(upserts[0].payload.seeking_study, true);
+  assert.equal(upserts[0].payload.target_degree_level, 'masters');
+  assert.equal(upserts[0].payload.target_field_of_study, 'computer science');
+});
+
+test('a profile with seeking_study set but every Section 10 field still unanswered is still reported incomplete, same as any other seeker', async () => {
+  // Guards against a future regression that decouples "seeking study" seekers
+  // from the intake gate without an explicit design decision (see the Devin
+  // handoff notes) -- for this pass, seeking_study is purely additive.
+  h.mock.__set('profiles', { data: { id: 200, preferred_language: 'en', preferred_country: null, sector: null, role_type: null, seeking_study: true }, error: null });
+  h.mock.__set('seeker_profiles', { data: null, error: null });
+  const r = await get(user());
+  const j = await r.json();
+  assert.equal(j.isComplete, false);
+  assert.ok(j.missing.includes('preferred_country'));
+});
