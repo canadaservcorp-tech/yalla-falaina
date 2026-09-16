@@ -268,7 +268,7 @@ create table if not exists public.profiles (
   phone_verified boolean not null default false,
   city text,
   country text,
-  preferred_language text, -- 'ar-LB' | 'ar-SY' | 'ar-EG' | 'ar' | 'fr' | 'en'
+  preferred_language text, -- 'ar-LB' | 'ar-SY' | 'ar-EG' | 'ar-AE' | 'ar' | 'fr' | 'hi' | 'en' | 'tr'
   preferred_country text,  -- weighting signal only, never a hard filter (4.3)
   preferred_city text,     -- same discipline as preferred_country, for community/accommodation matching
   sector text,

@@ -13,7 +13,7 @@ const { JWT_SECRET } = process.env;
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
 const BCRYPT_ROUNDS = 12;
 const TERMS_VERSION = '2026-09-08';
-const LANGUAGES = ['ar-LB', 'ar-SY', 'ar-EG', 'ar-AE', 'ar', 'fr', 'hi', 'en'];
+const LANGUAGES = ['ar-LB', 'ar-SY', 'ar-EG', 'ar-AE', 'ar', 'fr', 'hi', 'en', 'tr'];
 // Account-level brute-force lockout (schema.sql's record_login_result()) —
 // keyed on the account, not the IP, specifically to close the gap
 // sec.limits.credentials (IP+email) leaves open: a botnet spraying wrong

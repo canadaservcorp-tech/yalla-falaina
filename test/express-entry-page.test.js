@@ -33,15 +33,16 @@ test('loadDraws degrades to an empty list rather than throwing on a DB error', a
   assert.deepEqual(draws, []);
 });
 
-test('titleField picks the native headline for en/fr/ar, and English for Hindi (no machine-translated CRS numbers)', () => {
+test('titleField picks the native headline for en/fr/ar, and English for Hindi/Turkish (no machine-translated CRS numbers)', () => {
   assert.equal(expressEntryPage.titleField('en'), 'title_en');
   assert.equal(expressEntryPage.titleField('fr'), 'title_fr');
   assert.equal(expressEntryPage.titleField('ar'), 'title_ar');
   assert.equal(expressEntryPage.titleField('hi'), 'title_en');
+  assert.equal(expressEntryPage.titleField('tr'), 'title_en');
 });
 
-test('renderPage shows the right native headline per language, and falls back to title_en for Hindi', () => {
-  for (const [lang, expected] of [['en', DRAW.title_en], ['fr', DRAW.title_fr], ['ar', DRAW.title_ar], ['hi', DRAW.title_en]]) {
+test('renderPage shows the right native headline per language, and falls back to title_en for Hindi/Turkish', () => {
+  for (const [lang, expected] of [['en', DRAW.title_en], ['fr', DRAW.title_fr], ['ar', DRAW.title_ar], ['hi', DRAW.title_en], ['tr', DRAW.title_en]]) {
     const html = expressEntryPage.renderPage({ lang, draws: [DRAW], head: '<title>x</title>' });
     assert.ok(html.includes(expected), `expected ${lang} page to include its own headline text`);
   }

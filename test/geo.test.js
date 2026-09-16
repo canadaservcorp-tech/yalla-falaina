@@ -5,7 +5,7 @@ const h = getApp();
 after(() => h.stop());
 const geo = require('../lib/geo');
 
-const LANGS = ['en', 'fr', 'ar', 'hi'];
+const LANGS = ['en', 'fr', 'ar', 'hi', 'tr'];
 const req = (headers = {}, ip = null) => ({ headers, ip });
 
 test('the countries the operator named get the language they asked for', () => {
@@ -13,6 +13,7 @@ test('the countries the operator named get the language they asked for', () => {
   assert.equal(geo.COUNTRY_LANG.TN, 'fr');
   for (const c of ['SA', 'AE', 'KW', 'QA', 'BH', 'OM']) assert.equal(geo.COUNTRY_LANG[c], 'en', c);
   assert.equal(geo.COUNTRY_LANG.IN, 'hi');
+  assert.equal(geo.COUNTRY_LANG.TR, 'tr');
 });
 
 test('country beats Accept-Language, because phones in this market report en', () => {
@@ -57,6 +58,13 @@ test('India lands on the Hindi page', async () => {
   assert.doesNotMatch(body, /<html[^>]*dir="rtl"/);
 });
 
+test('Turkey lands on the Turkish page', async () => {
+  const body = await fetch(h.base + '/', { headers: { 'cf-ipcountry': 'TR' } }).then(r => r.text());
+  assert.match(body, /<html lang="tr"/);
+  assert.match(body, /<title>Yalla Nsafer — Seyahatiniz/);
+  assert.doesNotMatch(body, /<html[^>]*dir="rtl"/);
+});
+
 test('the server stamps a local-currency price label for the country', async () => {
   const cases = { AE: 'AED 92', SA: 'SAR 94', IN: '₹2,100', US: 'USD 25' };
   for (const [cc, price] of Object.entries(cases)) {
@@ -69,7 +77,7 @@ test('the paywall copy renders the stamped price through the {price} placeholder
   const fs = require('fs');
   const src = fs.readFileSync(require('path').join(__dirname, '..', 'public', 'i18n.js'), 'utf8');
   const rows = src.match(/paywallText: '[^']*'|paywallText: "[^"]*"/g);
-  assert.equal(rows.length, 4);
+  assert.equal(rows.length, 5);
   for (const r of rows) assert.ok(r.includes('{price}'), `${r} lost the price placeholder`);
 });
 
