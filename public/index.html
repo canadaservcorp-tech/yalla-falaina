@@ -1677,7 +1677,11 @@
       const dot = document.createElement('span');
       dot.className = 'dot';
       dot.textContent = '\u2022';
-      a.append(dot, document.createTextNode(it.title));
+      // Funding items wear a badge so a scholarship call or a program
+      // discount reads differently from an immigration-policy update at a
+      // glance — universal glyphs, no translation needed.
+      const badge = { scholarship: '🎓 ', program_offer: '🏷️ ' }[it.category] || '';
+      a.append(dot, document.createTextNode(badge + it.title));
       trackEl.appendChild(a);
     });
     // The animation translates the track by -50%, so the list is laid out

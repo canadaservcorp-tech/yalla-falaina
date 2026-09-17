@@ -10,6 +10,11 @@ const sec = require('../lib/security');
 const router = express.Router();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i;
+// What an operator post can be: a plain announcement (default), a
+// scholarship call ("bourse"), or a program offer/discount a university
+// is running. Anything else is not a ticker category — it silently
+// falls back to 'announcement' rather than letting a typo invent one.
+const CATEGORIES = ['announcement', 'scholarship', 'program_offer'];
 const adminOnly = (req, res, next) =>
   req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only', code: 'ERR_FORBIDDEN' });
 
@@ -31,6 +36,10 @@ router.post('/', authenticate, sec.requireActiveUser, adminOnly, async (req, res
   const title_ar = sec.clean(req.body.title_ar, 240) || null;
   const url = sec.clean(req.body.url, 500);
   const country = sec.clean(req.body.country, 60) || null;
+  // Beyond plain announcements the operator can post scholarship ("bourse")
+  // calls and program offers/discounts -- the ticker badges them so a
+  // visitor can tell a funding item from a policy update at a glance.
+  const category = CATEGORIES.includes(req.body.category) ? req.body.category : 'announcement';
   if (!title_en) return res.status(400).json({ error: 'An English headline is required', code: 'ERR_BAD_INPUT' });
   // A ticker item a visitor cannot verify is exactly what this product
   // refuses to publish, so the source link is mandatory and must be https.
@@ -40,7 +49,7 @@ router.post('/', authenticate, sec.requireActiveUser, adminOnly, async (req, res
   const { error } = await supabase.from('news_items').insert({
     source: 'operator',
     external_id: crypto.randomUUID(),
-    country, category: 'announcement',
+    country, category,
     title_en, title_fr, title_ar, url,
     published_at: new Date().toISOString(),
   });
