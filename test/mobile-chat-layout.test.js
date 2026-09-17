@@ -30,6 +30,17 @@ test('#messages can shrink below its content size so it scrolls internally inste
   assert.match(rule, /overflow-y:\s*auto/);
 });
 
+test('the fixed #ctaAside can never cover the composer — #chatPane is dynamically padded by the bar height', () => {
+  // Live-site regression: a signed-in visitor on desktop Arabic had the
+  // floating Contact/Advertise/social bar sitting directly on top of
+  // #inputRow (fixed bottom, inset-inline-start = the composer's corner in
+  // both directions). padForBar now measures the bar and pads the pane on
+  // every viewport, not just the signup card on small screens.
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  assert.match(script, /chatPane'\)\.style\.paddingBottom/);
+  assert.match(script, /cookiebar'\)\.offsetParent/, 'the consent cookiebar is the same bottom overlay and must count too');
+});
+
 test('on phones, the chat pane is capped at 60dvh (not just a floor) so the composer can never be pushed past the first screen', () => {
   const mobile = style.match(/@media \(max-width: 720px\) \{[\s\S]*?\n  \}/)[0];
   const rule = mobile.match(/#chatPane\s*\{[^}]*\}/)[0];
