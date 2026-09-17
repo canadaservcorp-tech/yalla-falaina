@@ -30,6 +30,18 @@ test('#messages can shrink below its content size so it scrolls internally inste
   assert.match(rule, /overflow-y:\s*auto/);
 });
 
+test('on phones, the chat pane must not flex-shrink inside the bounded main', () => {
+  // Regression from #100: body is now bounded to the viewport, so a mobile
+  // column whose children exceed it shrinks them -- the tall #jobsPane
+  // squeezed #chatPane to ~112px and clipped the composer inside it.
+  const mobileBlock = html.match(/@media \(max-width: 720px\) \{([\s\S]*?)\n  \}/)[1];
+  const chatRule = mobileBlock.match(/#chatPane \{[^}]+\}/)[0];
+  assert.match(chatRule, /flex-shrink:\s*0/);
+  // Prominence: the composer is the post-signup action and must read as such.
+  assert.match(mobileBlock, /#inputRow \{[^}]*border-top:\s*2px solid var\(--accent\)/);
+  assert.match(mobileBlock, /#inputRow input \{[^}]*font-size:\s*16px/);
+});
+
 test('the fixed #ctaAside can never cover the composer — #chatPane is dynamically padded by the bar height', () => {
   // Live-site regression: a signed-in visitor on desktop Arabic had the
   // floating Contact/Advertise/social bar sitting directly on top of
