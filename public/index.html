@@ -196,11 +196,12 @@
        scroll main past the paywall banner to find it, they only ever
        scroll further to reach #jobsPane (the matched-jobs / medical-intake
        panel) below. */
-    /* flex-shrink:0 is load-bearing: main is now bounded to the viewport
-       (#100), so a column whose children exceed it shrinks them -- the tall
-       #jobsPane squeezed this pane to ~112px and clipped the composer inside
-       it. The 60dvh height is an explicit contract, not a suggestion. */
-    #chatPane { border-right: none; border-bottom: 1px solid var(--border); height: 60dvh; flex-shrink: 0; overflow: hidden; }
+    /* flex-basis, not height, is what sizes a flex item: the base rule's
+       `flex: 2` means flex-basis: 0%, which overrides height:60dvh entirely
+       and lets the pane collapse to its content-min (~112px -- verified live:
+       the composer was clipped inside it at 390x844). `flex: 0 0 60dvh`
+       sets basis=60dvh with no grow/shrink, making the 60dvh cap real. */
+    #chatPane { border-right: none; border-bottom: 1px solid var(--border); flex: 0 0 60dvh; overflow: hidden; }
     /* The 60dvh cap alone still let the composer escape the first screen:
        a tall paywall banner (RTL Arabic wraps further, plus the retention
        note and two buttons) can exceed 60dvh on its own, and as a flex item
