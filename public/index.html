@@ -42,6 +42,10 @@
   button:hover { background: var(--accent-dim); }
   button:disabled { opacity: 0.5; cursor: default; }
   button.ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  /* The composer is THE action after signup -- a big green Send that can't
+     blend into the accent palette around it. */
+  #sendBtn { background: #2f9e44; color: #fff; font-size: 15px; padding: 10px 22px; }
+  #sendBtn:hover { background: #268238; }
   main { flex: 1; min-height: 0; display: flex; overflow: hidden; }
   #chatPane { flex: 2; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; }
   #jobsPane { flex: 1; padding: 14px; overflow-y: auto; background: var(--panel); min-width: 260px; }
@@ -239,7 +243,7 @@
        taller, 16px field (which also stops iOS focus-zoom). */
     #inputRow { border-top: 2px solid var(--accent); background: var(--panel); padding: 12px 10px; }
     #inputRow input { font-size: 16px; padding: 12px 14px; }
-    #sendBtn { padding: 12px 20px; font-size: 15px; }
+    #sendBtn { padding: 14px 22px; font-size: 16px; }
     #jobsPane { min-width: 0; width: auto; overflow-y: visible; }
     .msg { max-width: 92%; }
     header { padding: 10px 12px; }
