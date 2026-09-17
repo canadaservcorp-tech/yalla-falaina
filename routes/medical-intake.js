@@ -15,6 +15,7 @@ const { authenticate } = require('../lib/auth-mw');
 const sec = require('../lib/security');
 const supabase = require('../db');
 const { extractDocumentText, isAllowedType, MAX_DOCUMENT_BYTES } = require('../lib/documentExtract');
+const access = require('../lib/access');
 const router = express.Router();
 
 const BUCKET = process.env.DOCUMENTS_BUCKET || 'documents';
@@ -84,6 +85,18 @@ router.post('/documents', sec.limits.upload, authenticate, sec.requireActiveUser
     return res.status(415).json({ error: 'Upload a PDF or a clear photo (JPEG/PNG) of the report', code: 'ERR_BAD_DOC_TYPE' });
 
   try {
+    // Uploads are a subscriber perk, same family as voice notes — gated only
+    // when the paywall is actually enforced so dev/staging keeps working.
+    // access.hasAccess also honors a referral-reward bonus (lib/access.js).
+    if (process.env.PAYWALL_ENFORCED === 'true') {
+      const { data: u, error: uErr } = await supabase.from('users')
+        .select('subscription_status, subscription_tier, bonus_access_until')
+        .eq('id', req.user.id).maybeSingle();
+      if (uErr) throw uErr;
+      if (!access.hasAccess(u))
+        return res.status(402).json({ error: 'Uploading documents is included with a subscription', upgrade: true, code: 'ERR_PAYWALL' });
+    }
+
     const { data: latest, error: lErr } = await supabase.from('medical_intake_requests')
       .select('id, extracted_report_text').eq('profile_id', req.user.id)
       .order('created_at', { ascending: false }).limit(1).maybeSingle();

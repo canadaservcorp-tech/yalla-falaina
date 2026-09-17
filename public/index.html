@@ -463,6 +463,7 @@
       <label data-i18n="medicalUploadLabel">Upload a lab/medical report (PDF)</label>
       <input type="file" id="medFileInput" accept="application/pdf,image/jpeg,image/png">
       <div class="row"><button id="medUploadBtn" class="ghost" data-i18n="medicalUploadBtn">Upload report</button></div>
+      <p id="medUploadGateNote" class="hint" style="display:none" data-i18n="medicalUploadSubOnly">Uploading documents is included with a subscription.</p>
       <div id="medicalMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
     </div>
     <div id="securityPane" style="margin-top:16px">
@@ -590,6 +591,16 @@
   function renderMic() {
     $('micBtn').style.display = (voiceServerReady && subActive === true) ? '' : 'none';
   }
+  // Document uploads are a subscriber perk too (server enforces it on
+  // /api/medical-intake/documents) -- for an unpaid seeker the controls
+  // disable and the note explains why, rather than letting them pick a file
+  // just to get a 402 back.
+  function renderUploadGate() {
+    const gated = paywallEnforced && subActive !== true;
+    $('medUploadBtn').disabled = gated;
+    $('medFileInput').disabled = gated;
+    $('medUploadGateNote').style.display = gated ? '' : 'none';
+  }
   let pushServerReady = false;
   fetch('/api/health').then(r => r.json()).then(d => {
     // Only a real boolean flips the flag — an error/rate-limit body lacks the
@@ -603,6 +614,7 @@
     // refreshSub() has an answer.
     voiceServerReady = d.voice === true && canRecord();
     renderMic();
+    renderUploadGate();
     // The button only appears once the server confirms Google credentials are
     // configured — a visible button that dead-ends on a 503 is worse than none.
     if (d.google === true) $('googleBox').style.display = 'block';
@@ -1059,6 +1071,7 @@
       subProvider = d.provider === 'stripe' ? 'stripe' : 'paypal';
       renderPaywall();
       renderMic();
+      renderUploadGate();
       // The only place a subscriber could cancel used to be PayPal's own
       // site — the paywall panel (the only button that existed) disappears
       // the moment someone becomes active, so there was nothing to click here.
