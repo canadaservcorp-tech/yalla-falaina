@@ -36,7 +36,10 @@ test('on phones, the chat pane must not flex-shrink inside the bounded main', ()
   // squeezed #chatPane to ~112px and clipped the composer inside it.
   const mobileBlock = html.match(/@media \(max-width: 720px\) \{([\s\S]*?)\n  \}/)[1];
   const chatRule = mobileBlock.match(/#chatPane \{[^}]+\}/)[0];
-  assert.match(chatRule, /flex-shrink:\s*0/);
+  // flex-basis wins over height for a flex item -- the pane must declare
+  // its 60dvh as basis (flex: 0 0 60dvh), or the base rule's flex: 2
+  // (basis 0%) collapses it to content-min.
+  assert.match(chatRule, /flex:\s*0\s+0\s+60dvh/);
   // Prominence: the composer is the post-signup action and must read as such.
   assert.match(mobileBlock, /#inputRow \{[^}]*border-top:\s*2px solid var\(--accent\)/);
   assert.match(mobileBlock, /#inputRow input \{[^}]*font-size:\s*16px/);
@@ -56,7 +59,7 @@ test('the fixed #ctaAside can never cover the composer — #chatPane is dynamica
 test('on phones, the chat pane is capped at 60dvh (not just a floor) so the composer can never be pushed past the first screen', () => {
   const mobile = style.match(/@media \(max-width: 720px\) \{[\s\S]*?\n  \}/)[0];
   const rule = mobile.match(/#chatPane\s*\{[^}]*\}/)[0];
-  assert.match(rule, /height:\s*60dvh/);
+  assert.match(rule, /flex:\s*0\s+0\s+60dvh/, 'flex-basis is what actually sizes a flex item -- height:60dvh alone is overridden by the base flex:2 basis of 0%');
   assert.doesNotMatch(rule, /min-height/, 'a min-height (as opposed to a capped height) can grow past the fold again');
   assert.match(rule, /overflow:\s*hidden/, 'without this, content can still overflow the capped height');
 });
