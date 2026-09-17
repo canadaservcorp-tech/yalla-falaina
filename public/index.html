@@ -196,7 +196,11 @@
        scroll main past the paywall banner to find it, they only ever
        scroll further to reach #jobsPane (the matched-jobs / medical-intake
        panel) below. */
-    #chatPane { border-right: none; border-bottom: 1px solid var(--border); height: 60dvh; overflow: hidden; }
+    /* flex-shrink:0 is load-bearing: main is now bounded to the viewport
+       (#100), so a column whose children exceed it shrinks them -- the tall
+       #jobsPane squeezed this pane to ~112px and clipped the composer inside
+       it. The 60dvh height is an explicit contract, not a suggestion. */
+    #chatPane { border-right: none; border-bottom: 1px solid var(--border); height: 60dvh; flex-shrink: 0; overflow: hidden; }
     /* The 60dvh cap alone still let the composer escape the first screen:
        a tall paywall banner (RTL Arabic wraps further, plus the retention
        note and two buttons) can exceed 60dvh on its own, and as a flex item
@@ -206,6 +210,12 @@
        bottom on every banner length and language. */
     #paywall { min-height: 0; overflow-y: auto; }
     #inputRow { flex-shrink: 0; }
+    /* The composer is THE action after signup -- it must read as such at a
+       glance on a phone, not blend into the pane. Accent top border + a
+       taller, 16px field (which also stops iOS focus-zoom). */
+    #inputRow { border-top: 2px solid var(--accent); background: var(--panel); padding: 12px 10px; }
+    #inputRow input { font-size: 16px; padding: 12px 14px; }
+    #sendBtn { padding: 12px 20px; font-size: 15px; }
     #jobsPane { min-width: 0; width: auto; overflow-y: visible; }
     .msg { max-width: 92%; }
     header { padding: 10px 12px; }
