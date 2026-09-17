@@ -22,6 +22,29 @@ test('the scope guardrail explicitly carves out CV/job/visa/platform questions a
   assert.match(p, /does NOT apply to questions about the user's CV, their job search, their visa or travel-document process/);
 });
 
+// A seeker asking about universities in their OWN home country (e.g. a
+// Lebanese seeker asking about universities in Lebanon) was previously
+// declined as out of scope, because the "one purpose" line only ever named
+// work abroad, never study or a seeker's home country. Hicham's ask ("write
+// coding for all middle east universities... also allow fully local
+// (home-country) universities") is a scope fix, not just a data fix -- these
+// tests guard the prompt-level half of it.
+test('the "one purpose" line names study and medical-treatment help, not just work abroad, and explicitly allows home-country study questions', () => {
+  const p = prompt();
+  assert.match(p, /helping someone build a real future through work, study, or a needed medical treatment/);
+  assert.match(p, /a seeker asking about a university, program, or scholarship in their OWN home country is asking a fully in-scope question, never a personal\/off-topic one/);
+});
+
+test('the off-topic decline example offers study and medical-treatment help, not only "getting you abroad"', () => {
+  const p = prompt();
+  assert.match(p, /we specialize in getting you a real job, a real study\/scholarship opportunity, or help finding a needed medical treatment, at home or abroad/);
+});
+
+test('the CV/job/visa scope carve-out also names the study/university search, explicitly including the seeker\'s own home country', () => {
+  const p = prompt();
+  assert.match(p, /their study or university search — including in their own home country, not only abroad — their medical-treatment search/);
+});
+
 test('Gulf/Khaleeji Arabic is named as its own dialect, not folded into Lebanese/Egyptian by default', () => {
   const p = prompt();
   assert.match(p, /Gulf\/Khaleeji Arabic/);
@@ -116,6 +139,21 @@ test('the "which universities/countries do you cover" hard question answers hone
   assert.match(p, /Which universities\/countries do you cover/);
   assert.match(p, /not restricted to any fixed list of countries \(GCC, USA, Canada, Europe, UK, Turkey, or anywhere else\)/);
   assert.match(p, /never claim a specific country or university is or isn't covered from general knowledge/);
+  // Hicham's ask: this platform is not "abroad-only" for study -- a seeker's
+  // own home country gets the exact same treatment as any other country.
+  assert.match(p, /it is not "abroad-only" — a seeker's own home country is covered exactly the same way as anywhere else/);
+});
+
+test('a hard-questions entry tells the concierge to treat "find me universities in Lebanon/Jordan/Egypt/Turkey/Cyprus/..." like any other destination query, home country or not', () => {
+  const p = prompt();
+  assert.match(p, /Find me universities in \[Lebanon \/ Jordan \/ Egypt \/ Turkey \/ Cyprus \/ the UAE \/ Saudi Arabia \/ Qatar \/ Kuwait\]/);
+  assert.match(p, /Never tell a seeker that local\/home-country universities are out of scope or that this platform only covers "abroad\."/);
+});
+
+test('the STUDY PROGRAMS retrieval rule explicitly extends to the seeker\'s own home country, mirroring the job vertical\'s zone-local allowance', () => {
+  const p = prompt();
+  assert.match(p, /This also covers the seeker's OWN home country exactly like any other country/);
+  assert.match(p, /A Lebanese seeker asking about universities in Lebanon, an Egyptian seeker asking about universities in Egypt/);
 });
 
 test('the study-permit vs. work-permit hard question describes the general shape without stating a specific hour limit or wage as fact', () => {
