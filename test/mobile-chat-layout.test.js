@@ -37,3 +37,14 @@ test('on phones, the chat pane is capped at 60dvh (not just a floor) so the comp
   assert.doesNotMatch(rule, /min-height/, 'a min-height (as opposed to a capped height) can grow past the fold again');
   assert.match(rule, /overflow:\s*hidden/, 'without this, content can still overflow the capped height');
 });
+
+test('on phones, the paywall banner scrolls internally and the composer never shrinks — a tall banner used to push it past the pane\'s clipped bottom', () => {
+  const mobile = style.match(/@media \(max-width: 720px\) \{[\s\S]*?\n  \}/)[0];
+  const paywall = mobile.match(/#paywall\s*\{[^}]*\}/);
+  assert.ok(paywall, 'no #paywall rule in the mobile block — the tall-banner regression returns');
+  assert.match(paywall[0], /min-height:\s*0/);
+  assert.match(paywall[0], /overflow-y:\s*auto/);
+  const inputRow = mobile.match(/#inputRow\s*\{[^}]*\}/);
+  assert.ok(inputRow, 'no #inputRow rule in the mobile block');
+  assert.match(inputRow[0], /flex-shrink:\s*0/);
+});
