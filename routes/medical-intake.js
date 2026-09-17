@@ -26,7 +26,7 @@ const BUCKET = process.env.DOCUMENTS_BUCKET || 'documents';
 // spirit as lib/voiceNotes.js's own flagged assumption on cancellation
 // timing.
 const RETENTION_DAYS = 180;
-const EXT_BY_TYPE = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic' };
+const EXT_BY_TYPE = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'text/plain': 'txt', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx' };
 const DOCUMENT_KINDS = ['medical_report', 'lab_report'];
 
 router.get('/', authenticate, sec.requireActiveUser, async (req, res) => {

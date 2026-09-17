@@ -436,6 +436,8 @@
     <div id="inputRow">
       <input type="text" id="messageInput" placeholder="Type your message… (kifak? / bonjour / hello)" autocomplete="off">
       <button id="micBtn" class="ghost" style="display:none" data-i18n-title="micStart" title="Record a voice note">🎤</button>
+      <button id="attachBtn" class="ghost" style="display:none" data-i18n-title="attachDoc" title="Attach a document">📎</button>
+      <input type="file" id="attachFile" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,text/plain,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
       <button id="sendBtn" data-i18n="sendBtn">Send</button>
     </div>
   </div>
@@ -461,7 +463,7 @@
       <textarea id="medHistoryNote" rows="3" data-i18n-ph="medicalHistoryNotePlaceholder" placeholder="e.g. osteoarthritis, right hip, diagnosed 2024"></textarea>
       <div class="row"><button id="medSaveBtn" data-i18n="medicalSaveBtn">Save</button></div>
       <label data-i18n="medicalUploadLabel">Upload a lab/medical report (PDF)</label>
-      <input type="file" id="medFileInput" accept="application/pdf,image/jpeg,image/png">
+      <input type="file" id="medFileInput" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,text/plain,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
       <div class="row"><button id="medUploadBtn" class="ghost" data-i18n="medicalUploadBtn">Upload report</button></div>
       <p id="medUploadGateNote" class="hint" style="display:none" data-i18n="medicalUploadSubOnly">Uploading documents is included with a subscription.</p>
       <div id="medicalMsg" style="font-size:13px;min-height:18px;margin-top:4px"></div>
@@ -600,6 +602,10 @@
     $('medUploadBtn').disabled = gated;
     $('medFileInput').disabled = gated;
     $('medUploadGateNote').style.display = gated ? '' : 'none';
+    // The composer's 📎 follows the same subscriber-only rule (server
+    // enforces it on POST /api/documents) -- hidden for a free seeker
+    // rather than a button whose only answer is a 402.
+    $('attachBtn').style.display = gated ? 'none' : '';
   }
   let pushServerReady = false;
   fetch('/api/health').then(r => r.json()).then(d => {
@@ -1513,6 +1519,33 @@
   }
   sendBtn.onclick = sendMessage;
   inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+  // ---------- composer 📎 attachments ----------
+  // Opens the OS file picker -- on a phone that's the camera/photo/files
+  // chooser, on desktop the normal open dialog. Uploaded bytes go to
+  // POST /api/documents (subscriber-only server-side too); the extracted
+  // text joins the concierge's DOCUMENTS_CONTEXT on the next turn.
+  $('attachBtn').onclick = () => $('attachFile').click();
+  $('attachFile').onchange = async () => {
+    const file = $('attachFile').files[0];
+    $('attachFile').value = '';
+    if (!file) return;
+    const note = addMessage('system', t('docUploading', { name: file.name }));
+    $('attachBtn').disabled = true;
+    try {
+      const buf = await file.arrayBuffer();
+      const r = await fetch('/api/documents?name=' + encodeURIComponent(file.name), {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': file.type || 'application/pdf' },
+        body: buf,
+      });
+      const d = await r.json().catch(() => ({}));
+      note.remove();
+      if (r.status === 402) { addMessage('system', apiError(d, t('docUploadFailed'))); }
+      else if (!r.ok) { addMessage('system', apiError(d, t('docUploadFailed'))); }
+      else { addMessage('system', t('docUploaded', { name: d.fileName || file.name })); }
+    } catch { note.remove(); addMessage('system', t('networkError')); }
+    finally { $('attachBtn').disabled = false; }
+  };
 
   // ---------- voice notes ----------
   // Record in-page, POST the bytes to /api/voice/transcribe, and put the

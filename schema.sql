@@ -352,8 +352,10 @@ create table if not exists public.seeker_profiles (
 create table if not exists public.document_uploads (
   id uuid primary key default uuid_generate_v4(),
   profile_id bigint not null references public.profiles(id) on delete cascade,
-  kind text not null, -- 'cv' | 'voice_note' | 'screenshot' | 'passport_copy' | 'medical_report' | 'lab_report'
+  kind text not null, -- 'cv' | 'voice_note' | 'screenshot' | 'passport_copy' | 'medical_report' | 'lab_report' | 'document'
   storage_path text not null,
+  file_name text,                                -- original filename for composer attachments (routes/documents.js); null for older rows
+  extracted_text text,                           -- text pulled by lib/documentExtract.js; read to the concierge as the seeker's own uploaded document
   retention_expires_at timestamptz not null,
   created_at timestamptz not null default now()
 );
