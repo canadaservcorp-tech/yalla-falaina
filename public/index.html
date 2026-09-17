@@ -22,7 +22,13 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-         background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+         /* height, not min-height: a min-height lets main (flex:1) grow with
+            its content, and #jobsPane's ~1000px of panels stretched #chatPane
+            to match -- the composer ended up at the bottom of a tall column,
+            below the fold, which is exactly the "no icon to start chat" a
+            signed-in friend hit on desktop Arabic. Bounded, main gets exactly
+            the space left after header+ticker and each pane scrolls inside. */
+         background: var(--bg); color: var(--text); height: 100dvh; display: flex; flex-direction: column; }
   header { padding: 14px 20px; border-bottom: 1px solid var(--border);
            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
   header h1 { font-size: 16px; margin: 0; font-weight: 600; }
@@ -36,7 +42,7 @@
   button:hover { background: var(--accent-dim); }
   button:disabled { opacity: 0.5; cursor: default; }
   button.ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
-  main { flex: 1; display: flex; overflow: hidden; }
+  main { flex: 1; min-height: 0; display: flex; overflow: hidden; }
   #chatPane { flex: 2; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; }
   #jobsPane { flex: 1; padding: 14px; overflow-y: auto; background: var(--panel); min-width: 260px; }
   #jobsPane h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin: 0 0 10px 0; }
@@ -76,7 +82,7 @@
      SVG (Material Design's "flight" glyph) painted in the accent blue at
      low opacity, no image file to ship or slow-load. */
   #authWrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px;
-              position: relative; overflow: hidden; }
+              position: relative; overflow-x: hidden; overflow-y: auto; }
   #authWrap::before {
     content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234a7fa6'%3E%3Cpath d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z'/%3E%3C/svg%3E");
