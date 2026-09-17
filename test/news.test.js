@@ -133,3 +133,24 @@ test('only an admin can post an announcement, and only with an https source', as
   });
   assert.equal(ok.status, 200);
 });
+
+test('an operator post can carry a scholarship or offer category; anything else falls back to announcement', async () => {
+  const admin = actor(h, { id: 9, role: 'admin' });
+  h.mock.__set('news_items', { data: [{ id: 'n1' }], error: null });
+  const r = await fetch(h.base + '/api/admin/news', {
+    method: 'POST', headers: auth(admin),
+    body: JSON.stringify({ title_en: 'University of Toronto graduate scholarship window opens', url: 'https://www.utoronto.ca/scholarships', category: 'scholarship' }),
+  });
+  assert.equal(r.status, 200);
+  // This file doesn't reset the mock between tests — take the newest write.
+  const writes = h.mock.__writes('news_items', 'insert');
+  assert.equal(writes[writes.length - 1].payload.category, 'scholarship');
+
+  const bogus = await fetch(h.base + '/api/admin/news', {
+    method: 'POST', headers: auth(admin),
+    body: JSON.stringify({ title_en: 'x', url: 'https://example.gov/a', category: 'nonsense' }),
+  });
+  assert.equal(bogus.status, 200);
+  const writes2 = h.mock.__writes('news_items', 'insert');
+  assert.equal(writes2[writes2.length - 1].payload.category, 'announcement');
+});

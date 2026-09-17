@@ -94,6 +94,12 @@
       <label>Headline (French, optional)</label><input type="text" id="nTitleFr" maxlength="240">
       <label>Headline (Arabic, optional)</label><input type="text" id="nTitleAr" maxlength="240">
       <label>Source link (https)</label><input type="url" id="nUrl" maxlength="500" placeholder="https://…">
+      <label>Category</label>
+      <select id="nCategory">
+        <option value="announcement">Announcement</option>
+        <option value="scholarship">Scholarship / bourse</option>
+        <option value="program_offer">Program offer / discount</option>
+      </select>
       <label>Country (optional)</label><input type="text" id="nCountry" maxlength="60" placeholder="Australia">
       <div style="margin-top:10px"><button id="nPostBtn">Post to the ticker</button></div>
       <div id="newsMsg" style="font-size:13px;color:var(--warn);margin-top:8px;min-height:18px"></div>
@@ -331,7 +337,7 @@
       const card = document.createElement('div');
       card.className = 'card';
       card.innerHTML = `<div class="title">${esc(it.title_en)}</div>
-        <div class="meta">${esc(it.source)} · ${esc((it.published_at || '').slice(0, 10))}
+        <div class="meta">${esc(it.source)}${it.category ? ' · ' + esc(it.category) : ''} · ${esc((it.published_at || '').slice(0, 10))}
         · <a href="${esc(it.url)}" target="_blank" rel="noopener">source</a></div>`;
       if (it.source === 'operator') {
         const del = document.createElement('button');
@@ -357,6 +363,7 @@
         body: JSON.stringify({
           title_en: $('nTitleEn').value, title_fr: $('nTitleFr').value,
           title_ar: $('nTitleAr').value, url: $('nUrl').value, country: $('nCountry').value,
+          category: $('nCategory').value,
         }),
       });
       const d = await r.json();

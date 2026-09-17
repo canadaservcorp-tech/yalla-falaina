@@ -409,7 +409,7 @@ create table if not exists public.news_items (
   source text not null,        -- 'ircc_draw' | 'ircc_news' | 'operator'
   external_id text not null,   -- draw number / entry url / generated for operator posts
   country text,
-  category text,               -- 'express_entry' | 'announcement'
+  category text,               -- 'express_entry' | 'announcement' | 'scholarship' | 'program_offer'
   title_en text not null,
   title_fr text,               -- null when the source published English only
   title_ar text,
