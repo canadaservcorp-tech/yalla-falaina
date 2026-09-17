@@ -188,6 +188,15 @@
        scroll further to reach #jobsPane (the matched-jobs / medical-intake
        panel) below. */
     #chatPane { border-right: none; border-bottom: 1px solid var(--border); height: 60dvh; overflow: hidden; }
+    /* The 60dvh cap alone still let the composer escape the first screen:
+       a tall paywall banner (RTL Arabic wraps further, plus the retention
+       note and two buttons) can exceed 60dvh on its own, and as a flex item
+       it then pushed #inputRow below the pane's clipped bottom edge —
+       invisibly, thanks to overflow:hidden. Letting the banner scroll
+       internally instead keeps the composer pinned at the pane's real
+       bottom on every banner length and language. */
+    #paywall { min-height: 0; overflow-y: auto; }
+    #inputRow { flex-shrink: 0; }
     #jobsPane { min-width: 0; width: auto; overflow-y: visible; }
     .msg { max-width: 92%; }
     header { padding: 10px 12px; }
@@ -548,6 +557,10 @@
     if (d.google === true) $('googleBox').style.display = 'block';
     pushServerReady = d.push === true;
     refreshNotifyStatus();
+    // Same rule as the Google button above: Stripe checkout exists in the
+    // code but the rail is only live when its keys are configured on the
+    // server — a visible "Pay by card" that 503s is worse than none.
+    if (d.stripe !== true) $('subscribeStripeBtn').style.display = 'none';
   }).catch(() => {});
 
   // ---------- installable app / push notifications ----------
@@ -737,7 +750,7 @@
     const target = d.count, el = $('jobCountNum'), t0 = performance.now(), dur = 1800;
     const tick = now => {
       const p = Math.min(1, (now - t0) / dur);
-      el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))).toLocaleString(currentLang) + '+';
+      el.textContent = Math.max(0, Math.round(target * (1 - Math.pow(1 - p, 3)))).toLocaleString(currentLang) + '+';
       if (p < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
