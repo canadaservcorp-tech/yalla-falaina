@@ -49,10 +49,21 @@ test('the partner-logo rail stays hidden unless manifest.json lists a partner, a
   assert.match(html, /id="partnerRail"/);
   assert.match(html, /id="partnerLogos"/);
   assert.match(html, /#partnerRail \{[^}]*display:\s*none/);
-  assert.match(html, /@media \(min-width: 1100px\) \{ #partnerRail\.ready \{ display:\s*flex/, 'right-edge rail only exists on wide screens');
+  assert.match(html, /@media \(min-width: 1100px\) \{\s*#partnerRail\.ready \{ display:\s*flex/, 'right-edge rail only exists on wide screens');
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   assert.match(script, /partners\/manifest\.json/);
   assert.match(script, /if \(!items\.length\) return/, 'no partners => rail never shown');
+});
+
+test('the partner rail gets its own gutter: fixed width, reserved padding, no airplane behind it', () => {
+  // Live-site regression: the unconstrained rail overlaid the profile column's
+  // text and the right airplane glyph, and its title clipped at the edge.
+  assert.match(html, /#partnerRail \{[^}]*width:\s*150px/, 'bounded rail so the title can never overflow the edge');
+  assert.match(html, /#partnerRail \.ptitle \{[^}]*text-align:\s*center/);
+  assert.match(html, /body\.hasPartners #authWrap \{ padding-right:\s*186px/, 'physical right gutter matching the rail\'s physical position (LTR + RTL alike)');
+  assert.match(html, /body\.hasPartners \.sideSlot\.right \{ display:\s*none/, 'the decorative airplane would collide with the logos');
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  assert.match(script, /document\.body\.classList\.add\('hasPartners'\)/);
 });
 
 test('the fixed #ctaAside can never cover the composer — #chatPane is dynamically padded by the bar height', () => {
