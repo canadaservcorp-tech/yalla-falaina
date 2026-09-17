@@ -8,13 +8,17 @@ const express = require('express');
 const { authenticate } = require('../lib/auth-mw');
 const sec = require('../lib/security');
 const { computeCompleteness } = require('../lib/profileCompleteness');
+const { retrieveMedicalIntake } = require('../lib/yf/medicalMatching');
 const { loadCurrent, applyIntake } = require('../lib/profileWrite');
 const router = express.Router();
 
 router.get('/', authenticate, sec.requireActiveUser, async (req, res) => {
   try {
     const { profile, seekerProfile } = await loadCurrent(req.user.id);
-    const { isComplete, missing } = computeCompleteness({ profile, seekerProfile });
+    const hasMedicalIntake = profile?.seeking_treatment
+      ? Boolean(await retrieveMedicalIntake({ profileId: req.user.id }))
+      : false;
+    const { isComplete, missing } = computeCompleteness({ profile, seekerProfile, hasMedicalIntake });
     res.json({ success: true, profile: profile || null, seekerProfile: seekerProfile || null, isComplete, missing });
   } catch (e) {
     console.error('profile get', e);

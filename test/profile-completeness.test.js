@@ -36,6 +36,27 @@ test('a student with no study target gets a student-specific missing name', () =
   assert.ok(!missing.includes('sector_or_role_type'));
 });
 
+test('a treatment-seeker profile with a filed intake passes the target requirement', () => {
+  const { isComplete, missing } = computeCompleteness({
+    profile: { preferred_language: 'en', preferred_country: 'canada', seeking_treatment: true },
+    seekerProfile: completeSeeker,
+    hasMedicalIntake: true,
+  });
+  assert.equal(isComplete, true);
+  assert.deepEqual(missing, []);
+});
+
+test('a treatment-seeker with no filed intake is asked for required_treatment, not a job sector', () => {
+  const { isComplete, missing } = computeCompleteness({
+    profile: { preferred_language: 'en', preferred_country: 'canada', seeking_treatment: true },
+    seekerProfile: completeSeeker,
+    hasMedicalIntake: false,
+  });
+  assert.equal(isComplete, false);
+  assert.ok(missing.includes('required_treatment'));
+  assert.ok(!missing.includes('sector_or_role_type'));
+});
+
 test('a job-seeker profile still requires sector_or_role_type', () => {
   const { isComplete, missing } = computeCompleteness({
     profile: { preferred_language: 'en', preferred_country: 'canada', seeking_study: false },

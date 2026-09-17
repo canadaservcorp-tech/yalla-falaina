@@ -842,7 +842,8 @@ test('a complete profile retrieves and forwards all seven new sources into the s
     { id: 'p1', country: 'South Korea', city: 'Seoul', hospital_name: 'Seoul National University Hospital', specialties: 'orthopedic hip and knee replacement', price_range_note: '$12,000-18,000 USD', contact_email: 'intl@snuh.example', contact_phone: null, source_url: null },
   ], error: null });
 
-  const r = await ask({ message: 'help me plan my move' }, caller());
+  const r = await ask({ message: 'help me plan my move' }, caller({}, COMPLETE_SEEKER,
+    { ...COMPLETE_PROFILE, seeking_treatment: true }));
   assert.equal(r.status, 200);
   assert.match(upstream.body.system, /Excellence Bourse/);
   assert.match(upstream.body.system, /Laval Lebanese Diaspora/);
@@ -873,7 +874,7 @@ test('the seven new retrieval sources are queried in parallel, not serially -- a
 // query IS medicalIntake's own required_treatment/extracted_report_text --
 // so this covers that dependent fetch specifically.
 
-test('with no medical intake on file, medical providers are never fetched or shown, even if some exist', async () => {
+test('with no medical intake on file and no keyword overlap in the message, no provider is shown even if some exist', async () => {
   h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-medical-none' }, error: null });
   h.mock.__set('medical_intake_requests', { data: null, error: null });
   h.mock.__set('medical_treatment_providers', { data: [
@@ -883,6 +884,33 @@ test('with no medical intake on file, medical providers are never fetched or sho
   assert.equal(r.status, 200);
   assert.doesNotMatch(upstream.body.system, /Should Never Appear/);
   assert.match(upstream.body.system, /No medical-travel intake on file for this seeker yet/);
+});
+
+test('cross-track parity: a work-seeker with no intake asking about a named treatment gets real providers (message is the query)', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-medical-crosstrack' }, error: null });
+  h.mock.__set('medical_intake_requests', { data: null, error: null });
+  h.mock.__set('medical_treatment_providers', { data: [
+    { id: 'p1', country: 'South Korea', city: 'Seoul', hospital_name: 'Seoul Knee Clinic', specialties: 'knee replacement surgery', price_range_note: null, contact_email: null, contact_phone: null, source_url: null },
+  ], error: null });
+  const r = await ask({ message: 'how much is a knee replacement abroad?' }, caller());
+  assert.equal(r.status, 200);
+  assert.match(upstream.body.system, /Seoul Knee Clinic/);
+  assert.match(upstream.body.system, /No medical-travel intake on file for this seeker yet/);
+});
+
+test('intake extraction can write required_treatment -- it lands in medical_intake_requests and marks the treatment track', async () => {
+  h.mock.__setOp('concierge_conversations', 'insert', { data: { id: 'c-medical-extract' }, error: null });
+  respond = () => ({ status: 200, body: { content: [{ type: 'text', text: 'Saved.\n---PROFILE---\n{"required_treatment":"total hip replacement","has_passport":true}\n---END---' }] } });
+  const r = await ask({ message: 'I need a hip replacement' }, caller({}, { is_complete: false, confirmed_by_user: false },
+    { preferred_language: 'en', preferred_country: 'canada', sector: null, role_type: null }));
+  assert.equal(r.status, 200);
+  const medWrites = h.mock.__writes('medical_intake_requests', 'insert');
+  assert.equal(medWrites.length, 1);
+  assert.equal(medWrites[0].payload.required_treatment, 'total hip replacement');
+  const profileWrites = h.mock.__writes('profiles', 'upsert');
+  assert.ok(profileWrites.some(w => w.payload.seeking_treatment === true));
+  const j = await r.json();
+  assert.doesNotMatch(j.reply, /PROFILE---/);
 });
 
 test('a medical intake\'s required treatment and extracted report text together form the query that matches a curated provider', async () => {
@@ -895,7 +923,8 @@ test('a medical intake\'s required treatment and extracted report text together 
     { id: 'p1', country: 'Russia', city: 'Moscow', hospital_name: 'Moscow Cardiac Center', specialties: 'cardiac valve replacement surgery', price_range_note: '$15,000-22,000 USD', contact_email: 'intl@mcc.example', contact_phone: null, source_url: null },
     { id: 'p2', country: 'Turkey', city: 'Istanbul', hospital_name: 'Istanbul Dental Center', specialties: 'cosmetic dentistry', price_range_note: null, contact_email: null, contact_phone: null, source_url: null },
   ], error: null });
-  const r = await ask({ message: 'help me plan my move' }, caller());
+  const r = await ask({ message: 'help me plan my move' }, caller({}, COMPLETE_SEEKER,
+    { ...COMPLETE_PROFILE, seeking_treatment: true }));
   assert.equal(r.status, 200);
   assert.match(upstream.body.system, /Moscow Cardiac Center/);
   assert.doesNotMatch(upstream.body.system, /Istanbul Dental Center/); // does not match the stated treatment -- never shown as a fallback

@@ -485,9 +485,17 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       .limit(1)
       .maybeSingle();
     const { data: profileRow } = await supabase.from('profiles')
-      .select('preferred_language, preferred_country, preferred_city, sector, role_type, seeking_study, target_degree_level, target_field_of_study')
+      .select('preferred_language, preferred_country, preferred_city, sector, role_type, seeking_study, target_degree_level, target_field_of_study, seeking_treatment')
       .eq('id', req.user.id).maybeSingle();
-    const { isComplete, missing } = computeCompleteness({ profile: profileRow, seekerProfile });
+    // Fetched before the gate, not inside it: for a seeking_treatment profile
+    // the intake row's existence is itself a completeness input (it satisfies
+    // the target slot — the concierge can't match a provider for a treatment
+    // nobody ever stated). Reused below for the provider search so the
+    // parallel batch doesn't fetch it twice.
+    const medicalIntake = profileRow?.seeking_treatment
+      ? await retrieveMedicalIntake({ profileId: req.user.id })
+      : null;
+    const { isComplete, missing } = computeCompleteness({ profile: profileRow, seekerProfile, hasMedicalIntake: !!medicalIntake });
 
     // Subscription gate (Section 4.3): the $25 Basic tier is the paid lane;
     // the quota still applies to everyone so a trial can't burn the model.
@@ -542,7 +550,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // Fetched in parallel -- seven independent reads, no ordering dependency.
     // medicalIntake is the seeker's own latest request (or null), not a
     // search -- see lib/yf/medicalMatching.js's own comment.
-    const [studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving, medicalIntake] = isComplete
+    const [studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving] = isComplete
       ? await Promise.all([
           retrieveStudyOpportunities({
             query: message, preferredCountry,
@@ -553,17 +561,20 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
           retrieveTrustedPartners({ country: preferredCountry, limit: 3 }),
           retrieveCountryRisks({ country: preferredCountry, limit: 5 }),
           retrieveCostOfLiving({ country: preferredCountry, city: preferredCity, limit: 5 }),
-          retrieveMedicalIntake({ profileId: req.user.id }),
         ])
-      : [[], [], [], [], [], [], null];
-    // Depends on medicalIntake above (its required_treatment/extracted
-    // report text IS the search query), so it can't join the parallel batch
-    // -- kept to one extra, cheap await rather than forcing a fake
-    // dependency into Promise.all. Never weighted by preferredCountry (see
-    // retrieveMedicalProviders' own comment on why).
-    const medicalProviders = medicalIntake
-      ? await retrieveMedicalProviders({ query: [medicalIntake.requiredTreatment, medicalIntake.extractedReportText].filter(Boolean).join(' '), limit: 8 })
-      : [];
+      : [[], [], [], [], [], []];
+    // Cross-track parity (owner's rule: the concierge works in all cases and
+    // gives the same results regardless of which signup track attracted the
+    // user): with an intake row the query is the stated treatment + extracted
+    // report text; without one (a work/study seeker asking about a treatment)
+    // the message itself is the query — retrieveMedicalProviders returns []
+    // on no keyword overlap rather than a fallback sample, so unrelated
+    // messages never see provider noise. Never weighted by preferredCountry
+    // (see retrieveMedicalProviders' own comment on why).
+    const medicalProviders = !isComplete ? []
+      : medicalIntake
+        ? await retrieveMedicalProviders({ query: [medicalIntake.requiredTreatment, medicalIntake.extractedReportText].filter(Boolean).join(' '), limit: 8 })
+        : await retrieveMedicalProviders({ query: message, limit: 8 });
     // Seed/demo fixture rows (see demoJob above) are redacted before either
     // the model or the client sees them, regardless of preview/subscription
     // status — applied first so a demo job during free preview still gets
