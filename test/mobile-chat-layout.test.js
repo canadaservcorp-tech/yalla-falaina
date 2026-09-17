@@ -45,6 +45,15 @@ test('on phones, the chat pane must not flex-shrink inside the bounded main', ()
   assert.match(mobileBlock, /#inputRow input \{[^}]*font-size:\s*16px/);
 });
 
+test('the partner-logo strip stays hidden unless manifest.json lists a partner', () => {
+  assert.match(html, /id="partnerStrip"/);
+  assert.match(html, /id="partnerLogos"/);
+  assert.match(html, /#partnerStrip \{[^}]*display:\s*none/);
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  assert.match(script, /partners\/manifest\.json/);
+  assert.match(script, /if \(!items\.length\) return/, 'no partners => strip never shown');
+});
+
 test('the fixed #ctaAside can never cover the composer — #chatPane is dynamically padded by the bar height', () => {
   // Live-site regression: a signed-in visitor on desktop Arabic had the
   // floating Contact/Advertise/social bar sitting directly on top of
