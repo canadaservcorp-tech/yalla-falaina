@@ -183,3 +183,38 @@ test('an empty body is refused as bad input', async () => {
   assert.equal(r.status, 400);
   assert.equal((await r.json()).code, 'ERR_BAD_INPUT');
 });
+
+// ---------- the upload paywall gate (Hicham: all document uploads are a
+// subscriber perk, same family as voice notes) ----------
+
+test('with the paywall enforced, an unsubscribed seeker gets 402 before any upload work', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  try {
+    const token = actor(h, { id: 516, extra: { subscription_status: 'none', bonus_access_until: null } });
+    const pdf = await makePdf('Required treatment: knee replacement.');
+    const r = await postDocument(token, pdf, 'application/pdf');
+    assert.equal(r.status, 402);
+    assert.equal((await r.json()).code, 'ERR_PAYWALL');
+    assert.equal(h.mock.__writes('document_uploads', 'insert').length, 0);
+  } finally { delete process.env.PAYWALL_ENFORCED; }
+});
+
+test('with the paywall enforced, an active subscriber still uploads fine', async () => {
+  process.env.PAYWALL_ENFORCED = 'true';
+  try {
+    const token = actor(h, { id: 517, extra: { subscription_status: 'active', subscription_tier: 'basic' } });
+    h.mock.__set('medical_intake_requests', { data: { id: 'm1', extracted_report_text: null }, error: null });
+    const pdf = await makePdf('MRI shows a torn ACL.');
+    const r = await postDocument(token, pdf, 'application/pdf');
+    assert.equal(r.status, 200);
+  } finally { delete process.env.PAYWALL_ENFORCED; }
+});
+
+test('with the paywall NOT enforced, uploads work for everyone (dev/staging behavior preserved)', async () => {
+  delete process.env.PAYWALL_ENFORCED;
+  const token = actor(h, { id: 518, extra: { subscription_status: 'none' } });
+  h.mock.__set('medical_intake_requests', { data: { id: 'm1', extracted_report_text: null }, error: null });
+  const pdf = await makePdf('Ultrasound: gallstones present.');
+  const r = await postDocument(token, pdf, 'application/pdf');
+  assert.equal(r.status, 200);
+});
