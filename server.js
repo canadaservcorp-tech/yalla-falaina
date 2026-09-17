@@ -56,6 +56,9 @@ app.use((req, res, next) => {
   // larger byte ceiling (lib/documentExtract.js re-enforces it too).
   if (req.path === '/api/medical-intake/documents') // req.path (not originalUrl) so a ?kind= query string still matches
     return express.raw({ type: () => true, limit: documentExtract.MAX_DOCUMENT_BYTES })(req, res, next);
+  // Composer 📎 attachments -- same raw-bytes shape as the medical upload.
+  if (req.path === '/api/documents')
+    return express.raw({ type: () => true, limit: documentExtract.MAX_DOCUMENT_BYTES })(req, res, next);
   express.json({ limit: '128kb' })(req, res, next);
 });
 app.get('/index.html', (_req, res) => res.redirect(301, '/'));   // one canonical home URL
@@ -128,6 +131,7 @@ app.use('/api/admin/study-opportunities', require('./routes/admin-study-opportun
 app.use('/api/community', require('./routes/community'));               // diaspora groups + accommodation board
 app.use('/api/admin/community', require('./routes/admin-community'));
 app.use('/api/medical-intake', require('./routes/medical-intake'));      // medical-treatment/travel vertical
+app.use('/api/documents', require('./routes/documents'));                // composer 📎 attach button (paid)
 
 // booleans only: enough to tell a missing key from a rejected one without revealing either.
 // Step 7 (deployment prep) — paypal/email are configuration checks, same as
@@ -177,7 +181,7 @@ app.use((err, _req, res, _next) => {
   // (a long voice note), so it gets a real status + code, not a generic 400.
   if (err.type === 'entity.too.large' && _req.originalUrl === '/api/voice/transcribe')
     return res.status(413).json({ error: 'That recording is too long', code: 'ERR_TOO_LARGE' });
-  if (err.type === 'entity.too.large' && _req.path === '/api/medical-intake/documents')
+  if (err.type === 'entity.too.large' && (_req.path === '/api/medical-intake/documents' || _req.path === '/api/documents'))
     return res.status(413).json({ error: 'That document is too large', code: 'ERR_DOC_TOO_LARGE' });
   res.status(bodyProblem ? 400 : 500).json({ error: bodyProblem ? 'Invalid request body' : 'Internal error' });
 });

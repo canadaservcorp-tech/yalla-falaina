@@ -145,7 +145,7 @@ test('the kind query param selects lab_report vs. the medical_report default', a
 test('an unsupported document type is refused with 415', async () => {
   const token = actor(h, { id: 511 });
   h.mock.__set('medical_intake_requests', { data: { id: 'm1' }, error: null });
-  const r = await postDocument(token, Buffer.from('plain text report'), 'text/plain');
+  const r = await postDocument(token, Buffer.from('plain text report'), 'application/zip');
   assert.equal(r.status, 415);
   assert.equal((await r.json()).code, 'ERR_BAD_DOC_TYPE');
 });

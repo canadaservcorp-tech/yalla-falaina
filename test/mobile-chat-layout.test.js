@@ -102,3 +102,15 @@ test('on phones, the paywall banner scrolls internally and the composer never sh
   assert.ok(inputRow, 'no #inputRow rule in the mobile block');
   assert.match(inputRow[0], /flex-shrink:\s*0/);
 });
+
+test('the composer has a paperclip attach button next to the mic, wired to a hidden file input and the gated /api/documents route', () => {
+  assert.match(html, /<button id="micBtn"[^>]*>🎤<\/button>\s*<button id="attachBtn" class="ghost"[^>]*>📎<\/button>/,
+    'attachBtn must sit directly beside micBtn — the user asked for it next to the voice recorder');
+  assert.match(html, /<input type="file" id="attachFile"[^>]*style="display:none"/);
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  assert.match(script, /attachBtn'\)\.onclick = \(\) => \$\('attachFile'\)\.click\(\)/);
+  assert.match(script, /fetch\('\/api\/documents\?name='/);
+  // Same subscriber-only rule as the medical pane's upload controls —
+  // renderUploadGate hides the paperclip for a free seeker.
+  assert.match(script, /attachBtn'\)\.style\.display = gated \? 'none' : ''/);
+});

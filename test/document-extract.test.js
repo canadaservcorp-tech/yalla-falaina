@@ -61,13 +61,22 @@ test('extractDocumentText dispatches by content type -- PDF works for real, an u
   const text = await extractDocumentText(pdf, 'application/pdf');
   assert.match(text, /kidney transplant/);
 
-  await assert.rejects(() => extractDocumentText(Buffer.from('x'), 'text/plain'), { code: 'ERR_BAD_DOC_TYPE' });
+  await assert.rejects(() => extractDocumentText(Buffer.from('x'), 'application/zip'), { code: 'ERR_BAD_DOC_TYPE' });
 });
 
-test('isAllowedType accepts PDF and common image types, rejects everything else', () => {
+test('isAllowedType accepts PDF, image, text, and docx types; rejects everything else', () => {
   assert.equal(isAllowedType('application/pdf'), true);
   assert.equal(isAllowedType('image/jpeg'), true);
   assert.equal(isAllowedType('image/png'), true);
+  assert.equal(isAllowedType('text/plain'), true);
+  assert.equal(isAllowedType('application/vnd.openxmlformats-officedocument.wordprocessingml.document'), true);
   assert.equal(isAllowedType('application/zip'), false);
-  assert.equal(isAllowedType('text/plain'), false);
+  assert.equal(isAllowedType('application/msword'), false);
+});
+
+test('plain-text and docx uploads extract text for real', async () => {
+  assert.equal(await extractDocumentText(Buffer.from('  hello   world  '), 'text/plain'), 'hello world');
+  const { Document, Packer, Paragraph } = require('docx');
+  const docx = await Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph('seeker admission letter body')] }] }));
+  assert.match(await extractDocumentText(docx, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'), /admission letter/);
 });

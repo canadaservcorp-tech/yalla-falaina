@@ -495,6 +495,23 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     const medicalIntake = profileRow?.seeking_treatment
       ? await retrieveMedicalIntake({ profileId: req.user.id })
       : null;
+    // Composer 📎 attachments: the seeker's own uploaded documents (CV,
+    // university letter, contract...) — read to the model as their own
+    // material so it can answer from the actual file, not a description of
+    // it. Medical/lab reports are excluded here on purpose: their text
+    // already flows through MEDICAL_INTAKE_CONTEXT above, with its own
+    // much stricter never-interpret guardrails. Uploaded files are a paid
+    // feature, but read on every turn (paid and free alike) — a comped
+    // seeker's upload shouldn't vanish from context, and the read is one
+    // cheap indexed query.
+    const { data: docRows } = await supabase.from('document_uploads')
+      .select('kind, file_name, extracted_text')
+      .eq('profile_id', req.user.id)
+      .order('created_at', { ascending: false }).limit(10);
+    const uploadedDocuments = (docRows || [])
+      .filter(d => d.extracted_text && !['medical_report', 'lab_report', 'voice_note'].includes(d.kind))
+      .slice(0, 5)
+      .map(d => ({ kind: d.kind, fileName: d.file_name || 'document', extractedText: String(d.extracted_text).slice(0, 1500) }));
     const { isComplete, missing } = computeCompleteness({ profile: profileRow, seekerProfile, hasMedicalIntake: !!medicalIntake });
 
     // Subscription gate (Section 4.3): the $25 Basic tier is the paid lane;
@@ -650,7 +667,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     const system = buildSystemPrompt({
       jobs: outJobs, dialectHint: sec.clean(req.body.dialectHint, 40),
       studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving,
-      medicalIntake, medicalProviders,
+      medicalIntake, medicalProviders, uploadedDocuments,
       travel: { flightsConfigured: flightSearch.configured(), hotelsConfigured: hotelSearch.configured() },
     })
       + (context ? '\n\n' + context : '')
