@@ -45,6 +45,16 @@ test('on phones, the chat pane must not flex-shrink inside the bounded main', ()
   assert.match(mobileBlock, /#inputRow input \{[^}]*font-size:\s*16px/);
 });
 
+test('the partner-logo rail stays hidden unless manifest.json lists a partner, and is desktop-only', () => {
+  assert.match(html, /id="partnerRail"/);
+  assert.match(html, /id="partnerLogos"/);
+  assert.match(html, /#partnerRail \{[^}]*display:\s*none/);
+  assert.match(html, /@media \(min-width: 1100px\) \{ #partnerRail\.ready \{ display:\s*flex/, 'right-edge rail only exists on wide screens');
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  assert.match(script, /partners\/manifest\.json/);
+  assert.match(script, /if \(!items\.length\) return/, 'no partners => rail never shown');
+});
+
 test('the fixed #ctaAside can never cover the composer — #chatPane is dynamically padded by the bar height', () => {
   // Live-site regression: a signed-in visitor on desktop Arabic had the
   // floating Contact/Advertise/social bar sitting directly on top of

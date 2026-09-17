@@ -1,0 +1,16 @@
+{
+  "partners": [
+    {
+      "file": "kidneycare-oregon.jpg",
+      "name": "KidneyCare of Oregon"
+    },
+    {
+      "file": "university-of-toronto.webp",
+      "name": "University of Toronto"
+    },
+    {
+      "file": "lmrt-immigration.webp",
+      "name": "LMRT Immigration Services"
+    }
+  ]
+}
