@@ -45,6 +45,13 @@ test('on phones, the chat pane must not flex-shrink inside the bounded main', ()
   assert.match(mobileBlock, /#inputRow input \{[^}]*font-size:\s*16px/);
 });
 
+test('the Send button is green and oversized on every viewport (Hicham: it must be unmissable)', () => {
+  assert.match(html, /#sendBtn \{[^}]*background:\s*#2f9e44/, 'green, distinct from the accent palette');
+  assert.match(html, /#sendBtn \{[^}]*font-size:\s*15px[^}]*padding:\s*10px 22px/, 'bigger than a default button on desktop');
+  const mobileBlock = html.match(/@media \(max-width: 720px\) \{([\s\S]*?)\n  \}/)[1];
+  assert.match(mobileBlock, /#sendBtn \{[^}]*font-size:\s*16px/, 'even bigger on phones');
+});
+
 test('the partner-logo rail stays hidden unless manifest.json lists a partner, and is desktop-only', () => {
   assert.match(html, /id="partnerRail"/);
   assert.match(html, /id="partnerLogos"/);
