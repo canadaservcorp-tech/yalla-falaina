@@ -351,3 +351,59 @@ test('a new city-vs-country/region guardrail tells the concierge to name a real 
   assert.match(p, /roughly 2\.5 hours away/);
   assert.match(p, /rather than answering as if it were in Montreal or silently substituting/);
 });
+
+// Hicham's ask (Sept 2026): visitors/subscribers weren't getting any real,
+// positive information out of the study vertical -- "any program around the
+// world we should have a positive answer, and giving chance, and show
+// opportunity for the student." This is a tone/behavior mandate layered on
+// top of RETRIEVE, DON'T RECALL (which must NOT loosen -- still zero
+// invented programs) telling the concierge to never leave a study question
+// as a dead end, for any country on earth.
+test('a new "never a dead end" rule mandates a positive, opportunity-first answer for every country, without loosening RETRIEVE, DON\'T RECALL', () => {
+  const p = prompt();
+  const at = p.indexOf('=== NEVER A DEAD END: ALWAYS SHOW A REAL PATH FORWARD FOR STUDY');
+  assert.ok(at > -1);
+  const section = p.slice(at, p.indexOf('=== RETRIEVE, DON\'T RECALL: DIASPORA'));
+  assert.match(section, /does NOT loosen the RETRIEVE, DON'T RECALL discipline above in any way/);
+  assert.match(section, /never invent a program, university, or scholarship/);
+  assert.match(section, /genuinely positive, opportunity-focused answer, never a flat "no"/);
+  assert.match(section, /ONE concrete, actionable next step/);
+  assert.match(section, /there is no province, region, or country this positive, chance-giving framing applies more weakly to/);
+});
+
+test('the "never a dead end" study rule sits right after STUDY_CONTEXT, before the diaspora/community section', () => {
+  const p = prompt();
+  const studyContextAt = p.indexOf('STUDY_CONTEXT (the only study programs/scholarships you may discuss as real, currently-open opportunities):');
+  const deadEndAt = p.indexOf('=== NEVER A DEAD END: ALWAYS SHOW A REAL PATH FORWARD FOR STUDY');
+  const diasporaAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: DIASPORA & COMMUNITY GROUPS ===');
+  assert.ok(studyContextAt > -1 && deadEndAt > -1 && diasporaAt > -1);
+  assert.ok(studyContextAt < deadEndAt && deadEndAt < diasporaAt);
+});
+
+// Hicham's follow-up (Sept 2026): "not only in Canada, in case we didn't find
+// in Quebec, we should always provide alternatives, in other province, or
+// countries, and be positive answer, and accurate." The first version of the
+// dead-end rule only spelled out "same country, different city" and "nearby
+// country" -- this widens it into an explicit escalation ladder (city ->
+// other provinces in the same country -> other countries entirely) and adds
+// an explicit accuracy requirement so a positive answer never blurs which of
+// those three it actually is.
+test('the dead-end rule spells out an explicit escalation ladder: other cities, then other provinces/states, then other countries', () => {
+  const p = prompt();
+  const at = p.indexOf('=== NEVER A DEAD END: ALWAYS SHOW A REAL PATH FORWARD FOR STUDY');
+  const section = p.slice(at, p.indexOf('=== RETRIEVE, DON\'T RECALL: DIASPORA'));
+  assert.match(section, /A different city in the same province\/region/);
+  assert.match(section, /A different province\/state in the same country/);
+  assert.match(section, /Never treat "not in Quebec" as "not in Canada" without actually checking the rest of the country first/);
+  assert.match(section, /A different country entirely, anywhere in the world/);
+  assert.match(section, /never something to apologize for or bury as a last resort/);
+});
+
+test('the dead-end rule requires accuracy alongside positivity -- a hopeful answer must not blur city/province/country', () => {
+  const p = prompt();
+  const at = p.indexOf('=== NEVER A DEAD END: ALWAYS SHOW A REAL PATH FORWARD FOR STUDY');
+  const section = p.slice(at, p.indexOf('=== RETRIEVE, DON\'T RECALL: DIASPORA'));
+  assert.match(section, /Positive and accurate are equally required/);
+  assert.match(section, /a hopeful-sounding answer that gets the city, province, or country wrong is a false chance, not a real one/);
+  assert.match(section, /never misdescribe a real one to make it sound closer to what they asked than it actually is/);
+});
