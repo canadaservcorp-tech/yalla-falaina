@@ -48,9 +48,18 @@
 --     no fee figure found elsewhere on the official site.
 --   UAE: Khalifa University -- official page gives a flat AED 2,500/credit
 --     hour figure but does not state which academic year it applies to.
---   Saudi Arabia: King Saud University (KSU) and King Abdulaziz University
---     (KAU) -- both official international-student pages are live but
---     content-empty/placeholder ("in development") as of this check.
+--   Saudi Arabia: King Saud University (KSU) -- official international-
+--     student page is live but content-empty/placeholder ("in development")
+--     as of this check.
+--   [CORRECTED -- see scripts/seed-study-opportunities-saudi-kau.sql] Saudi
+--     Arabia: King Abdulaziz University (KAU) was originally listed here as
+--     excluded because only its generic "international student" landing
+--     pages were checked, and those were placeholder/empty. A user-reported
+--     gap (Sept 2026) prompted a re-check of KAU's actual program pages
+--     directly, which found a real, live Master's program (Arid Land
+--     Agriculture) and a real international graduate scholarship -- both now
+--     seeded in the file named above instead of here, to keep this file's
+--     own "verified as of this pass" claim accurate.
 --   Saudi Arabia: King Abdullah Scholarship Program (KASP) is confirmed
 --     OUTBOUND-only (funds Saudi nationals studying abroad) -- does not
 --     apply to this inbound-study table, so it is not seeded here at all.
