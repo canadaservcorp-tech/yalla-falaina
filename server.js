@@ -96,19 +96,45 @@ for (const country of gccGuides.COUNTRIES) {
   });
 }
 
-// Blog/guide articles (lib/articles.js) -- the SEO pack's three evergreen
-// articles in ar/fr/en, static pages like the GCC guides above. Registered
-// ahead of the catch-all for the same reason.
-const ARTICLE_LANGS = require('./lib/articles').LANGS;
+// Blog/guide articles (lib/articles.js) -- the SEO pack's evergreen articles.
+// Each article serves only the languages it actually has copy for
+// (articleLangs), so a ?lang=hi request on an article with no Hindi copy
+// falls back instead of pretending. Registered ahead of the catch-all.
 const articles = require('./lib/articles');
+app.get('/blog', (req, res) => {
+  const asked = seo.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, seo.LANGS) || 'en';
+  res.set('Cache-Control', asked ? 'public, max-age=3600' : 'private, no-cache');
+  res.type('html').send(articles.renderIndex({ lang, head: seo.head('/blog', lang, asked || 'en') }));
+});
 app.get('/blog/:slug', (req, res) => {
   const article = articles.ARTICLES.find(a => a.slug === req.params.slug);
   if (!article) return res.status(404).type('html').send('<h1>Not found</h1>');
-  const asked = ARTICLE_LANGS.includes(req.query.lang) ? req.query.lang : null;
-  const lang = asked || geo.pickLang(req, ARTICLE_LANGS) || 'en';
+  const avail = articles.articleLangs(article);
+  const asked = avail.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, avail) || 'en';
   const head = seo.head(`/blog/${article.slug}`, lang, asked || 'en');
   res.set('Cache-Control', asked ? 'public, max-age=3600' : 'private, no-cache');
   res.type('html').send(articles.renderPage({ article, lang, head, baseUrl: seo.base() }));
+});
+
+// Real-data directory pages (lib/directories.js) -- the study_opportunities
+// and medical_treatment_providers rows rendered as indexable listings, so
+// "study in Turkey" / "hospital abroad" searches land on real, sourced data.
+const directories = require('./lib/directories');
+app.get('/study-opportunities', async (req, res) => {
+  const asked = directories.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, directories.LANGS) || 'en';
+  const rows = await directories.loadStudyOpportunities();
+  res.set('Cache-Control', 'private, no-cache');
+  res.type('html').send(directories.renderStudyPage({ lang, rows, head: seo.head('/study-opportunities', lang, asked || 'en') }));
+});
+app.get('/medical-providers', async (req, res) => {
+  const asked = directories.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, directories.LANGS) || 'en';
+  const rows = await directories.loadMedicalProviders();
+  res.set('Cache-Control', 'private, no-cache');
+  res.type('html').send(directories.renderMedicalPage({ lang, rows, head: seo.head('/medical-providers', lang, asked || 'en') }));
 });
 
 // A real, crawlable page (lib/expressEntryPage.js), not another view of the
