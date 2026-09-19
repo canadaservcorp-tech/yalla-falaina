@@ -39,6 +39,13 @@
 --     than folded into the program row's funding fields.
 --   - city: KAU's main campus is in Jeddah; stated plainly since the
 --     program/faculty pages don't repeat this themselves.
+--   - Both rows' requirements field carries a real contact (cic@kau.edu.sa,
+--     8001169528) so the concierge has something real to hand a seeker who
+--     wants to ask about tuition or other unpublished details directly --
+--     sourced from KAU's own official Contact Us page, honestly labeled as
+--     the university's general contact center rather than a program-specific
+--     admissions email, since no such department-specific address is
+--     published for this program or faculty.
 
 insert into public.study_opportunities
   (kind, title, institution, country, city, degree_level, field_of_study, language, duration_note, tuition_note, funding_coverage_pct, eligibility_note, deadline, requirements, source_url)
@@ -51,8 +58,9 @@ from (values
    'English', '2 years',
    null,
    null,
-   'Offered as a General Master''s program with specialization tracks in Animal Production, Horticulture, Natural Resources, Field Crops and Soil Science, and Crop Protection. The official program page links to a separate admission-requirements page for the specific prerequisites rather than listing them itself -- confirm current requirements directly before applying. See the separate KAU International Graduate Scholarship row for a real, published funding route that covers this and other master''s programs university-wide.',
-   null::date, null,
+   'Offered as a General Master''s program with specialization tracks in Animal Production, Horticulture, Natural Resources, Field Crops and Soil Science, and Crop Protection. The official program page links to a separate admission-requirements page for the specific prerequisites rather than listing them itself -- confirm current requirements, tuition, and current deadlines directly before applying. See the separate KAU International Graduate Scholarship row for a real, published funding route that covers this and other master''s programs university-wide.',
+   null::date,
+   'The official program page links to a separate admission-requirements page rather than listing prerequisites itself -- confirm directly before applying. Real contact on file: KAU''s official general Contact/Call and Information Center -- email cic@kau.edu.sa, phone 8001169528 (this is the university''s general contact center, not a department-specific admissions line, since no separate email is published for this program or for the Faculty of Environmental Sciences).',
    'https://kau.edu.sa/en/programs/master-in-arid-land-agriculture'),
 
   ('scholarship', 'International Graduate Scholarship (Master''s & PhD, all fields except health sciences)',
@@ -64,7 +72,7 @@ from (values
    null,
    'Official eligibility, as published: a prior university degree rated "very good" or higher, with certified transcripts from the Saudi Embassy; under 35 for Master''s programs (under 40 for PhD); "a record of good Conduct and must be medically fit"; English proficiency (TOEFL iBT minimum 61, or IELTS minimum 5, with the Arabic Language/Islamic Studies exception above); two recommendation letters from former professors; and a nomination letter from competent authorities in the applicant''s home country. Coverage is described qualitatively as "tuition fees, accommodation, and living expenses" plus "housing, health insurance, and academic guidance programs" -- no exact percentage or dollar figure is published, so this is not stated as a guaranteed 100% here.',
    null::date,
-   'Submit the online application; some programs may carry additional eligibility criteria beyond this baseline.',
+   'Submit the online application; some programs may carry additional eligibility criteria beyond this baseline. Real contact on file: KAU''s official general Contact/Call and Information Center -- email cic@kau.edu.sa, phone 8001169528 (general contact center; no separate scholarship-office email is published).',
    'https://graduatestudies.kau.edu.sa/content-306-EN-278671')
 
 ) as v(kind, title, institution, country, city, degree_level, field_of_study, language, duration_note, tuition_note, funding_coverage_pct, eligibility_note, deadline, requirements, source_url)
