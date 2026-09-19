@@ -96,6 +96,21 @@ for (const country of gccGuides.COUNTRIES) {
   });
 }
 
+// Blog/guide articles (lib/articles.js) -- the SEO pack's three evergreen
+// articles in ar/fr/en, static pages like the GCC guides above. Registered
+// ahead of the catch-all for the same reason.
+const ARTICLE_LANGS = require('./lib/articles').LANGS;
+const articles = require('./lib/articles');
+app.get('/blog/:slug', (req, res) => {
+  const article = articles.ARTICLES.find(a => a.slug === req.params.slug);
+  if (!article) return res.status(404).type('html').send('<h1>Not found</h1>');
+  const asked = ARTICLE_LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, ARTICLE_LANGS) || 'en';
+  const head = seo.head(`/blog/${article.slug}`, lang, asked || 'en');
+  res.set('Cache-Control', asked ? 'public, max-age=3600' : 'private, no-cache');
+  res.type('html').send(articles.renderPage({ article, lang, head, baseUrl: seo.base() }));
+});
+
 // A real, crawlable page (lib/expressEntryPage.js), not another view of the
 // SPA shell -- registered ahead of the catch-all below so it isn't swallowed
 // by it. No inline script at all, so no CSP nonce is needed here.
