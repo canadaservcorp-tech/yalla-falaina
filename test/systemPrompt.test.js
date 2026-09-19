@@ -351,3 +351,31 @@ test('a new city-vs-country/region guardrail tells the concierge to name a real 
   assert.match(p, /roughly 2\.5 hours away/);
   assert.match(p, /rather than answering as if it were in Montreal or silently substituting/);
 });
+
+// Hicham's ask (Sept 2026): visitors/subscribers weren't getting any real,
+// positive information out of the study vertical -- "any program around the
+// world we should have a positive answer, and giving chance, and show
+// opportunity for the student." This is a tone/behavior mandate layered on
+// top of RETRIEVE, DON'T RECALL (which must NOT loosen -- still zero
+// invented programs) telling the concierge to never leave a study question
+// as a dead end, for any country on earth.
+test('a new "never a dead end" rule mandates a positive, opportunity-first answer for every country, without loosening RETRIEVE, DON\'T RECALL', () => {
+  const p = prompt();
+  const at = p.indexOf('=== NEVER A DEAD END: ALWAYS SHOW A REAL PATH FORWARD FOR STUDY');
+  assert.ok(at > -1);
+  const section = p.slice(at, p.indexOf('=== RETRIEVE, DON\'T RECALL: DIASPORA'));
+  assert.match(section, /does NOT loosen the RETRIEVE, DON'T RECALL discipline above in any way/);
+  assert.match(section, /never invent a program, university, or scholarship/);
+  assert.match(section, /genuinely positive, opportunity-focused answer, never a flat "no"/);
+  assert.match(section, /ONE concrete, actionable next step/);
+  assert.match(section, /there is no country or region this positive, chance-giving framing applies more weakly to/);
+});
+
+test('the "never a dead end" study rule sits right after STUDY_CONTEXT, before the diaspora/community section', () => {
+  const p = prompt();
+  const studyContextAt = p.indexOf('STUDY_CONTEXT (the only study programs/scholarships you may discuss as real, currently-open opportunities):');
+  const deadEndAt = p.indexOf('=== NEVER A DEAD END: ALWAYS SHOW A REAL PATH FORWARD FOR STUDY');
+  const diasporaAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: DIASPORA & COMMUNITY GROUPS ===');
+  assert.ok(studyContextAt > -1 && deadEndAt > -1 && diasporaAt > -1);
+  assert.ok(studyContextAt < deadEndAt && deadEndAt < diasporaAt);
+});
