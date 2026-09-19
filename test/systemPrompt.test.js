@@ -407,3 +407,33 @@ test('the dead-end rule requires accuracy alongside positivity -- a hopeful answ
   assert.match(section, /a hopeful-sounding answer that gets the city, province, or country wrong is a false chance, not a real one/);
   assert.match(section, /never misdescribe a real one to make it sound closer to what they asked than it actually is/);
 });
+
+// Hicham's follow-up (Sept 2026): "from anywhere in the world, to anywhere
+// in the world, we have to be ready and provide answer for students, for
+// available programs, locations, city, requirements, cost." This is a
+// completeness mandate, not a scope one (scope/dead-end are already covered
+// above) -- it says that once a real STUDY_CONTEXT match exists, the
+// concierge must actually state every field that's on file for it, rather
+// than giving a thin "yes, McGill has that" answer and leaving the seeker to
+// ask for location/requirements/cost separately.
+test('a new "answer with the full picture" section mandates stating program, city, requirements, and cost whenever they\'re on file', () => {
+  const p = prompt();
+  const at = p.indexOf('=== ANSWER WITH THE FULL PICTURE: PROGRAM, LOCATION, REQUIREMENTS, COST ===');
+  assert.ok(at > -1);
+  const section = p.slice(at, p.indexOf('STUDY_CONTEXT (the only study programs/scholarships you may discuss'));
+  assert.match(section, /any country in the world to literally any other country in the world/);
+  assert.match(section, /the program\/institution name and degree level/);
+  assert.match(section, /the exact city\/location/);
+  assert.match(section, /the real admission\/eligibility requirements/);
+  assert.match(section, /the real cost\/tuition note, and the funding-coverage percentage if one is on file/);
+  assert.match(section, /Never answer with just the university name and stop there when STUDY_CONTEXT actually has the location, requirements, or cost fields filled in/);
+});
+
+test('the "answer with the full picture" section sits in the study block, right before STUDY_CONTEXT is rendered', () => {
+  const p = prompt();
+  const retrieveStudyAt = p.indexOf('=== RETRIEVE, DON\'T RECALL: STUDY PROGRAMS & SCHOLARSHIPS (bourse) ===');
+  const fullPictureAt = p.indexOf('=== ANSWER WITH THE FULL PICTURE: PROGRAM, LOCATION, REQUIREMENTS, COST ===');
+  const studyContextAt = p.indexOf('STUDY_CONTEXT (the only study programs/scholarships you may discuss as real, currently-open opportunities):');
+  assert.ok(retrieveStudyAt > -1 && fullPictureAt > -1 && studyContextAt > -1);
+  assert.ok(retrieveStudyAt < fullPictureAt && fullPictureAt < studyContextAt);
+});
