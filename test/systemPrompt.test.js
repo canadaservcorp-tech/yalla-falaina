@@ -437,3 +437,31 @@ test('the "answer with the full picture" section sits in the study block, right 
   assert.ok(retrieveStudyAt > -1 && fullPictureAt > -1 && studyContextAt > -1);
   assert.ok(retrieveStudyAt < fullPictureAt && fullPictureAt < studyContextAt);
 });
+
+// Hicham's follow-up (Sept 2026): "even if the tuition fees are not
+// published, we have to get the contact email for the student to contact
+// them and write email for the university, to ask all details." This adds a
+// proactive "offer to draft a real email" behavior for exactly the case the
+// full-picture rule already flags (a real match with a genuinely missing
+// field) -- it must reuse only a real contact from STUDY_CONTEXT (never
+// invent one) and must never claim the concierge can send anything itself.
+test('a new section offers to draft a real email to the institution when tuition/requirements/deadline are missing, using only a real contact from STUDY_CONTEXT', () => {
+  const p = prompt();
+  const at = p.indexOf('=== WHEN A REAL FIELD ISN\'T PUBLISHED: OFFER TO DRAFT A REAL EMAIL TO THE INSTITUTION ===');
+  assert.ok(at > -1);
+  const section = p.slice(at, p.indexOf('STUDY_CONTEXT (the only study programs/scholarships you may discuss'));
+  assert.match(section, /proactively offer to draft a ready-to-send email/);
+  assert.match(section, /never invent a contact that isn't written there/);
+  assert.match(section, /never ask about a field STUDY_CONTEXT already has/);
+  assert.match(section, /Leave a clear placeholder for the seeker's own details/);
+  assert.match(section, /you have no ability to send an email, submit a form, or message anyone yourself/);
+});
+
+test('the "draft a real email" section sits right after the full-picture rule, before STUDY_CONTEXT is rendered', () => {
+  const p = prompt();
+  const fullPictureAt = p.indexOf('=== ANSWER WITH THE FULL PICTURE: PROGRAM, LOCATION, REQUIREMENTS, COST ===');
+  const emailAt = p.indexOf('=== WHEN A REAL FIELD ISN\'T PUBLISHED: OFFER TO DRAFT A REAL EMAIL TO THE INSTITUTION ===');
+  const studyContextAt = p.indexOf('STUDY_CONTEXT (the only study programs/scholarships you may discuss as real, currently-open opportunities):');
+  assert.ok(fullPictureAt > -1 && emailAt > -1 && studyContextAt > -1);
+  assert.ok(fullPictureAt < emailAt && emailAt < studyContextAt);
+});
