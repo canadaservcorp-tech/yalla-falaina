@@ -9,9 +9,10 @@ after(() => h.stop());
 
 // ---------- lib/articles.js unit tests ----------
 
-test('ARTICLES covers exactly the three SEO-pack articles', () => {
-  assert.deepEqual(articles.ARTICLES.map(a => a.slug).sort(), [
-    'scholarships-arab-students', 'spot-fake-job-offer', 'work-abroad-without-degree',
+test('ARTICLES covers exactly the five SEO-pack articles, in the pack\'s publishing order', () => {
+  assert.deepEqual(articles.ARTICLES.map(a => a.slug), [
+    'verify-immigration-consultant', 'scholarships-arab-students',
+    'work-abroad-without-degree', 'spot-fake-job-offer', 'medical-treatment-abroad',
   ]);
 });
 
