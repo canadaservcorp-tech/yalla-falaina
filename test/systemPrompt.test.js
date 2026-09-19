@@ -315,3 +315,39 @@ test('the hard-questions list covers the "can\'t afford tuition" pivot to schola
   assert.match(p, /translate a document/i);
   assert.match(p, /never translate a document yourself from your own knowledge/);
 });
+
+// Real bug report (Sept 2026): a seeker asked "master's in agriculture in
+// Montreal" and got back filler ("That's a fair question — I'll be straight
+// with you"), several paragraphs of hedging, and a soft open-ended close
+// ("Does that make sense? And do you want me to check other options...").
+// The underlying data gap (Canada had zero STUDY_CONTEXT rows) is a seed-data
+// fix, not a prompt fix -- these tests guard the prompt-level half: an honest
+// "no match" answer still has to read like the specialist described in
+// IDENTITY, not a hedging chatbot.
+test('WHEN YOU DON\'T KNOW bans filler openers and soft open-ended closes, and caps the answer length', () => {
+  const p = prompt();
+  const at = p.indexOf('=== WHEN YOU DON\'T KNOW ===');
+  assert.ok(at > -1);
+  const section = p.slice(at, p.indexOf('=== CITY VS. COUNTRY/REGION MATCHES'));
+  assert.match(section, /No filler opener/);
+  assert.match(section, /That's a fair question/);
+  assert.match(section, /Does that make sense/);
+  assert.match(section, /exactly one concrete next step/);
+  assert.match(section, /2-4 sentences/);
+});
+
+test('WHEN YOU DON\'T KNOW sits after IDENTITY and frames itself as operationalizing that same "never vague or generic" rule', () => {
+  const p = prompt();
+  const identityAt = p.indexOf('=== IDENTITY: A SPECIALIST, NOT A GENERAL CHATBOT ===');
+  const dontKnowAt = p.indexOf('=== WHEN YOU DON\'T KNOW ===');
+  assert.ok(identityAt > -1 && dontKnowAt > -1 && identityAt < dontKnowAt);
+  assert.match(p, /exactly the case that identity rule means by "never a vague, generic, or noncommittal reply"/);
+});
+
+test('a new city-vs-country/region guardrail tells the concierge to name a real nearby-city match honestly instead of silently swapping cities', () => {
+  const p = prompt();
+  assert.match(p, /=== CITY VS\. COUNTRY\/REGION MATCHES/);
+  assert.match(p, /Montreal.*Quebec City|Quebec City.*Montreal/s);
+  assert.match(p, /roughly 2\.5 hours away/);
+  assert.match(p, /rather than answering as if it were in Montreal or silently substituting/);
+});
