@@ -386,6 +386,7 @@
     </div>
     <label data-i18n="labelEmail">Email</label><input type="email" id="email">
     <label data-i18n="labelPassword">Password</label><input type="password" id="password">
+    <div id="googlePasswordHint" style="display:none;font-size:12px;color:var(--text-dim);margin:-8px 0 8px" data-i18n="googlePasswordHint">Signed up with Google? Just tap "Continue with Google" above — you don't need a password.</div>
     <div id="totpRow" style="display:none">
       <label data-i18n="labelTotp">Authentication code</label>
       <input type="text" id="totpToken" inputmode="numeric" maxlength="6" autocomplete="one-time-code" data-i18n-ph="totpCodePlaceholder" placeholder="6-digit code">
@@ -666,6 +667,11 @@
     $('attachBtn').style.display = gated ? 'none' : '';
   }
   let pushServerReady = false;
+  // Set true only once /api/health confirms Google sign-in is actually
+  // configured (same gate #googleBox itself waits for below) -- read by
+  // updateGooglePasswordHint() so the hint about "you don't need a password"
+  // never shows on a deployment where Google sign-in isn't even offered.
+  let googleConfigured = false;
   fetch('/api/health').then(r => r.json()).then(d => {
     // Only a real boolean flips the flag — an error/rate-limit body lacks the
     // field and must not silently read as "not enforced" while it is.
@@ -681,7 +687,7 @@
     renderUploadGate();
     // The button only appears once the server confirms Google credentials are
     // configured — a visible button that dead-ends on a 503 is worse than none.
-    if (d.google === true) $('googleBox').style.display = 'block';
+    if (d.google === true) { googleConfigured = true; $('googleBox').style.display = 'block'; updateGooglePasswordHint(); }
     pushServerReady = d.push === true;
     refreshNotifyStatus();
     // Same rule as the Google button above: Stripe checkout exists in the
@@ -916,6 +922,24 @@
   // request. Switching tabs abandons that half-finished sign-in, same as
   // navigating away from it would.
   let googlePendingToken = null;
+  // Bug report (Sept 2026): a seeker who signed up with "Continue with
+  // Google" closed the app, came back once their localStorage token had
+  // expired or been cleared, and landed on this same login form with nothing
+  // to tell them apart from a password-account seeker -- so "the app is
+  // asking for a password" even though a Google-created account never had
+  // one (routes/auth.js stores a random unguessable hash for these, on
+  // purpose, so /login can never match it). The fix can't come from the
+  // server: /login's "Invalid credentials" response is deliberately the same
+  // for every failure reason (wrong password, no such account, a Google-only
+  // account) specifically to prevent account enumeration -- see that route's
+  // own comment. So this is a client-side, account-agnostic hint shown to
+  // EVERY visitor in login mode (never naming or confirming any specific
+  // account), only once Google sign-in is actually configured, and only in
+  // login mode -- someone actively creating a new account with their own
+  // chosen password doesn't need to be told they don't need one.
+  function updateGooglePasswordHint() {
+    $('googlePasswordHint').style.display = (googleConfigured && mode === 'login') ? 'block' : 'none';
+  }
   function setMode(m) {
     mode = m;
     googlePendingToken = null;
@@ -928,6 +952,7 @@
     $('resendVerify').style.display = 'none';
     $('totpRow').style.display = 'none';
     $('totpToken').value = '';
+    updateGooglePasswordHint();
   }
   $('tabLogin').onclick = () => setMode('login');
   $('tabRegister').onclick = () => setMode('register');
@@ -1023,7 +1048,15 @@
       body: JSON.stringify({ email, password, ...(totpToken ? { totpToken } : {}) }) });
     const d = await r.json();
     if (!r.ok) {
-      $('authMsg').textContent = apiError(d, t('errSignInFailed'));
+      // On invalid credentials specifically (never on a 403/2FA failure,
+      // which already confirms a real password matched), also surface the
+      // Google hint right here -- this is the exact moment a Google-original
+      // seeker is stuck guessing a password they never set. Shown to every
+      // failed attempt alike (see updateGooglePasswordHint's comment on why
+      // this can't be account-specific), so it reveals nothing about whether
+      // THIS account actually is a Google one.
+      const hint = (googleConfigured && d.code === 'ERR_INVALID_CREDENTIALS') ? ' ' + t('googlePasswordHint') : '';
+      $('authMsg').textContent = apiError(d, t('errSignInFailed')) + hint;
       if (r.status === 403) $('resendVerify').style.display = 'inline';
       // Backend has full TOTP support (routes/auth.js) but the login form
       // never had anywhere to type the code -- without this, anyone who
