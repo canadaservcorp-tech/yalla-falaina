@@ -21,7 +21,7 @@ test('the toggle is a "..." button, closed by default, anchored to the right edg
   assert.ok(toggleAt > -1);
   const toggleEl = html.slice(html.lastIndexOf('<button', toggleAt), html.indexOf('</button>', toggleAt) + '</button>'.length);
   assert.match(toggleEl, /aria-expanded="false"/, 'must start closed');
-  assert.match(toggleEl, /aria-controls="ctaAsideBody"/);
+  assert.match(toggleEl, /aria-controls="ctaAsideBody jobsPane"/, 'controls both the popover and (on a phone) the revealed #jobsPane');
   assert.match(toggleEl, />⋮</, 'the three-dot glyph itself');
   // right edge, not the old left-corner position
   const asideRule = style.match(/#ctaAside\s*\{[^}]*\}/)[0];
@@ -60,6 +60,22 @@ test('clicking the toggle flips the .open class and aria-expanded on #ctaAsideBo
   assert.match(handler, /classList\.contains\('open'\)/);
   assert.match(handler, /classList\.toggle\('open', open\)/);
   assert.match(handler, /setAttribute\('aria-expanded', String\(open\)\)/);
+});
+
+test('the same click also flips a ctaMenuOpen class on <body>, since #jobsPane lives outside #ctaAside\'s subtree', () => {
+  const handlerAt = script.indexOf("$('ctaAsideToggle').onclick");
+  const handler = script.slice(handlerAt, script.indexOf('};', handlerAt) + 2);
+  assert.match(handler, /document\.body\.classList\.toggle\('ctaMenuOpen', open\)/);
+});
+
+test('on phones, #jobsPane (matched jobs / CV / medical / security / notifications / referral) is hidden until the menu is opened -- desktop is untouched', () => {
+  const mobile = style.match(/@media \(max-width: 720px\) \{[\s\S]*?\n  \}/)[0];
+  assert.match(mobile, /#jobsPane\s*\{[^}]*display:\s*none/, 'hidden by default on a phone');
+  assert.match(mobile, /body\.ctaMenuOpen #jobsPane\s*\{[^}]*display:\s*block/, 'revealed by the same toggle');
+  // the base (non-mobile) rule must never hide it -- desktop keeps its
+  // permanent side-by-side #chatPane / #jobsPane columns
+  const baseStyle = style.slice(0, style.indexOf('@media (max-width: 720px)'));
+  assert.doesNotMatch(baseStyle, /#jobsPane\s*\{[^}]*display:\s*none/);
 });
 
 test('the toggle has a translated tooltip wired through the existing data-i18n-title mechanism', () => {
