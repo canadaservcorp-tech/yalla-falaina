@@ -7,6 +7,40 @@ const { buildSystemPrompt } = require('../lib/yf/systemPrompt');
 
 const prompt = () => buildSystemPrompt({ jobs: [], dialectHint: null });
 
+// Bug report (Sept 2026): asked about scholarships "for this year," the live
+// concierge opened with "this year (2025)" -- a full year behind the actual
+// date. Nothing ever told the model what today really is, so it fell back on
+// its own training-data guess. buildSystemPrompt now takes an explicit
+// `today` (Date or ISO string, defaulting to the real clock) purely so these
+// tests can pin it; routes/concierge.js itself passes nothing and gets the
+// real date for free.
+test('the prompt states the real, injected date -- never left for the model to guess from its own training', () => {
+  const p = buildSystemPrompt({ jobs: [], dialectHint: null, today: '2026-09-20' });
+  assert.match(p, /=== TODAY'S ACTUAL DATE ===/);
+  assert.match(p, /Today's real date is 2026-09-20/);
+  assert.match(p, /never your own internal sense of "the current year"/);
+  assert.match(p, /Your own training gives you no reliable way to know the real date on its own/);
+});
+
+test('the date section defaults to the real clock when no `today` is passed, and tolerates a bad value', () => {
+  const withoutOverride = buildSystemPrompt({ jobs: [], dialectHint: null });
+  const isoToday = new Date().toISOString().slice(0, 10);
+  assert.match(withoutOverride, new RegExp(`Today's real date is ${isoToday}`));
+  // an unparseable override must never crash prompt building -- fall back
+  // to the real date rather than emitting "Invalid Date" into the prompt
+  const withBadOverride = buildSystemPrompt({ jobs: [], dialectHint: null, today: 'not-a-date' });
+  assert.doesNotMatch(withBadOverride, /Invalid Date/);
+  assert.match(withBadOverride, new RegExp(`Today's real date is ${isoToday}`));
+});
+
+test('the date section comes before every other guardrail, so date-relative reasoning (deadlines, "this year") is anchored from the start', () => {
+  const p = prompt();
+  const dateAt = p.indexOf("=== TODAY'S ACTUAL DATE ===");
+  const identityAt = p.indexOf('=== IDENTITY: A SPECIALIST');
+  assert.ok(dateAt > -1 && identityAt > -1);
+  assert.ok(dateAt < identityAt);
+});
+
 test('the concierge is told to decline personal/off-topic questions instead of answering them', () => {
   const p = prompt();
   assert.match(p, /STAYING IN SCOPE/);
