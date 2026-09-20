@@ -304,6 +304,21 @@
     #contactForm { order: 1; flex: 1 1 100%; }
     #shareBar { order: 3; flex: 1 1 100%; margin-top: 0; }
     #gccGuideLinks, #guideLinks { order: 4; flex: 1 1 100%; }
+    /* Hicham's ask (Sept 2026, third pass): on a phone, everything below the
+       green Send button -- matched jobs, the CV panel, the medical-treatment
+       intake form, account security (2FA), notifications, invite-a-friend --
+       is the same kind of clutter the "..." menu already solves for. Rather
+       than cram five full functional panels into the small floating
+       #ctaAsideBody popover, #jobsPane stays exactly where it already
+       renders (right below the composer) but starts hidden; the SAME toggle
+       that opens #ctaAsideBody also reveals it in place, via a class on
+       <body> since the two live in separate subtrees (#ctaAsideBody inside
+       #ctaAside, #jobsPane inside #appMain) and can't be reached with a
+       plain CSS sibling selector. Desktop is untouched -- #jobsPane there is
+       a permanent side-by-side column, never part of this "closed by
+       default" pattern. */
+    #jobsPane { display: none; margin-top: 12px; }
+    body.ctaMenuOpen #jobsPane { display: block; }
   }
 </style>
 </head>
@@ -546,7 +561,7 @@
 </main>
 
 <div id="ctaAside">
-  <button id="ctaAsideToggle" aria-expanded="false" aria-controls="ctaAsideBody"
+  <button id="ctaAsideToggle" aria-expanded="false" aria-controls="ctaAsideBody jobsPane"
           data-i18n-title="moreMenuTitle" title="More" aria-label="More">⋮</button>
   <div id="ctaAsideBody">
     <div id="contactForm" style="display:none">
@@ -1069,17 +1084,27 @@
   }
   $('authGo').onclick = authGo;
 
-  // ---------- the "..." menu (contact/promote/social/share/guides) ----------
+  // ---------- the "..." menu (contact/promote/social/share/guides, plus --
+  // on a phone, everything below the composer once signed in) ----------
   // Closed by default, every time -- it isn't a state to remember between
   // visits, just a way to keep the corner from being a wall of buttons.
   // A plain CSS :checked/:focus-within accordion can't work here because
   // #showContact and #showPromote already toggle #contactForm's own inline
   // display style in JS (see toggleContactForm below), so the open/closed
   // state of the menu itself has to be JS-driven too, not CSS-only.
+  // The same click also flips a class on <body>: #jobsPane (matched jobs,
+  // CV, medical intake, 2FA, notifications, invite-a-friend) sits in a
+  // completely different subtree from #ctaAsideBody, so there's no shared
+  // parent a CSS-only rule could hang off -- see the mobile-block comment
+  // above #jobsPane's display:none for why it's revealed in place rather
+  // than moved into the popover itself. Harmless outside the <720px media
+  // query, where that rule doesn't exist and #jobsPane just renders as the
+  // normal side-by-side desktop column regardless of this class.
   $('ctaAsideToggle').onclick = () => {
     const body = $('ctaAsideBody');
     const open = !body.classList.contains('open');
     body.classList.toggle('open', open);
+    document.body.classList.toggle('ctaMenuOpen', open);
     $('ctaAsideToggle').setAttribute('aria-expanded', String(open));
   };
 
