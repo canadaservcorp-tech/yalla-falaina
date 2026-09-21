@@ -78,14 +78,30 @@ test('the same click also flips a ctaMenuOpen class on <body>, since #jobsPane l
   assert.match(handler, /document\.body\.classList\.toggle\('ctaMenuOpen', open\)/);
 });
 
-test('on phones, #jobsPane (matched jobs / CV / medical / security / notifications / referral) is hidden until the menu is opened -- desktop is untouched', () => {
-  const mobile = style.match(/@media \(max-width: 720px\) \{[\s\S]*?\n  \}/)[0];
-  assert.match(mobile, /#jobsPane\s*\{[^}]*display:\s*none/, 'hidden by default on a phone');
-  assert.match(mobile, /body\.ctaMenuOpen #jobsPane\s*\{[^}]*display:\s*block/, 'revealed by the same toggle');
-  // the base (non-mobile) rule must never hide it -- desktop keeps its
-  // permanent side-by-side #chatPane / #jobsPane columns
+test('#jobsPane (matched jobs / CV / medical / security / notifications / referral) is hidden until the menu is opened, on every viewport', () => {
+  // Hicham's cleanup ask: the signed-in screen is just chat + composer;
+  // the side column appears only when the "..." menu is open, desktop
+  // included -- the rule lives in the BASE styles, not the media query.
   const baseStyle = style.slice(0, style.indexOf('@media (max-width: 720px)'));
-  assert.doesNotMatch(baseStyle, /#jobsPane\s*\{[^}]*display:\s*none/);
+  assert.match(baseStyle, /#jobsPane\s*\{[^}]*display:\s*none/, 'hidden by default everywhere');
+  assert.match(baseStyle, /body\.ctaMenuOpen #jobsPane\s*\{[^}]*display:\s*block/, 'revealed by the toggle everywhere');
+});
+
+test('account actions (subscription status, cancel/resume, sign out) live in the menu, not the header', () => {
+  // they used to crowd the header's .controls row when signed in
+  const bodyStart = html.indexOf('id="ctaAsideBody"');
+  const bodyEnd = html.indexOf('</header>');
+  const body = html.slice(bodyStart, bodyEnd);
+  for (const id of ['accountSection', 'subBar', 'resumeSubBtn', 'cancelSubBtn', 'cancelSubConfirm', 'logoutBtn']) {
+    assert.ok(body.includes(`id="${id}"`), `#${id} must live inside the menu's account section`);
+  }
+  // the section is hidden until signed in -- no empty bordered box for visitors
+  const acctEl = html.slice(html.lastIndexOf('<div', body.indexOf('id="accountSection"') + bodyStart), body.indexOf('id="accountSection"') + bodyStart + 200);
+  assert.match(acctEl, /display:\s*none/);
+  // and it only appears on sign-in
+  const enterAt = script.indexOf('async function enter()');
+  const enter = script.slice(enterAt, script.indexOf('resumed', enterAt));
+  assert.match(enter, /\$\('accountSection'\)\.style\.display = 'block'/);
 });
 
 test('the toggle has a translated tooltip wired through the existing data-i18n-title mechanism', () => {

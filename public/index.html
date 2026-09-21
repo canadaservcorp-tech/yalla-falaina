@@ -59,7 +59,14 @@
   #sendBtn:hover { background: #268238; }
   main { flex: 1; min-height: 0; display: flex; overflow: hidden; }
   #chatPane { flex: 2; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; }
-  #jobsPane { flex: 1; padding: 14px; overflow-y: auto; background: var(--panel); min-width: 260px; }
+  /* Hidden until the "..." menu opens -- on EVERY viewport now, not just
+     phones (Hicham's cleanup ask: the signed-in screen should be just the
+     chat and the composer; matched jobs / CV / medical intake / security /
+     notifications / invite all live behind the same toggle). The class is
+     flipped on <body> because #jobsPane lives in #appMain, a different
+     subtree from #ctaAsideBody inside the header. */
+  #jobsPane { flex: 1; padding: 14px; overflow-y: auto; background: var(--panel); min-width: 260px; display: none; }
+  body.ctaMenuOpen #jobsPane { display: block; }
   #jobsPane h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin: 0 0 10px 0; }
   .job-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
               padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
@@ -175,6 +182,11 @@
                              color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
   #ctaAsideBody > a.menuItem:hover { border-color: var(--accent); color: var(--accent); }
   #ctaAsideBody .menuSection { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 8px; }
+  #ctaAsideBody .menuSection:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+  /* Account actions are full-width rows like the other menu items; JS still
+     toggles each one with inline display as before (inline-block + 100%
+     width reads as a row). */
+  #accountSection > button { width: 100%; text-align: start; margin-top: 4px; padding: 9px 10px; font-size: 13px; }
   #contactForm { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
                      padding: 14px; margin-bottom: 8px; max-height: 60dvh; overflow-y: auto; }
   #contactForm .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 10px; }
@@ -275,7 +287,7 @@
     #inputRow { border-top: 2px solid var(--accent); background: var(--panel); padding: 12px 10px; }
     #inputRow input { font-size: 16px; padding: 12px 14px; }
     #sendBtn { padding: 14px 22px; font-size: 16px; }
-    #jobsPane { min-width: 0; width: auto; overflow-y: visible; }
+    #jobsPane { min-width: 0; width: auto; overflow-y: visible; margin-top: 12px; }
     .msg { max-width: 92%; }
     header { padding: 10px 12px; }
     header h1 { font-size: 15px; }
@@ -285,21 +297,9 @@
     #ctaAsideBody { width: min(320px, calc(100vw - 16px)); }
     #ctaAsideBody > button, #ctaAsideBody > a.menuItem { font-size: 12px; padding: 9px 10px; }
     #ctaAside a.ig { width: 30px; height: 30px; }
-    /* Hicham's ask (Sept 2026): on a phone, everything below the
-       green Send button -- matched jobs, the CV panel, the medical-treatment
-       intake form, account security (2FA), notifications, invite-a-friend --
-       is the same kind of clutter the "..." menu already solves for. Rather
-       than cram five full functional panels into the small
-       #ctaAsideBody dropdown, #jobsPane stays exactly where it already
-       renders (right below the composer) but starts hidden; the SAME toggle
-       that opens #ctaAsideBody also reveals it in place, via a class on
-       <body> since the two live in separate subtrees (#ctaAsideBody inside
-       #ctaAside, #jobsPane inside #appMain) and can't be reached with a
-       plain CSS sibling selector. Desktop is untouched -- #jobsPane there is
-       a permanent side-by-side column, never part of this "closed by
-       default" pattern. */
-    #jobsPane { display: none; margin-top: 12px; }
-    body.ctaMenuOpen #jobsPane { display: block; }
+    /* (#jobsPane's hidden-until-menu-opened rule moved to the base
+       stylesheet -- it now applies on desktop too, so the side column only
+       appears when the "..." menu is open.) */
   }
 </style>
 </head>
@@ -341,15 +341,6 @@
       <option value="English">English</option>
     </select>
     <input type="text" id="countryInput" data-i18n-ph="countryInputPlaceholder" placeholder="Preferred country (optional)">
-    <span id="subBar"></span>
-    <button class="ghost" id="resumeSubBtn" style="display:none;font-size:12px;padding:4px 8px;color:var(--accent);border-color:var(--accent)" data-i18n="resumeSubBtn">Resume subscription</button>
-    <button class="ghost" id="cancelSubBtn" style="display:none;font-size:12px;padding:4px 8px" data-i18n="cancelSubBtn">Cancel subscription</button>
-    <span id="cancelSubConfirm" style="display:none;font-size:12px;color:var(--text-dim)">
-      <span data-i18n="cancelSubConfirmText">Cancel? You'll keep access until the paid period ends.</span>
-      <button class="ghost" id="cancelSubYes" style="font-size:12px;padding:2px 8px;color:var(--danger);border-color:var(--danger)" data-i18n="cancelSubYes">Yes, cancel</button>
-      <button class="ghost" id="cancelSubNo" style="font-size:12px;padding:2px 8px" data-i18n="cancelSubNo">Never mind</button>
-    </span>
-    <button class="ghost" id="logoutBtn" style="display:none" data-i18n="signOut">Sign out</button>
     <span id="langSwitch" style="font-size:12px;color:var(--text-dim)">
       <a href="?lang=en" style="color:inherit">EN</a> ·
       <a href="?lang=fr" style="color:inherit">FR</a> ·
@@ -361,6 +352,22 @@
       <button id="ctaAsideToggle" aria-expanded="false" aria-controls="ctaAsideBody jobsPane"
               data-i18n-title="moreMenuTitle" title="More" aria-label="More">⋮</button>
       <div id="ctaAsideBody">
+        <!-- Account row lives in the menu, not the header (Hicham's cleanup
+             ask): subscription status, cancel/resume, sign out. Hidden
+             entirely until enter() shows it -- a signed-out visitor has no
+             account actions, so the section doesn't render an empty box. -->
+        <div id="accountSection" class="menuSection" style="display:none">
+          <span class="lbl" style="display:block;color:var(--text-dim);font-size:11px;margin-bottom:4px" data-i18n="accountHeading">Account</span>
+          <div id="subBar" style="font-size:12px;color:var(--text-dim);margin-bottom:4px"></div>
+          <button class="ghost" id="resumeSubBtn" style="display:none;color:var(--accent);border-color:var(--accent)" data-i18n="resumeSubBtn">Resume subscription</button>
+          <button class="ghost" id="cancelSubBtn" style="display:none" data-i18n="cancelSubBtn">Cancel subscription</button>
+          <div id="cancelSubConfirm" style="display:none;font-size:12px;color:var(--text-dim)">
+            <span data-i18n="cancelSubConfirmText">Cancel? You'll keep access until the paid period ends.</span>
+            <button class="ghost" id="cancelSubYes" style="font-size:12px;padding:2px 8px;color:var(--danger);border-color:var(--danger)" data-i18n="cancelSubYes">Yes, cancel</button>
+            <button class="ghost" id="cancelSubNo" style="font-size:12px;padding:2px 8px" data-i18n="cancelSubNo">Never mind</button>
+          </div>
+          <button class="ghost" id="logoutBtn" style="display:none" data-i18n="signOut">Sign out</button>
+        </div>
         <div id="contactForm" style="display:none">
           <div class="hint" data-i18n="contactHint">Questions, feedback, or a problem with your account? Send us a message and we’ll reply by email.</div>
           <label data-i18n="contactName">Your name</label>
@@ -1149,6 +1156,7 @@
     $('authWrap').style.display = 'none';
     $('appMain').style.display = 'flex';
     $('logoutBtn').style.display = 'inline-block';
+    $('accountSection').style.display = 'block';
     refreshSub();
     refreshCv();
     refreshMedicalIntake();
