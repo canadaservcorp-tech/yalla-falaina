@@ -73,15 +73,15 @@ test('the partner rail gets its own gutter: fixed width, reserved padding, no ai
   assert.match(script, /document\.body\.classList\.add\('hasPartners'\)/);
 });
 
-test('the fixed #ctaAside can never cover the composer — #chatPane is dynamically padded by the bar height', () => {
-  // Live-site regression: a signed-in visitor on desktop Arabic had the
-  // floating Contact/Advertise/social bar sitting directly on top of
-  // #inputRow (fixed bottom, inset-inline-start = the composer's corner in
-  // both directions). padForBar now measures the bar and pads the pane on
-  // every viewport, not just the signup card on small screens.
+test('the fixed-bottom cookiebar can never cover the composer — #chatPane is dynamically padded by its height', () => {
+  // Live-site regression: a fixed bottom overlay sitting directly on top of
+  // #inputRow left a signed-in user with "no icon to start chat". padForBar
+  // measures the consent cookiebar and pads the pane on every viewport, not
+  // just the signup card on small screens. (The "..." menu moved into the
+  // header — a top dropdown, not a bottom overlay — so it's off this hook.)
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   assert.match(script, /chatPane'\)\.style\.paddingBottom/);
-  assert.match(script, /cookiebar'\)\.offsetParent/, 'the consent cookiebar is the same bottom overlay and must count too');
+  assert.match(script, /cookiebar'\)\.offsetParent/, 'the consent cookiebar is a bottom overlay and must count');
 });
 
 test('on phones, the chat pane is capped at 60dvh (not just a floor) so the composer can never be pushed past the first screen', () => {
