@@ -42,7 +42,7 @@
      its own right-to-left base direction from the Arabic text it starts with,
      independent of the page's overall dir (English/French pages are dir="ltr"). */
   header .verticals-tagline { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
-  header .verticals-tagline .line { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+  header .verticals-tagline .line { font-size: 12px; color: var(--text-dim); line-height: 1.6; text-wrap: balance; }
   header .verticals-tagline .en { font-style: italic; opacity: 0.8; }
   .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   select, input[type="text"], input[type="email"], input[type="password"], input[type="tel"] {
@@ -103,8 +103,8 @@
      the one screen every visitor sees before anything else. A single inline
      SVG (Material Design's "flight" glyph) painted in the accent blue at
      low opacity, no image file to ship or slow-load. */
-  #authWrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px;
-              position: relative; overflow-x: hidden; overflow-y: auto; }
+  #authWrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+              position: relative; overflow-x: hidden; overflow-y: auto; gap: 14px; }
   #authWrap::before {
     content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234a7fa6'%3E%3Cpath d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z'/%3E%3C/svg%3E");
@@ -134,6 +134,19 @@
     body.hasPartners #authWrap { padding-right: 186px; }
     body.hasPartners .sideSlot.right { display: none; }
   }
+  /* What a first-time visitor actually gets -- the landing used to show a
+     bare login box. Three honest bullets under the card, the price up
+     front (transparency converts better than mystery), and clickable
+     sample questions that demonstrate the product instead of describing
+     it. z-index:1 keeps it above the ::before airplane like #authCard. */
+  #landingValue { position: relative; z-index: 1; max-width: 420px; font-size: 13px; color: var(--text-dim); }
+  #landingValue ul { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; }
+  #landingValue li::marker { color: var(--accent); }
+  #sampleQs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; font-size: 12px; }
+  .sampleQ { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: transparent;
+             border: 1px solid var(--border); color: var(--text); cursor: pointer; }
+  .sampleQ:hover { border-color: var(--accent); color: var(--accent); }
+  #landingValue .price { margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--text); }
   #authCard { position: relative; z-index: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
               padding: 24px; width: 100%; max-width: 420px; }
   #authCard h2 { margin: 0 0 4px; font-size: 18px; }
@@ -292,6 +305,16 @@
     header { padding: 10px 12px; }
     header h1 { font-size: 15px; }
     #contactForm { max-height: 56dvh; }
+    /* The signed-out landing is a card + the value block, and both can be
+       taller than a phone screen: flex-start makes the wrap scroll from
+       the top (a centered flex group would clip its top edge when it
+       overflows), and padForBar's measured bottom padding then guarantees
+       the cookiebar never sits on the Sign in button. */
+    #authWrap { justify-content: flex-start; }
+    /* One tagline line on a phone -- the other two pushed the sign-in card
+       half a screen down, and the value block below the card states all
+       three verticals anyway. */
+    header .verticals-tagline .line:nth-child(n+2) { display: none; }
     /* The "..." toggle lives in the header on every viewport now; on a
        phone the dropdown just gets a little tighter. */
     #ctaAsideBody { width: min(320px, calc(100vw - 16px)); }
@@ -515,6 +538,20 @@
     <div class="row"><button id="authGo" data-i18n="tabSignIn">Sign in</button></div>
     <div id="authMsg"></div>
     <button id="resendVerify" style="display:none;background:none;border:none;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13px" data-i18n="resendVerifyLink">Resend verification email</button>
+  </div>
+  <div id="landingValue">
+    <ul>
+      <li data-i18n="landingBullet1">Real verified opportunities — every job, program and hospital links to an official source</li>
+      <li data-i18n="landingBullet2">One concierge for study, treatment and work abroad — in Arabic, French, English, Hindi and Turkish</li>
+      <li data-i18n="landingBullet3">CV export and real inquiry emails to universities and employers</li>
+    </ul>
+    <div id="sampleQs">
+      <span data-i18n="sampleQsLabel">Try asking:</span>
+      <button type="button" class="sampleQ" data-i18n="sampleQ1">Nursing jobs in Qatar</button>
+      <button type="button" class="sampleQ" data-i18n="sampleQ2">Scholarships in Turkey</button>
+      <button type="button" class="sampleQ" data-i18n="sampleQ3">Hospitals in Istanbul</button>
+    </div>
+    <div class="price" data-i18n="landingPrice">$25/month after a free preview — cancel anytime</div>
   </div>
 </div>
 
@@ -952,6 +989,20 @@
   $('tabLogin').onclick = () => setMode('login');
   $('tabRegister').onclick = () => setMode('register');
 
+  // A sample-question chip doesn't fake a chat -- it switches the card to
+  // Create account and remembers the question; enter() then drops it into
+  // the composer so the brand-new seeker's first ask is one tap away.
+  // The question stored is the chip's localized text, so the concierge
+  // reads it in the language the visitor actually saw.
+  document.querySelectorAll('.sampleQ').forEach(b => {
+    b.onclick = () => {
+      sessionStorage.setItem('yf_pending_q', b.textContent.trim());
+      setMode('register');
+      $('authCard').scrollIntoView({ block: 'start' });
+      $('email').focus();
+    };
+  });
+
   // Toggles which signup track's fields are visible -- see #regExtra's own
   // comment on why this doesn't change what account gets created (role stays
   // 'seeker' either way), only which questions the form asks up front.
@@ -1165,6 +1216,8 @@
     refreshReferral();
     const resumed = await resumeConversation();
     if (!resumed) addMessage('system', t('welcomeSystemMessage'));
+    const pendingQ = sessionStorage.getItem('yf_pending_q');
+    if (pendingQ) { sessionStorage.removeItem('yf_pending_q'); $('messageInput').value = pendingQ; $('messageInput').focus(); }
   }
   $('logoutBtn').onclick = () => { localStorage.removeItem(tokenKey); location.reload(); };
 
