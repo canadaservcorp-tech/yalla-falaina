@@ -746,8 +746,20 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), isComplete ? usage.COST.text : 0);
     if (isComplete) await usage.charge(user.id, usage.COST.text);
     markPreviewUsed();
+    // Which quick-reply chips the client offers under this reply. A context
+    // key, never text — the actual wording is the client's i18n so a chip
+    // always reads in the seeker's UI language. Priority: what actually
+    // matched this turn beats the seeker's signup track, because someone
+    // who just got three real jobs wants job follow-ups, not their track's
+    // defaults.
+    const suggest = !nowComplete ? 'intake'
+      : jobs.length ? 'jobs'
+      : studyOpportunities.length ? 'study'
+      : medicalProviders.length ? 'medical'
+      : (profileRow?.seeking_treatment ? 'medical' : profileRow?.seeking_study ? 'study' : 'work');
     res.json({
       success: true, reply, jobs: outJobs, conversationId, llmConfigured: true, intake: !nowComplete, isComplete: nowComplete, missing: nowMissing,
+      suggest,
       // A live-test finding ("feed-claim on completion turn"): `jobs` above
       // was computed from the ORIGINAL `isComplete` (line ~356, before this
       // turn's intake extraction could flip it), so on the exact turn a
