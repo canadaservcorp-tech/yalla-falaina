@@ -134,19 +134,35 @@
     body.hasPartners #authWrap { padding-right: 186px; }
     body.hasPartners .sideSlot.right { display: none; }
   }
-  /* What a first-time visitor actually gets -- the landing used to show a
-     bare login box. Three honest bullets under the card, the price up
-     front (transparency converts better than mystery), and clickable
-     sample questions that demonstrate the product instead of describing
-     it. z-index:1 keeps it above the ::before airplane like #authCard. */
-  #landingValue { position: relative; z-index: 1; max-width: 420px; font-size: 13px; color: var(--text-dim); }
-  #landingValue ul { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; }
-  #landingValue li::marker { color: var(--accent); }
-  #sampleQs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; font-size: 12px; }
+  /* "Why Yalla Nsafer" lives INSIDE the "..." menu, not on the landing —
+     Hicham's call: the interface stays clean, and the pitch is one tap
+     away for anyone curious. */
+  #whySection ul { margin: 0; padding-inline-start: 16px; display: flex; flex-direction: column; gap: 4px;
+                   font-size: 12px; color: var(--text-dim); }
+  #whySection li::marker { color: var(--accent); }
+  #sampleQs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; font-size: 12px;
+              color: var(--text-dim); }
   .sampleQ { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: transparent;
              border: 1px solid var(--border); color: var(--text); cursor: pointer; }
   .sampleQ:hover { border-color: var(--accent); color: var(--accent); }
-  #landingValue .price { margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--text); }
+  #whySection .price { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--text); }
+  /* Concierge quick-replies: the server says WHICH pool fit this turn
+     (jobs matched / study matched / intake running ...), the client
+     renders the seeker's-language wording. One tap sends it -- the
+     fastest interaction on a phone is no typing at all. */
+  .suggRow { display: flex; flex-wrap: wrap; gap: 6px; align-self: flex-start; }
+  [dir="rtl"] .suggRow { align-self: flex-end; }
+  .suggChip { font-size: 12px; padding: 5px 11px; border-radius: 999px; background: transparent;
+              border: 1px solid var(--accent); color: var(--accent); cursor: pointer; }
+  .suggChip:hover { background: var(--accent); color: var(--accent-contrast); }
+  /* The model takes seconds; an empty gap reads as frozen. The three-dot
+     bubble is the universal "it's thinking" cue -- no translation needed. */
+  .msg.typing { display: flex; gap: 4px; padding: 12px 14px; }
+  .msg.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim);
+                     animation: typeBlink 1.2s infinite; }
+  .msg.typing span:nth-child(2) { animation-delay: .2s; }
+  .msg.typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes typeBlink { 0%, 60%, 100% { opacity: .25 } 30% { opacity: 1 } }
   #authCard { position: relative; z-index: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
               padding: 24px; width: 100%; max-width: 420px; }
   #authCard h2 { margin: 0 0 4px; font-size: 18px; }
@@ -405,6 +421,21 @@
         <button id="showContact" data-i18n="contactLink">Contact us</button>
         <a class="ghost menuItem" href="/express-entry-draws" data-i18n="expressEntryLink">Latest Express Entry draws</a>
         <button id="showPromote" class="ghost" style="border-color:var(--accent);color:var(--accent)" data-i18n="promoteLink">📣 Promote your company with us</button>
+        <div id="whySection" class="menuSection">
+          <span class="lbl" style="display:block;color:var(--text-dim);font-size:11px;margin-bottom:4px" data-i18n="whyHeading">Why Yalla Nsafer</span>
+          <ul>
+            <li data-i18n="landingBullet1">Real verified opportunities — every job, program and hospital links to an official source</li>
+            <li data-i18n="landingBullet2">One concierge for study, treatment and work abroad — in Arabic, French, English, Hindi and Turkish</li>
+            <li data-i18n="landingBullet3">CV export and real inquiry emails to universities and employers</li>
+          </ul>
+          <div id="sampleQs">
+            <span data-i18n="sampleQsLabel">Try asking:</span>
+            <button type="button" class="sampleQ" data-i18n="sampleQ1">Nursing jobs in Qatar</button>
+            <button type="button" class="sampleQ" data-i18n="sampleQ2">Scholarships in Turkey</button>
+            <button type="button" class="sampleQ" data-i18n="sampleQ3">Hospitals in Istanbul</button>
+          </div>
+          <div class="price" data-i18n="landingPrice">$25/month after a free preview — cancel anytime</div>
+        </div>
         <div id="gccGuideLinks" class="menuSection" style="font-size:12px;line-height:1.8">
           <span class="lbl" style="display:block;color:var(--text-dim);font-size:11px;margin-bottom:4px" data-i18n="gccGuidesHeading">Working in the Gulf</span>
           <a href="/work-in-uae" data-i18n="workInUaeLink">Working in the UAE</a> ·
@@ -538,20 +569,6 @@
     <div class="row"><button id="authGo" data-i18n="tabSignIn">Sign in</button></div>
     <div id="authMsg"></div>
     <button id="resendVerify" style="display:none;background:none;border:none;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13px" data-i18n="resendVerifyLink">Resend verification email</button>
-  </div>
-  <div id="landingValue">
-    <ul>
-      <li data-i18n="landingBullet1">Real verified opportunities — every job, program and hospital links to an official source</li>
-      <li data-i18n="landingBullet2">One concierge for study, treatment and work abroad — in Arabic, French, English, Hindi and Turkish</li>
-      <li data-i18n="landingBullet3">CV export and real inquiry emails to universities and employers</li>
-    </ul>
-    <div id="sampleQs">
-      <span data-i18n="sampleQsLabel">Try asking:</span>
-      <button type="button" class="sampleQ" data-i18n="sampleQ1">Nursing jobs in Qatar</button>
-      <button type="button" class="sampleQ" data-i18n="sampleQ2">Scholarships in Turkey</button>
-      <button type="button" class="sampleQ" data-i18n="sampleQ3">Hospitals in Istanbul</button>
-    </div>
-    <div class="price" data-i18n="landingPrice">$25/month after a free preview — cancel anytime</div>
   </div>
 </div>
 
@@ -989,17 +1006,28 @@
   $('tabLogin').onclick = () => setMode('login');
   $('tabRegister').onclick = () => setMode('register');
 
-  // A sample-question chip doesn't fake a chat -- it switches the card to
-  // Create account and remembers the question; enter() then drops it into
-  // the composer so the brand-new seeker's first ask is one tap away.
-  // The question stored is the chip's localized text, so the concierge
-  // reads it in the language the visitor actually saw.
+  // A sample-question chip doesn't fake a chat. Signed out: it switches
+  // the card to Create account and remembers the question; enter() then
+  // drops it into the composer. Signed in (the chips live in the "..."
+  // menu, reachable from the app too): it goes straight into the composer
+  // and the menu closes. Either way the question sent is the chip's
+  // localized text -- the concierge reads it in the language the seeker
+  // actually saw.
   document.querySelectorAll('.sampleQ').forEach(b => {
     b.onclick = () => {
-      sessionStorage.setItem('yf_pending_q', b.textContent.trim());
-      setMode('register');
-      $('authCard').scrollIntoView({ block: 'start' });
-      $('email').focus();
+      const q = b.textContent.trim();
+      if ($('appMain').style.display === 'flex') {
+        $('messageInput').value = q;
+        $('ctaAsideBody').classList.remove('open');
+        document.body.classList.remove('ctaMenuOpen');
+        $('ctaAsideToggle').setAttribute('aria-expanded', 'false');
+        $('messageInput').focus();
+      } else {
+        sessionStorage.setItem('yf_pending_q', q);
+        setMode('register');
+        $('authCard').scrollIntoView({ block: 'start' });
+        $('email').focus();
+      }
     };
   });
 
@@ -1591,6 +1619,47 @@
     return div;   // transient notices (voice transcribing…) remove themselves
   }
 
+  // The model round-trip takes seconds; without a cue the chat reads as
+  // frozen mid-send. Three pulsing dots = "it's thinking".
+  function showTyping() {
+    const div = document.createElement('div');
+    div.className = 'msg bot typing';
+    div.append(document.createElement('span'), document.createElement('span'), document.createElement('span'));
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  // One-tap follow-ups under each bot reply. The server names the pool
+  // (data.suggest) that matched this turn; the wording is this client's
+  // i18n, so a chip always reads in the language the UI is in.
+  // Pools resolve lazily (t() at render, not at parse) so a mid-session
+  // language switch localizes the chips correctly -- and so each key stays
+  // a literal t('...') call the i18n drift test can count.
+  const SUGGEST_POOLS = {
+    intake:  () => [t('suggIntake1'), t('suggIntake2'), t('suggIntake3')],
+    jobs:    () => [t('suggJobs1'), t('suggJobs2'), t('suggJobs3')],
+    study:   () => [t('suggStudy1'), t('suggStudy2'), t('suggStudy3')],
+    medical: () => [t('suggMedical1'), t('suggMedical2'), t('suggMedical3')],
+    work:    () => [t('suggWork1'), t('suggWork2'), t('suggWork3')],
+  };
+  function addSuggestions(pool) {
+    const labels = SUGGEST_POOLS[pool] ? SUGGEST_POOLS[pool]() : null;
+    if (!labels) return;
+    const row = document.createElement('div');
+    row.className = 'suggRow';
+    for (const label of labels) {
+      const b = document.createElement('button');
+      b.className = 'suggChip';
+      b.textContent = label;
+      // Tap = the question asked: into the composer, sent immediately.
+      b.onclick = () => { row.remove(); inputEl.value = b.textContent; sendMessage(); };
+      row.appendChild(b);
+    }
+    messagesEl.appendChild(row);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
   // `retrieved` distinguishes "the feed was actually searched and found
   // nothing" from "retrieval never ran this turn at all" (server's
   // jobsRetrieved field — see routes/concierge.js). Live-test finding
@@ -1660,6 +1729,7 @@
     sendBtn.disabled = true;
     addMessage('user', text);
     history.push({ role: 'user', content: text });
+    const typing = showTyping();
     try {
       const res = await fetch('/api/concierge', { method: 'POST', headers: headers(),
         body: JSON.stringify({ message: text, history: history.slice(0, -1),
@@ -1667,11 +1737,13 @@
           dialectHint: dialectSelect.value || undefined,
           preferredCountry: countryInput.value || undefined }) });
       const data = await res.json();
+      typing.remove();
       if (res.status === 401) { localStorage.removeItem(tokenKey); location.reload(); return; }
       if (res.status === 402) { $('paywall').style.display = 'block'; addMessage('system', apiError(data, data.error)); return; }
       if (!res.ok) { addMessage('system', t('errorPrefix') + apiError(data, data.error || res.statusText)); return; }
       conversationId = data.conversationId || conversationId;
       addMessage('bot', data.reply);
+      addSuggestions(data.suggest);
       history.push({ role: 'assistant', content: data.reply });
       renderJobs(data.jobs, data.jobsRetrieved, data.isComplete);
       refreshCv(); // the seeker's collected background just grew (or their profile just completed)
