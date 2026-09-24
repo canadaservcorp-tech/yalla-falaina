@@ -392,6 +392,46 @@ async function ask(system, messages) {
   return { status: r.status, body: r.ok ? await r.json() : (await r.text()).slice(0, 300) };
 }
 
+// Streamed variant of ask(): the same Anthropic call with stream:true, so
+// the reply can reach the client token-by-token instead of only after the
+// full generation. onText receives the reply-so-far on every text delta --
+// the caller decides how much of it is safe to forward (the ---PROFILE---
+// block is withheld, never streamed). Returns {status: 200, text} on
+// success or the same {status, body} error shape ask() produces.
+async function askStream(system, messages, onText) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({ model: MODEL, max_tokens: MAX_REPLY_TOKENS, system, messages, stream: true }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (!r.ok) return { status: r.status, body: (await r.text()).slice(0, 300) };
+  let text = '', buf = '';
+  const decoder = new TextDecoder();
+  for await (const chunk of r.body) {
+    buf += decoder.decode(chunk, { stream: true });
+    let sep;
+    while ((sep = buf.indexOf('\n\n')) !== -1) {
+      const frame = buf.slice(0, sep);
+      buf = buf.slice(sep + 2);
+      const dataLine = frame.split('\n').find(l => l.startsWith('data:'));
+      if (!dataLine) continue;
+      try {
+        const ev = JSON.parse(dataLine.slice(5).trim());
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
+          text += ev.delta.text;
+          onText?.(text);
+        }
+      } catch { /* a malformed SSE frame never sinks the turn */ }
+    }
+  }
+  return { status: 200, text };
+}
+
 // Why the concierge is failing is invisible from the outside: a bad key, an unavailable
 // model and a blocked egress all surface as 502. Admins can read the upstream verdict.
 router.get('/diag', authenticate, sec.requireActiveUser, async (req, res) => {
@@ -471,6 +511,42 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       .map(m => ({ role: m.role, content: m.content.slice(0, MAX_CHARS) }));
     if (!message) return res.status(400).json({ error: 'message is required', code: 'ERR_BAD_INPUT' });
 
+    // Streaming replies: when the client opts in (`stream: true`) the answer
+    // is pushed over SSE — real stage events while the pipeline works, then
+    // live token deltas, then a 'done' event carrying the exact same JSON
+    // payload non-stream callers get from res.json. finish()/fail() route
+    // results/errors to whichever transport this request ended up on; the
+    // hard-fail returns above the header flush stay plain JSON.
+    const wantsStream = req.body.stream === true;
+    const sse = (event, data) => { try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* client gone — finish() still lands */ } };
+    const finish = (payload) => {
+      if (!wantsStream || !res.headersSent) return res.json(payload);
+      sse('done', payload);
+      return res.end();
+    };
+    const fail = (statusCode, payload) => {
+      if (wantsStream && res.headersSent) { sse('error', payload); return res.end(); }
+      return res.status(statusCode).json(payload);
+    };
+    // relayDelta forwards reply text to the SSE client as it generates, but
+    // never the ---PROFILE--- fencing: a complete marker cuts emission at
+    // its start, and a trailing partial marker ('---PROF' split across
+    // deltas) is withheld until it resolves. The authoritative reply —
+    // after PROFILE extraction and the claim scrubs — lands in the 'done'
+    // payload, and the client re-renders its bubble from that at the end.
+    const PROFILE_MARKER = '---PROFILE---';
+    let emittedChars = 0;
+    const relayDelta = (full) => {
+      let safe = full.indexOf(PROFILE_MARKER);
+      if (safe === -1) {
+        safe = full.length;
+        for (let k = Math.min(safe, PROFILE_MARKER.length - 1); k > 0; k--) {
+          if (full.endsWith(PROFILE_MARKER.slice(0, k))) { safe = full.length - k; break; }
+        }
+      }
+      if (safe > emittedChars) { sse('delta', { text: full.slice(emittedChars, safe) }); emittedChars = safe; }
+    };
+
     // Profile completeness gate (Section 10) — checked before the paywall.
     // An incomplete profile does NOT block the conversation: the seeker enters
     // intake mode, where the concierge asks for the missing Section 10 fields
@@ -545,6 +621,14 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
         return res.status(429).json({ error: 'Daily limit reached — come back tomorrow or upgrade', quota, code: 'ERR_QUOTA' });
     }
 
+    // Streaming headers go out before retrieval, so the client's stage line
+    // shows 'searching' while the reads actually run — real pipeline events,
+    // not a canned animation.
+    if (wantsStream) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' });
+      res.write('\n');
+      sse('stage', { stage: 'searching' });
+    }
     // Intake mode retrieves nothing — no jobs are fetched, shown to the model,
     // or returned to the client until the profile gate passes. A client that
     // doesn't send preferredCountry (most won't, every turn) falls back to
@@ -552,23 +636,29 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // matching as if that answer didn't exist.
     const preferredCountry = sec.clean(req.body.preferredCountry, 60) || profileRow?.preferred_country || '';
     const preferredCity = profileRow?.preferred_city || '';
-    const jobs = isComplete ? await retrieveJobs({
-      query: message,
-      preferredCountry,
-      limit: 5,
-    }) : [];
-    // Same "no retrieval before the profile gate passes" discipline as jobs
-    // above, extended to every other retrieved-context source added for the
+    // Same "no retrieval before the profile gate passes" discipline as before,
+    // extended to every other retrieved-context source added for the
     // international-students, travel/community, and trusted-partner verticals
     // (Section 4/5 of the build brief) -- none of these are gated behind
     // profile.seeking_study specifically (a pure job-seeker profile still
     // benefits from community/accommodation/partner/risk context once
     // complete), only behind the same completeness gate jobs already use.
-    // Fetched in parallel -- seven independent reads, no ordering dependency.
-    // medicalIntake is the seeker's own latest request (or null), not a
-    // search -- see lib/yf/medicalMatching.js's own comment.
-    const [studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving] = isComplete
+    // All eight reads run in one Promise.all -- jobs and the medical-provider
+    // search used to await before/after this block sequentially, and there is
+    // no ordering dependency among any of them. medicalIntake is the seeker's
+    // own latest request (or null), not a search -- see
+    // lib/yf/medicalMatching.js's own comment. Cross-track parity (owner's
+    // rule: the concierge works in all cases and gives the same results
+    // regardless of which signup track attracted the user): with an intake
+    // row the provider query is the stated treatment + extracted report text;
+    // without one (a work/study seeker asking about a treatment) the message
+    // itself is the query — retrieveMedicalProviders returns [] on no keyword
+    // overlap rather than a fallback sample, so unrelated messages never see
+    // provider noise. Never weighted by preferredCountry (see
+    // retrieveMedicalProviders' own comment on why).
+    const [jobs, studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving, medicalProviders] = isComplete
       ? await Promise.all([
+          retrieveJobs({ query: message, preferredCountry, limit: 5 }),
           retrieveStudyOpportunities({
             query: message, preferredCountry,
             degreeLevel: profileRow?.target_degree_level, fieldOfStudy: profileRow?.target_field_of_study, limit: 5,
@@ -578,20 +668,11 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
           retrieveTrustedPartners({ country: preferredCountry, limit: 3 }),
           retrieveCountryRisks({ country: preferredCountry, limit: 5 }),
           retrieveCostOfLiving({ country: preferredCountry, city: preferredCity, limit: 5 }),
+          medicalIntake
+            ? retrieveMedicalProviders({ query: [medicalIntake.requiredTreatment, medicalIntake.extractedReportText].filter(Boolean).join(' '), limit: 8 })
+            : retrieveMedicalProviders({ query: message, limit: 8 }),
         ])
-      : [[], [], [], [], [], []];
-    // Cross-track parity (owner's rule: the concierge works in all cases and
-    // gives the same results regardless of which signup track attracted the
-    // user): with an intake row the query is the stated treatment + extracted
-    // report text; without one (a work/study seeker asking about a treatment)
-    // the message itself is the query — retrieveMedicalProviders returns []
-    // on no keyword overlap rather than a fallback sample, so unrelated
-    // messages never see provider noise. Never weighted by preferredCountry
-    // (see retrieveMedicalProviders' own comment on why).
-    const medicalProviders = !isComplete ? []
-      : medicalIntake
-        ? await retrieveMedicalProviders({ query: [medicalIntake.requiredTreatment, medicalIntake.extractedReportText].filter(Boolean).join(' '), limit: 8 })
-        : await retrieveMedicalProviders({ query: message, limit: 8 });
+      : [[], [], [], [], [], [], [], []];
     // Seed/demo fixture rows (see demoJob above) are redacted before either
     // the model or the client sees them, regardless of preview/subscription
     // status — applied first so a demo job during free preview still gets
@@ -603,6 +684,11 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // the model could be talked out of. matched_job_ids in the audit log
     // below still uses the real `jobs`, ids only, never anything redacted.
     const outJobs = inPreview ? safeJobs.map(teaserJob) : safeJobs;
+    // 'found' fires only when retrieval actually ran (an intake turn fetches
+    // nothing — '0 matches' would be a false claim), and the count is the
+    // real result size across the three matched verticals.
+    if (wantsStream && isComplete)
+      sse('stage', { stage: 'found', n: jobs.length + studyOpportunities.length + medicalProviders.length });
     // Best-effort, never fails the seeker's turn: the counter existing at all
     // is what makes preview mode self-limiting, but a write hiccup shouldn't
     // block someone who's genuinely on their last free reply.
@@ -656,7 +742,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       if (conversationId) logTurn(conversationId, message, reply, jobs.map(j => j.id), isComplete ? usage.COST.text : 0);
       if (isComplete) await usage.charge(user.id, usage.COST.text);
       markPreviewUsed();
-      return res.json({
+      return finish({
         success: true, reply, jobs: outJobs, conversationId, llmConfigured: false, intake: !isComplete, isComplete, missing,
         jobsRetrieved: isComplete,
         ...(inPreview ? { preview: true, previewRemaining: freePreviewLimit() - previewUsed - 1 } : {}),
@@ -674,13 +760,24 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       + (isComplete ? '' : '\n\n' + intakeInstructions(missing))
       + (inPreview ? '\n\n' + previewInstructions(freePreviewLimit() - previewUsed - 1) : '')
       + (active ? '\n\n' + cvAvailableInstructions : '');
-    const { status, body } = await ask(system, [...history, { role: 'user', content: message }]);
-    if (status !== 200) {
-      console.error('concierge upstream', status, body);
-      return res.status(502).json({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
+    if (wantsStream) sse('stage', { stage: 'writing' });
+    let reply;
+    if (wantsStream) {
+      const s = await askStream(system, [...history, { role: 'user', content: message }], relayDelta);
+      if (s.status !== 200) {
+        console.error('concierge upstream', s.status, s.body);
+        return fail(502, { error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
+      }
+      reply = (s.text || '').trim();
+    } else {
+      const { status, body } = await ask(system, [...history, { role: 'user', content: message }]);
+      if (status !== 200) {
+        console.error('concierge upstream', status, body);
+        return res.status(502).json({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
+      }
+      reply = (body.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
     }
-    let reply = (body.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
-    if (!reply) return res.status(502).json({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
+    if (!reply) return fail(502, { error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
 
     // Intake extraction: the model may end its reply with a ---PROFILE---
     // JSON block. Strip it from the visible reply and persist it through the
@@ -757,7 +854,7 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
       : studyOpportunities.length ? 'study'
       : medicalProviders.length ? 'medical'
       : (profileRow?.seeking_treatment ? 'medical' : profileRow?.seeking_study ? 'study' : 'work');
-    res.json({
+    finish({
       success: true, reply, jobs: outJobs, conversationId, llmConfigured: true, intake: !nowComplete, isComplete: nowComplete, missing: nowMissing,
       suggest,
       // A live-test finding ("feed-claim on completion turn"): `jobs` above
@@ -776,6 +873,12 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     });
   } catch (e) {
     console.error('concierge', e.name, e.message);
+    // Once SSE headers are committed the reply can only fail as an 'error'
+    // event — a JSON status at that point is bytes the client never reads.
+    if (req.body?.stream === true && res.headersSent) {
+      try { res.write(`event: error\ndata: ${JSON.stringify({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' })}\n\n`); } catch { /* gone */ }
+      return res.end();
+    }
     res.status(502).json({ error: 'Concierge unavailable', code: 'ERR_UPSTREAM_UNAVAILABLE' });
   }
 });

@@ -64,7 +64,7 @@ test('concierge replies carry one-tap suggestion chips keyed by server context',
 test('a typing bubble shows while the concierge thinks', () => {
   assert.match(script, /className = 'msg bot typing'/);
   assert.match(script, /const typing = showTyping\(\);/);
-  assert.match(style, /\.msg\.typing span \{[^}]*animation: typeBlink/);
+  assert.match(style, /\.msg\.typing\s*>\s*span\s*\{[^}]*animation: typeBlink/);
 });
 
 test('on phones the landing scrolls from the top so the cookiebar never covers Sign in', () => {

@@ -18,13 +18,16 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'),
 const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
-test('the toggle is a green "..." button, closed by default, at the top of the page inside the header', () => {
+test('the toggle is a labeled green "Menu" pill, closed by default, at the top of the page inside the header', () => {
   const toggleAt = html.indexOf('id="ctaAsideToggle"');
   assert.ok(toggleAt > -1);
   const toggleEl = html.slice(html.lastIndexOf('<button', toggleAt), html.indexOf('</button>', toggleAt) + '</button>'.length);
   assert.match(toggleEl, /aria-expanded="false"/, 'must start closed');
   assert.match(toggleEl, /aria-controls="ctaAsideBody jobsPane"/, 'controls both the dropdown and (on a phone) the revealed #jobsPane');
-  assert.match(toggleEl, />⋮</, 'the three-dot glyph itself');
+  // a readable label, not a bare ⋮ glyph — "the menu button name it menu,
+  // not 3 dot, and make it bigger visible" (operator)
+  assert.match(toggleEl, /<span data-i18n="menuLabel">Menu<\/span>/, 'the localized Menu label itself');
+  assert.ok(!toggleEl.includes('⋮'), 'no three-dot glyph anymore');
   // top right: the menu is the last item of the header's .controls (the
   // logical inline end -- mirrored to the top left in RTL, like every
   // other control)
@@ -34,6 +37,8 @@ test('the toggle is a green "..." button, closed by default, at the top of the p
   // same green as the Send button, not the old panel/border look
   const toggleRule = style.match(/#ctaAsideToggle\s*\{[^}]*\}/)[0];
   assert.match(toggleRule, /background:\s*#2f9e44/, 'same green as #sendBtn');
+  assert.match(toggleRule, /font-weight:\s*700/, 'a labeled pill reads bold — bigger and more visible than the icon was');
+  assert.match(toggleRule, /padding:\s*0 16px/, 'real horizontal padding for the label');
 });
 
 test('#ctaAsideBody is hidden until opened, and holds every relocated control', () => {

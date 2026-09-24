@@ -157,12 +157,15 @@
   .suggChip:hover { background: var(--accent); color: var(--accent-contrast); }
   /* The model takes seconds; an empty gap reads as frozen. The three-dot
      bubble is the universal "it's thinking" cue -- no translation needed. */
-  .msg.typing { display: flex; gap: 4px; padding: 12px 14px; }
-  .msg.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim);
+  .msg.typing { display: flex; gap: 4px; padding: 12px 14px; flex-wrap: wrap; }
+  .msg.typing > span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim);
                      animation: typeBlink 1.2s infinite; }
-  .msg.typing span:nth-child(2) { animation-delay: .2s; }
-  .msg.typing span:nth-child(3) { animation-delay: .4s; }
+  .msg.typing > span:nth-child(2) { animation-delay: .2s; }
+  .msg.typing > span:nth-child(3) { animation-delay: .4s; }
   @keyframes typeBlink { 0%, 60%, 100% { opacity: .25 } 30% { opacity: 1 } }
+  /* Under the dots: what the concierge is doing right now, narrated from
+     real server-side pipeline events (never canned copy). */
+  .msg.typing .stageLine { flex-basis: 100%; margin-top: 6px; font-size: 12px; color: var(--text-dim); }
   #authCard { position: relative; z-index: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
               padding: 24px; width: 100%; max-width: 420px; }
   #authCard h2 { margin: 0 0 4px; font-size: 18px; }
@@ -191,8 +194,11 @@
      absolute dropdown under the button so opening it never flexes the
      header row. */
   #ctaAside { position: relative; flex: 0 0 auto; margin-inline-start: auto; }
-  #ctaAsideToggle { width: 40px; height: 40px; border-radius: 50%; font-size: 20px;
-                    line-height: 1; padding: 0; display: flex; align-items: center; justify-content: center;
+  /* A labeled pill, not a bare glyph: "Menu" reads as an affordance in a way
+     three dots never did for first-time visitors. Same Send green, sized to
+     be unmissable at the end of the header row. */
+  #ctaAsideToggle { min-width: 64px; height: 44px; border-radius: 22px; font-size: 16px; font-weight: 700;
+                    letter-spacing: .2px; line-height: 1; padding: 0 16px; display: flex; align-items: center; justify-content: center;
                     background: #2f9e44; color: #fff; cursor: pointer; flex: 0 0 auto; }
   #ctaAsideToggle:hover, #ctaAsideToggle[aria-expanded="true"] { background: #268238; color: #fff; }
   /* A real panel, not transparent buttons floating over whatever sits behind
@@ -389,7 +395,7 @@
     </span>
     <div id="ctaAside">
       <button id="ctaAsideToggle" aria-expanded="false" aria-controls="ctaAsideBody jobsPane"
-              data-i18n-title="moreMenuTitle" title="More" aria-label="More">⋮</button>
+              data-i18n-title="moreMenuTitle" title="More" aria-label="More"><span data-i18n="menuLabel">Menu</span></button>
       <div id="ctaAsideBody">
         <!-- Account row lives in the menu, not the header (Hicham's cleanup
              ask): subscription status, cancel/resume, sign out. Hidden
@@ -1730,26 +1736,98 @@
     addMessage('user', text);
     history.push({ role: 'user', content: text });
     const typing = showTyping();
-    try {
-      const res = await fetch('/api/concierge', { method: 'POST', headers: headers(),
-        body: JSON.stringify({ message: text, history: history.slice(0, -1),
-          conversationId: conversationId || undefined,
-          dialectHint: dialectSelect.value || undefined,
-          preferredCountry: countryInput.value || undefined }) });
-      const data = await res.json();
-      typing.remove();
-      if (res.status === 401) { localStorage.removeItem(tokenKey); location.reload(); return; }
-      if (res.status === 402) { $('paywall').style.display = 'block'; addMessage('system', apiError(data, data.error)); return; }
-      if (!res.ok) { addMessage('system', t('errorPrefix') + apiError(data, data.error || res.statusText)); return; }
+    // Under the dots, the stage line narrates what the concierge is doing —
+    // driven by real SSE 'stage' events from the server (searching → found
+    // → writing); it carries only a key + a count, the wording is this
+    // client's i18n so it reads in the UI's language.
+    const setStage = (label) => {
+      let s = typing.querySelector('.stageLine');
+      if (!s) { s = document.createElement('div'); s.className = 'stageLine'; typing.appendChild(s); }
+      s.textContent = label;
+    };
+    setStage(t('stageSearching'));
+    // What a finished turn does with the server payload — identical whether
+    // it arrived as one JSON body (non-SSE fallback) or as the SSE 'done'
+    // event. botEl lets a bubble the stream already rendered be re-rendered
+    // in place from the authoritative (stripped + scrubbed) reply instead
+    // of appending a second one.
+    const finishConcierge = (data, botEl) => {
       conversationId = data.conversationId || conversationId;
-      addMessage('bot', data.reply);
+      if (botEl) botEl.innerHTML = renderMarkdown(data.reply); else addMessage('bot', data.reply);
       addSuggestions(data.suggest);
       history.push({ role: 'assistant', content: data.reply });
       renderJobs(data.jobs, data.jobsRetrieved, data.isComplete);
       refreshCv(); // the seeker's collected background just grew (or their profile just completed)
       if (data.llmConfigured === false) addMessage('system', t('demoModeNotice'));
       if (data.preview) addMessage('system', t('previewRemainingNotice', { n: data.previewRemaining }));
+    };
+    try {
+      const res = await fetch('/api/concierge', { method: 'POST', headers: headers(),
+        body: JSON.stringify({ message: text, stream: true, history: history.slice(0, -1),
+          conversationId: conversationId || undefined,
+          dialectHint: dialectSelect.value || undefined,
+          preferredCountry: countryInput.value || undefined }) });
+      if (res.status === 401) { typing.remove(); localStorage.removeItem(tokenKey); location.reload(); return; }
+      const isSse = (res.headers.get('content-type') || '').includes('text/event-stream');
+      if (!isSse) {
+        // Non-stream response — either a hard-fail JSON error (402/429/502…)
+        // or a non-streaming server; the payload shape is identical.
+        const data = await res.json();
+        typing.remove();
+        if (res.status === 402) { $('paywall').style.display = 'block'; addMessage('system', apiError(data, data.error)); return; }
+        if (!res.ok) { addMessage('system', t('errorPrefix') + apiError(data, data.error || res.statusText)); return; }
+        finishConcierge(data);
+        return;
+      }
+      // SSE turn: 'stage' updates the line under the dots, 'delta' streams
+      // the reply into a live bot bubble, 'done' carries the authoritative
+      // payload (scrubbed reply + suggest + jobs), 'error' mirrors a JSON
+      // error response mid-stream.
+      let botEl = null, streamed = '', sawDone = false, sseError = null;
+      const handleEvent = (event, data) => {
+        if (event === 'stage') {
+          if (data.stage === 'found') setStage(data.n > 0 ? t('stageFound', { n: data.n }) : t('stageFoundNone'));
+          else if (data.stage === 'writing') setStage(t('stageWriting'));
+        } else if (event === 'delta') {
+          streamed += data.text;
+          if (!botEl) { typing.remove(); botEl = addMessage('bot', streamed); }
+          else botEl.innerHTML = renderMarkdown(streamed);
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        } else if (event === 'done') {
+          sawDone = true;
+          typing.remove();
+          finishConcierge(data, botEl);
+        } else if (event === 'error') {
+          sseError = data;
+        }
+      };
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let sep;
+        while ((sep = buf.indexOf('\n\n')) !== -1) {
+          const frame = buf.slice(0, sep); buf = buf.slice(sep + 2);
+          const event = (frame.split('\n').find(l => l.startsWith('event:')) || 'event:message').slice(6).trim();
+          const dataLine = frame.split('\n').find(l => l.startsWith('data:'));
+          if (!dataLine) continue;
+          try { handleEvent(event, JSON.parse(dataLine.slice(5).trim())); }
+          catch { /* a malformed frame never sinks the turn */ }
+        }
+      }
+      if (!sawDone) {
+        typing.remove();
+        if (botEl) botEl.remove();
+        if (sseError) {
+          if (sseError.upgrade) { $('paywall').style.display = 'block'; addMessage('system', apiError(sseError, sseError.error)); }
+          else addMessage('system', t('errorPrefix') + apiError(sseError, sseError.error || 'error'));
+        } else addMessage('system', t('networkError'));
+      }
     } catch (err) {
+      typing.remove();
       addMessage('system', t('networkError'));
       console.error(err);
     } finally { sendBtn.disabled = false; inputEl.focus(); }
