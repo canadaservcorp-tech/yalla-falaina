@@ -19,7 +19,7 @@ const html = (until) => `
   about a week. After that the concierge, uploads and CV export need a
   subscription ($25/month).</p>
   <p>To keep everything without interruption, subscribe from the app:</p>
-  <p><a href="${PUBLIC_URL}/">${PUBLIC_URL}/</a></p>`;
+  <p><a href="${PUBLIC_URL}/?sub=subscribe"><b>Subscribe and keep my access →</b></a></p>`;
 
 async function run() {
   const now = Date.now();

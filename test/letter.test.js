@@ -63,6 +63,12 @@ test('POST /api/letter refuses a bad type with 400', async () => {
   assert.equal(r.status, 400);
 });
 
+test('POST /api/letter accepts the scholarship type (422 on a thin profile proves type validation passed)', async () => {
+  const token = caller({ subscription_status: 'active' }, {}, {});
+  const r = await post(token, { type: 'scholarship' });
+  assert.equal(r.status, 422);
+});
+
 test('POST /api/letter refuses an unsubscribed seeker with 402 -- the hard gate, same as the CV', async () => {
   const token = caller({ subscription_status: 'inactive' }, READY_PROFILE, READY_SEEKER);
   const r = await post(token, { type: 'motivation' });

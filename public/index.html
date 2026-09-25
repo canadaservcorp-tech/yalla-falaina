@@ -609,6 +609,7 @@
         <button id="cvDownloadStudentPdf" class="ghost" data-i18n="cvDownloadStudent">Student CV (PDF)</button>
         <button id="letterMotivationBtn" class="ghost" data-i18n="letterMotivationBtn">Motivation letter (job)</button>
         <button id="letterInterestBtn" class="ghost" data-i18n="letterInterestBtn">Letter of interest (university)</button>
+        <button id="letterScholarshipBtn" class="ghost" data-i18n="letterScholarshipBtn">Motivation letter (scholarship)</button>
       </div>
       <button id="cvSubscribePrompt" class="ghost" style="display:none" data-i18n="cvSubscribeToDownload">🔒 Subscribe to download</button>
     </div>
@@ -680,6 +681,10 @@
   // persists in the URL for the whole visit even after other query params
   // (?sub=, ?lang=) get scrubbed off elsewhere on this page.
   const refCode = (new URLSearchParams(location.search).get('ref') || '').trim();
+  // ?src=instagram / ?src=google ... — the campaign/source that brought the
+  // visitor, recorded on their account at signup (signup_source) so the
+  // operator can see which channel actually converts, promo included.
+  const srcParam = (new URLSearchParams(location.search).get('src') || '').trim();
   let history = [], conversationId = null;
 
   // Hicham's ask: closing the app (or the browser) and reopening it must not
@@ -703,9 +708,16 @@
   // unnecessary banner than a hidden one while enforcement is actually on.
   let paywallEnforced = true;
   let subActive = null;
+  // subscribeRequested: the visitor arrived via ?sub=subscribe (the expiry-
+  // warning email's CTA). subBonusOnly: access comes from bonus_access_until,
+  // not a paid subscription — the account the CTA was written FOR. For that
+  // account the paywall must stay open even though "active" is true.
+  let subscribeRequested = false;
+  let subBonusOnly = false;
   function renderPaywall() {
     if (subActive === null) return;
-    $('paywall').style.display = (paywallEnforced && !subActive) ? 'block' : 'none';
+    const gated = paywallEnforced && (!subActive || (subscribeRequested && subBonusOnly));
+    $('paywall').style.display = gated ? 'block' : 'none';
   }
   // Voice notes are a paid perk: lib/voiceNotes.js gives an unsubscribed
   // seeker 0 notes per day, so showing the mic to one produces a button whose
@@ -832,7 +844,11 @@
   // ---------- continue with Google ----------
   $('googleBtn').onclick = () => {
     track('login_start', { method: 'google' });
-    location.href = '/api/auth/google' + (refCode ? '?ref=' + encodeURIComponent(refCode) : '');
+    const gq = new URLSearchParams();
+    if (refCode) gq.set('ref', refCode);
+    if (srcParam) gq.set('source', srcParam);
+    const gqs = gq.toString();
+    location.href = '/api/auth/google' + (gqs ? '?' + gqs : '');
   };
 
   // Coming back from Google: the URL carries a two-minute handoff token, never
@@ -1113,7 +1129,8 @@
           accountType, sector: $('sector').value.trim(),
           targetDegreeLevel: $('targetDegreeLevel').value, targetFieldOfStudy: $('targetFieldOfStudy').value.trim(),
           requiredTreatment: $('requiredTreatment').value.trim(), medicalHistoryNote: $('medicalHistoryNote').value.trim(),
-          confirmAge: true, acceptTerms: true, referralCode: refCode || undefined }) });
+          confirmAge: true, acceptTerms: true, referralCode: refCode || undefined,
+          source: srcParam || undefined }) });
       const d = await r.json();
       // d.message stays English (see the language note above) — but d.error
       // now goes through apiError() first, which maps the response's `code`
@@ -1179,6 +1196,16 @@
     document.body.classList.toggle('ctaMenuOpen', open);
     $('ctaAsideToggle').setAttribute('aria-expanded', String(open));
   };
+  // The popover floats over #jobsPane's top-right — exactly where the CV and
+  // letter buttons sit on a desktop — and it only used to close by toggling
+  // the whole menu off (hiding the panels with it). A click anywhere outside
+  // the menu now dismisses just the list: the panels stay revealed and fully
+  // clickable, and the Menu button brings the list back.
+  document.addEventListener('click', (e) => {
+    const body = $('ctaAsideBody');
+    if (body.classList.contains('open') && !e.target.closest('#ctaAside'))
+      body.classList.remove('open');
+  });
 
   // ---------- contact us (no account needed) ----------
   // Inside the header's "..." menu, which renders whether the visitor is
@@ -1277,9 +1304,14 @@
       const canceled = active && Boolean(d.cancelAt);
       const dateStr = d.periodEnd ? d.periodEnd.slice(0,10) : '—';
       const bonusDate = d.bonusAccessUntil ? d.bonusAccessUntil.slice(0, 10) : null;
+      const bonusDays = d.bonusAccessUntil ? Math.max(0, Math.ceil((new Date(d.bonusAccessUntil) - Date.now()) / 86400000)) : null;
+      // Access is bonus-only when there's no paid subscription period behind
+      // it — the launch-offer / referral-grant accounts the subscribe CTA
+      // exists to convert.
+      subBonusOnly = !!(active && bonusDate && !d.periodEnd);
       $('subBar').textContent = !active ? ''
         : canceled ? t('subActiveCanceled', { date: dateStr })
-        : (bonusDate && !d.periodEnd) ? t('freeAccessUntil', { date: bonusDate })
+        : (bonusDate && !d.periodEnd) ? t('freeAccessUntil', { date: bonusDate, n: bonusDays })
         : t('subActiveRenews', { date: dateStr });
       // Don't show the $25/month pitch to an unsubscribed visitor when the
       // server isn't actually enforcing it (fixed; see renderPaywall() above).
@@ -1400,7 +1432,10 @@
   // profile into a downloadable PDF -- same access gate as the CV. The
   // prompt asks who the letter is for; blank is allowed (generic salutation).
   async function downloadLetter(type) {
-    const target = prompt(type === 'interest' ? t('letterPromptUniversity') : t('letterPromptJob'), '');
+    const target = prompt(
+      type === 'interest' ? t('letterPromptUniversity')
+      : type === 'scholarship' ? t('letterPromptScholarship')
+      : t('letterPromptJob'), '');
     if (target === null) return; // cancelled
     addMessage('system', t('letterGenerating'));
     try {
@@ -1415,13 +1450,16 @@
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = type === 'interest' ? 'Letter-of-Interest.pdf' : 'Motivation-Letter.pdf';
+      a.href = url; a.download = type === 'interest' ? 'Letter-of-Interest.pdf'
+        : type === 'scholarship' ? 'Scholarship-Motivation-Letter.pdf'
+        : 'Motivation-Letter.pdf';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch { addMessage('system', t('networkError')); }
   }
   $('letterMotivationBtn').onclick = () => downloadLetter('motivation');
   $('letterInterestBtn').onclick = () => downloadLetter('interest');
+  $('letterScholarshipBtn').onclick = () => downloadLetter('scholarship');
 
   // ---------- invite a friend (referral link) ----------
   // Mirrors the anonymous shareBar() below, but with a personal link (routes/
@@ -1581,6 +1619,16 @@
     track('checkout_result', { result: 'cancel' });
     $('subMsg').textContent = t('checkoutCancelled');
   }
+  // ?sub=subscribe — the CTA inside the "your free access ends soon" email
+  // (scripts/bonus-expiry.js). Signed-in visitors land straight on the
+  // subscribe panel; signed-out ones see it as soon as they sign in, because
+  // refreshSub()/paywall render runs the same path.
+  else if (subParam === 'subscribe') {
+    cleanSubParam();
+    track('subscribe_cta', { source: 'expiry_email' });
+    subscribeRequested = true;
+    renderPaywall();
+  }
   // Covers the case none of the timers above do: a tab backgrounded during
   // the PayPal/Stripe redirect (phone locked, app-switched) that only comes
   // back to life well after polling would have given up.
@@ -1688,9 +1736,18 @@
     medical: () => [t('suggMedical1'), t('suggMedical2'), t('suggMedical3')],
     work:    () => [t('suggWork1'), t('suggWork2'), t('suggWork3')],
   };
+  // Action chips appended to a pool — a real deliverable (draft the letter as
+  // a downloadable PDF), not another concierge question. Same chip look,
+  // different click: the action runs instead of a message being sent.
+  const SUGGEST_ACTIONS = {
+    jobs:  () => [[t('suggLetterJob'), 'motivation']],
+    study: () => [[t('suggLetterUni'), 'interest']],
+    work:  () => [[t('suggLetterJob'), 'motivation']],
+  };
   function addSuggestions(pool) {
     const labels = SUGGEST_POOLS[pool] ? SUGGEST_POOLS[pool]() : null;
     if (!labels) return;
+    const actions = SUGGEST_ACTIONS[pool] ? SUGGEST_ACTIONS[pool]() : [];
     const row = document.createElement('div');
     row.className = 'suggRow';
     for (const label of labels) {
@@ -1699,6 +1756,13 @@
       b.textContent = label;
       // Tap = the question asked: into the composer, sent immediately.
       b.onclick = () => { row.remove(); inputEl.value = b.textContent; sendMessage(); };
+      row.appendChild(b);
+    }
+    for (const [label, letterType] of actions) {
+      const b = document.createElement('button');
+      b.className = 'suggChip';
+      b.textContent = label;
+      b.onclick = () => { row.remove(); downloadLetter(letterType); };
       row.appendChild(b);
     }
     messagesEl.appendChild(row);

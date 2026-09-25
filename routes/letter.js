@@ -34,18 +34,32 @@ const TYPES = {
     en: { what: 'a letter of interest for a university application', subjectFallback: 'Letter of Interest' },
     fr: { what: 'une lettre de motivation pour une candidature universitaire', subjectFallback: "Lettre d'intérêt" },
   },
+  scholarship: {
+    en: { what: 'a motivation letter for a scholarship application', subjectFallback: 'Scholarship Application' },
+    fr: { what: 'une lettre de motivation pour une demande de bourse', subjectFallback: 'Demande de bourse' },
+  },
+};
+
+// The generic salutation has to fit the letter's purpose — a scholarship
+// letter that opens "Dear Hiring Manager" reads as a job application no
+// matter what the heading says.
+const GENERIC_SALUTATION = {
+  motivation: '"Dear Hiring Manager"',
+  interest: '"Dear Admissions Committee"',
+  scholarship: '"Dear Scholarship Committee"',
 };
 
 function systemPrompt(type, lang, target) {
   const spec = TYPES[type][lang];
   const targetLine = target
     ? `The letter is addressed to/for: ${target}.`
-    : 'No specific recipient was named — keep the salutation generic and honest (e.g. "Dear Admissions Committee" / "Dear Hiring Manager").';
+    : `No specific recipient was named — keep the salutation generic and honest (e.g. ${GENERIC_SALUTATION[type]}).`;
   return `You draft ${spec.what} for the platform's seeker, written in ${lang === 'fr' ? 'French' : 'English'}, one page maximum.
 ${targetLine}
 
 Rules, all hard:
-- Use ONLY facts present in the seeker profile data given in the user message — never invent employers, degrees, dates, grades, achievements, skills, or a contact person's name. If a detail is missing, write around it honestly rather than filling it with a plausible-sounding fabrication.
+- The letter's purpose is exactly: ${spec.what}. Every paragraph must serve that purpose — never drift into a different application type (e.g. employment when the letter is for a scholarship or a university). The seeker's profile may list a different primary goal; the letter still asks for what it says it asks for.
+- Use ONLY facts present in the seeker profile data given in the user message — never invent employers, degrees, dates, grades, achievements, skills, or a contact person's name. Never invent circumstances either: no financial hardship, family obstacles, health issues, or motivations the profile does not state. If a detail is missing, write around it honestly rather than filling it with a plausible-sounding fabrication.
 - Professional, sincere, specific tone — no purple prose, no buzzword lists, no fake enthusiasm.
 - Output ONLY the letter body: the greeting line, the body paragraphs (separated by a blank line), and the sign-off. No subject line, no sender address block, no commentary, no markdown.`;
 }
@@ -74,8 +88,8 @@ async function draftLetter(system, profileSummary) {
 
 router.post('/', sec.limits.cv, authenticate, sec.requireActiveUser, async (req, res) => {
   try {
-    const type = req.body.type === 'motivation' ? 'motivation' : req.body.type === 'interest' ? 'interest' : null;
-    if (!type) return res.status(400).json({ error: 'type must be "motivation" or "interest"', code: 'ERR_BAD_INPUT' });
+    const type = TYPES[req.body.type] ? req.body.type : null;
+    if (!type) return res.status(400).json({ error: 'type must be "motivation", "interest" or "scholarship"', code: 'ERR_BAD_INPUT' });
     const lang = req.body.lang === 'fr' ? 'fr' : 'en';
     const target = sec.clean(req.body.target, 200) || '';
 
@@ -107,8 +121,8 @@ router.post('/', sec.limits.cv, authenticate, sec.requireActiveUser, async (req,
     });
 
     const subject = target
-      ? (type === 'interest'
-          ? (lang === 'fr' ? `Candidature — ${target}` : `Application — ${target}`)
+      ? (type === 'scholarship'
+          ? (lang === 'fr' ? `Demande de bourse — ${target}` : `Scholarship Application — ${target}`)
           : (lang === 'fr' ? `Candidature — ${target}` : `Application — ${target}`))
       : TYPES[type][lang].subjectFallback;
 
@@ -124,7 +138,8 @@ router.post('/', sec.limits.cv, authenticate, sec.requireActiveUser, async (req,
     });
     const slug = (data.name || 'yalla-nsafer').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'letter';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${type === 'interest' ? 'Letter-of-Interest' : 'Motivation-Letter'}-${slug}.pdf"`);
+    const filePrefix = type === 'interest' ? 'Letter-of-Interest' : type === 'scholarship' ? 'Scholarship-Motivation-Letter' : 'Motivation-Letter';
+    res.setHeader('Content-Disposition', `attachment; filename="${filePrefix}-${slug}.pdf"`);
     res.send(buf);
   } catch (e) {
     console.error('letter generate', e);

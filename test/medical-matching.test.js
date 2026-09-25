@@ -79,7 +79,7 @@ test('a provider that does not match the stated treatment is never returned as a
   assert.deepEqual(results, []);
 });
 
-test('results are never weighted or filtered by a preferred country -- Cuba/Korea/Russia surface exactly like any other real match', async () => {
+test('without a preferred country, Cuba/Korea/Russia surface exactly like any other real match', async () => {
   mock.__set('medical_treatment_providers', {
     data: [
       { id: '1', country: 'Canada', city: 'Montreal', hospital_name: 'Montreal General', specialties: 'cardiac surgery, valve replacement', price_range_note: '$45,000-60,000 CAD, published estimate', contact_email: null, contact_phone: null, source_url: null },
@@ -92,6 +92,19 @@ test('results are never weighted or filtered by a preferred country -- Cuba/Kore
   const countries = results.map(r => r.country);
   assert.ok(countries.includes('South Korea'));
   assert.ok(countries.includes('Canada'));
+});
+
+test('a preferred country nudges ordering but never filters -- a non-matching country still surfaces', async () => {
+  mock.__set('medical_treatment_providers', {
+    data: [
+      { id: '1', country: 'Canada', city: 'Montreal', hospital_name: 'Montreal General', specialties: 'cardiac surgery, valve replacement, transplant', price_range_note: null, contact_email: null, contact_phone: null, source_url: null },
+      { id: '2', country: 'South Korea', city: 'Seoul', hospital_name: 'Seoul National University Hospital', specialties: 'cardiac surgery, valve replacement', price_range_note: null, contact_email: null, contact_phone: null, source_url: null },
+    ],
+    error: null,
+  });
+  const results = await retrieveMedicalProviders({ query: 'heart valve replacement surgery', preferredCountry: 'South Korea' });
+  assert.equal(results.length, 2); // the Canadian match is NOT filtered out
+  assert.equal(results[0].country, 'South Korea'); // just ordered first (Korea 3+1, Canada 3)
 });
 
 test('a DB error on provider load resolves to an empty list rather than throwing', async () => {

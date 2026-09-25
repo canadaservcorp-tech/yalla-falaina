@@ -136,6 +136,24 @@ app.get('/medical-providers', async (req, res) => {
   res.set('Cache-Control', 'private, no-cache');
   res.type('html').send(directories.renderMedicalPage({ lang, rows, head: seo.head('/medical-providers', lang, asked || 'en') }));
 });
+// Per-country directory — "hospitals in Turkey" searches rank per country,
+// so each covered country gets its own indexable page (and sitemap entry,
+// via seo.js's PAGES map). Unknown slugs redirect to the index page rather
+// than 404ing a crawler that followed a stale link.
+app.get('/medical-providers/:country', async (req, res) => {
+  const slug = String(req.params.country || '').toLowerCase();
+  const cc = directories.MEDICAL_COUNTRIES[slug];
+  if (!cc) return res.redirect(302, '/medical-providers');
+  const asked = directories.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, directories.LANGS) || 'en';
+  const rows = (await directories.loadMedicalProviders())
+    .filter(r => String(r.country).toLowerCase() === cc.db.toLowerCase());
+  res.set('Cache-Control', 'private, no-cache');
+  res.type('html').send(directories.renderMedicalPage({
+    lang, rows, countrySlug: slug,
+    head: seo.head(`/medical-providers/${slug}`, lang, asked || 'en'),
+  }));
+});
 
 // A real, crawlable page (lib/expressEntryPage.js), not another view of the
 // SPA shell -- registered ahead of the catch-all below so it isn't swallowed
