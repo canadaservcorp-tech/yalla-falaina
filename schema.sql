@@ -415,6 +415,8 @@ create table if not exists public.news_items (
   title_en text not null,
   title_fr text,               -- null when the source published English only
   title_ar text,
+  title_hi text,
+  title_tr text,
   url text not null,
   published_at timestamptz not null default now(),
   created_at timestamptz not null default now(),

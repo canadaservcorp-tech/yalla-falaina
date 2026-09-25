@@ -51,6 +51,10 @@ test('an Express Entry draw becomes one dated, linked item per language', async 
     assert.match(draw.title_en, /CRS cutoff 734/);
     assert.match(draw.title_fr, /Entr\u00e9e express n\u00b0 442/);
     assert.match(draw.title_ar, /442/);
+    assert.match(draw.title_hi, /ड्रॉ #442/);
+    assert.match(draw.title_hi, /Provincial Nominee Program/, 'the official program name stays in English');
+    assert.match(draw.title_tr, /çekilişi #442/);
+    assert.match(draw.title_tr, /davetiye/);
     assert.match(draw.url, /^https:\/\/www\.canada\.ca\/.*invitations\.html\?q=442$/);
     assert.equal(draw.published_at, '2026-09-14T00:00:00.000Z');
   } finally { restore(); }

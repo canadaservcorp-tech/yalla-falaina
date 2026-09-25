@@ -20,7 +20,7 @@ const adminOnly = (req, res, next) =>
 
 router.get('/', authenticate, sec.requireActiveUser, adminOnly, async (_req, res) => {
   const { data, error } = await supabase.from('news_items')
-    .select('id, source, country, category, title_en, title_fr, title_ar, url, published_at')
+    .select('id, source, country, category, title_en, title_fr, title_ar, title_hi, title_tr, url, published_at')
     .order('published_at', { ascending: false })
     .limit(100);
   if (error) {
@@ -34,6 +34,8 @@ router.post('/', authenticate, sec.requireActiveUser, adminOnly, async (req, res
   const title_en = sec.clean(req.body.title_en, 240);
   const title_fr = sec.clean(req.body.title_fr, 240) || null;
   const title_ar = sec.clean(req.body.title_ar, 240) || null;
+  const title_hi = sec.clean(req.body.title_hi, 240) || null;
+  const title_tr = sec.clean(req.body.title_tr, 240) || null;
   const url = sec.clean(req.body.url, 500);
   const country = sec.clean(req.body.country, 60) || null;
   // Beyond plain announcements the operator can post scholarship ("bourse")
@@ -50,7 +52,7 @@ router.post('/', authenticate, sec.requireActiveUser, adminOnly, async (req, res
     source: 'operator',
     external_id: crypto.randomUUID(),
     country, category,
-    title_en, title_fr, title_ar, url,
+    title_en, title_fr, title_ar, title_hi, title_tr, url,
     published_at: new Date().toISOString(),
   });
   if (error) {

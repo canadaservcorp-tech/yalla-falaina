@@ -79,10 +79,10 @@ app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.site
 // /express-entry-draws: static, sourced content with zero client JS, and
 // zero DB dependency (unlike the draws page, this content isn't ingested
 // from anywhere -- it's static reference data).
-// The guide pages exist in en/fr/ar only (lib/gccGuides.js has no hi copy —
+// The guide pages exist in en/fr/ar/tr only (lib/gccGuides.js has no hi copy —
 // same "original over invented translation" rule as the news ticker's Hindi
 // fallback), so the route's language set is narrower than seo.LANGS.
-const GUIDE_LANGS = ['en', 'fr', 'ar'];
+const GUIDE_LANGS = ['en', 'fr', 'ar', 'tr'];
 for (const country of gccGuides.COUNTRIES) {
   app.get(`/${country.slug}`, (req, res) => {
     const asked = GUIDE_LANGS.includes(req.query.lang) ? req.query.lang : null;

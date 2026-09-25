@@ -21,7 +21,7 @@ test('COUNTRIES lists exactly the four countries this platform tracks as the GCC
 
 test('every country has real facts, a title phrase, and an official source link in every supported language', () => {
   for (const c of gccGuides.COUNTRIES) {
-    for (const lang of ['en', 'fr', 'ar']) {
+    for (const lang of ['en', 'fr', 'ar', 'tr']) {
       assert.ok(Array.isArray(c.facts[lang]) && c.facts[lang].length > 0, `${c.slug} missing facts for ${lang}`);
       assert.ok(c.title[lang], `${c.slug} missing title phrase for ${lang}`);
       for (const o of [].concat(c.official)) assert.ok(o.label[lang], `${c.slug} missing official source label for ${lang}`);
@@ -32,11 +32,11 @@ test('every country has real facts, a title phrase, and an official source link 
 
 test('renderPage shows the right language\'s own facts, not another language\'s or a mix', () => {
   const uae = gccGuides.COUNTRIES.find(c => c.slug === 'work-in-uae');
-  for (const lang of ['en', 'fr', 'ar']) {
+  for (const lang of ['en', 'fr', 'ar', 'tr']) {
     const html = gccGuides.renderPage({ country: uae, lang, head: '<title>x</title>' });
     for (const fact of uae.facts[lang]) assert.ok(html.includes(escHtml(fact)), `expected ${lang} page to include its own fact text`);
     // none of the OTHER languages' facts should have leaked in
-    for (const other of ['en', 'fr', 'ar'].filter(x => x !== lang)) {
+    for (const other of ['en', 'fr', 'ar', 'tr'].filter(x => x !== lang)) {
       for (const fact of uae.facts[other]) assert.ok(!html.includes(escHtml(fact)), `${lang} page should not include ${other} fact text`);
     }
   }
@@ -110,4 +110,14 @@ test('each GCC guide page gets its own <title> from lib/seo.js, not the homepage
   const r = await fetch(h.base + '/work-in-kuwait');
   const body = await r.text();
   assert.match(body, /<title>Working in Kuwait/);
+});
+
+test('the Turkish guide serves its own copy and puts the verb last, as Turkish requires', async () => {
+  const r = await fetch(h.base + '/work-in-qatar?lang=tr');
+  const body = await r.text();
+  const qatar = gccGuides.COUNTRIES.find(c => c.slug === 'work-in-qatar');
+  assert.match(body, /<html lang="tr">/);
+  assert.ok(body.includes(escHtml(qatar.facts.tr[0])));
+  // "Katar'da çalışmak", never the English-order "Çalışmak Katar'da"
+  assert.match(body, /<h1>Katar[^<]*\u2019da çalışmak —/);
 });

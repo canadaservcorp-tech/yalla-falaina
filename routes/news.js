@@ -5,7 +5,7 @@ const express = require('express');
 const supabase = require('../db');
 const router = express.Router();
 
-const LANGS = ['en', 'fr', 'ar'];
+const LANGS = ['en', 'fr', 'ar', 'hi', 'tr'];
 const LIMIT = 12;
 
 // Falls back to the English headline when a source published only that one
@@ -16,7 +16,7 @@ const localize = (row, lang) => row['title_' + lang] || row.title_en;
 router.get('/', async (req, res) => {
   const lang = LANGS.includes(req.query.lang) ? req.query.lang : 'en';
   const { data, error } = await supabase.from('news_items')
-    .select('id, source, country, category, title_en, title_fr, title_ar, url, published_at')
+    .select('id, source, country, category, title_en, title_fr, title_ar, title_hi, title_tr, url, published_at')
     .order('published_at', { ascending: false })
     .limit(LIMIT);
   if (error) {
