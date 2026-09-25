@@ -66,7 +66,12 @@ router.get('/export', sec.limits.cv, authenticate, sec.requireActiveUser, async 
 
     const format = req.query.format === 'docx' ? 'docx' : 'pdf';
     const lang = req.query.lang === 'fr' ? 'fr' : 'en';
-    const data = buildCvData({ user, profile, seekerProfile, lang });
+    // Students get the academic layout (education leads); ?variant=student or
+    // =professional can force either — a job seeker can also need an academic
+    // CV for an application, and a student can hold a job history worth
+    // leading with.
+    const variant = req.query.variant === 'student' || req.query.variant === 'professional' ? req.query.variant : undefined;
+    const data = buildCvData({ user, profile, seekerProfile, lang, variant });
     const { ready, reason } = cvReadiness(data);
     if (!ready)
       return res.status(422).json({ error: 'Not enough information yet to build a CV — keep chatting with the concierge first', code: 'ERR_CV_NOT_READY', reason });

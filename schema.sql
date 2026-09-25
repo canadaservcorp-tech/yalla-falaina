@@ -180,6 +180,8 @@ create table if not exists public.users (
   referred_by bigint references public.users(id),-- who referred this account (captured at signup; null if none/unknown code)
   referral_credited boolean not null default false, -- true once referred_by's referrer has been credited once for THIS account — guards against double-crediting across a cancel/resubscribe cycle
   bonus_access_until timestamptz,                -- referral-reward grant (lib/access.js) — paid-tier access through this date regardless of subscription_status; stacks on repeat referrals, independent of real billing
+  bonus_expiry_warned_at timestamptz,            -- set once the "your free access ends soon" warning has been sent for the CURRENT bonus_access_until (scripts/bonus-expiry.js); a later re-grant re-arms it
+  promo_offer_notified_at timestamptz,           -- set once the launch-offer announcement email has been sent to this account (scripts/promo-offer.js) — also what makes that grant idempotent
   created_at timestamptz default now()
 );
 create table if not exists public.banned_emails (   -- blocklist (can't re-subscribe)
