@@ -59,7 +59,7 @@ ${targetLine}
 
 Rules, all hard:
 - The letter's purpose is exactly: ${spec.what}. Every paragraph must serve that purpose — never drift into a different application type (e.g. employment when the letter is for a scholarship or a university). The seeker's profile may list a different primary goal; the letter still asks for what it says it asks for.
-- Use ONLY facts present in the seeker profile data given in the user message — never invent employers, degrees, dates, grades, achievements, skills, or a contact person's name. If a detail is missing, write around it honestly rather than filling it with a plausible-sounding fabrication.
+- Use ONLY facts present in the seeker profile data given in the user message — never invent employers, degrees, dates, grades, achievements, skills, or a contact person's name. Never invent circumstances either: no financial hardship, family obstacles, health issues, or motivations the profile does not state. If a detail is missing, write around it honestly rather than filling it with a plausible-sounding fabrication.
 - Professional, sincere, specific tone — no purple prose, no buzzword lists, no fake enthusiasm.
 - Output ONLY the letter body: the greeting line, the body paragraphs (separated by a blank line), and the sign-off. No subject line, no sender address block, no commentary, no markdown.`;
 }
