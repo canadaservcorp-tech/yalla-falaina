@@ -34,6 +34,10 @@ const TYPES = {
     en: { what: 'a letter of interest for a university application', subjectFallback: 'Letter of Interest' },
     fr: { what: 'une lettre de motivation pour une candidature universitaire', subjectFallback: "Lettre d'intérêt" },
   },
+  scholarship: {
+    en: { what: 'a motivation letter for a scholarship application', subjectFallback: 'Scholarship Application' },
+    fr: { what: 'une lettre de motivation pour une demande de bourse', subjectFallback: 'Demande de bourse' },
+  },
 };
 
 function systemPrompt(type, lang, target) {
@@ -74,8 +78,8 @@ async function draftLetter(system, profileSummary) {
 
 router.post('/', sec.limits.cv, authenticate, sec.requireActiveUser, async (req, res) => {
   try {
-    const type = req.body.type === 'motivation' ? 'motivation' : req.body.type === 'interest' ? 'interest' : null;
-    if (!type) return res.status(400).json({ error: 'type must be "motivation" or "interest"', code: 'ERR_BAD_INPUT' });
+    const type = TYPES[req.body.type] ? req.body.type : null;
+    if (!type) return res.status(400).json({ error: 'type must be "motivation", "interest" or "scholarship"', code: 'ERR_BAD_INPUT' });
     const lang = req.body.lang === 'fr' ? 'fr' : 'en';
     const target = sec.clean(req.body.target, 200) || '';
 
@@ -107,8 +111,8 @@ router.post('/', sec.limits.cv, authenticate, sec.requireActiveUser, async (req,
     });
 
     const subject = target
-      ? (type === 'interest'
-          ? (lang === 'fr' ? `Candidature — ${target}` : `Application — ${target}`)
+      ? (type === 'scholarship'
+          ? (lang === 'fr' ? `Demande de bourse — ${target}` : `Scholarship Application — ${target}`)
           : (lang === 'fr' ? `Candidature — ${target}` : `Application — ${target}`))
       : TYPES[type][lang].subjectFallback;
 
@@ -124,7 +128,8 @@ router.post('/', sec.limits.cv, authenticate, sec.requireActiveUser, async (req,
     });
     const slug = (data.name || 'yalla-nsafer').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'letter';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${type === 'interest' ? 'Letter-of-Interest' : 'Motivation-Letter'}-${slug}.pdf"`);
+    const filePrefix = type === 'interest' ? 'Letter-of-Interest' : type === 'scholarship' ? 'Scholarship-Motivation-Letter' : 'Motivation-Letter';
+    res.setHeader('Content-Disposition', `attachment; filename="${filePrefix}-${slug}.pdf"`);
     res.send(buf);
   } catch (e) {
     console.error('letter generate', e);

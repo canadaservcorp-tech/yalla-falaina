@@ -654,8 +654,8 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // without one (a work/study seeker asking about a treatment) the message
     // itself is the query — retrieveMedicalProviders returns [] on no keyword
     // overlap rather than a fallback sample, so unrelated messages never see
-    // provider noise. Never weighted by preferredCountry (see
-    // retrieveMedicalProviders' own comment on why).
+    // provider noise. preferredCountry is a soft ordering nudge there, never
+    // a filter (see retrieveMedicalProviders' own comment on why).
     const [jobs, studyOpportunities, communityGroups, accommodationListings, trustedPartners, countryRisks, costOfLiving, medicalProviders] = isComplete
       ? await Promise.all([
           retrieveJobs({ query: message, preferredCountry, limit: 5 }),
@@ -669,8 +669,8 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
           retrieveCountryRisks({ country: preferredCountry, limit: 5 }),
           retrieveCostOfLiving({ country: preferredCountry, city: preferredCity, limit: 5 }),
           medicalIntake
-            ? retrieveMedicalProviders({ query: [medicalIntake.requiredTreatment, medicalIntake.extractedReportText].filter(Boolean).join(' '), limit: 8 })
-            : retrieveMedicalProviders({ query: message, limit: 8 }),
+            ? retrieveMedicalProviders({ query: [medicalIntake.requiredTreatment, medicalIntake.extractedReportText].filter(Boolean).join(' '), preferredCountry, limit: 8 })
+            : retrieveMedicalProviders({ query: message, preferredCountry, limit: 8 }),
         ])
       : [[], [], [], [], [], [], [], []];
     // Seed/demo fixture rows (see demoJob above) are redacted before either
