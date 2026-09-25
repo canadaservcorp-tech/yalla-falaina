@@ -21,5 +21,6 @@ test('GET /api/health -> 200 with feature booleans only', async () => {
     medicalReportOcr: Boolean(process.env.OCR_API_KEY),
     google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     push: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+    promo: require('../lib/promo').promoActive() ? { freeMonths: 3, offerEnds: '2026-12-31' } : null,
   });
 });

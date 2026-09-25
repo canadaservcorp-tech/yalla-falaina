@@ -7,6 +7,7 @@ const { sendEmail } = require('../lib/email');
 const sec = require('../lib/security');
 const totp = require('../lib/totp');
 const referral = require('../lib/referral');
+const promo = require('../lib/promo');
 const { authenticate } = require('../lib/auth-mw');
 const router = express.Router();
 const { JWT_SECRET } = process.env;
@@ -81,6 +82,9 @@ router.post('/register', sec.limits.register, sec.limits.credentials, async (req
         email, password_hash, name, phone, role: 'seeker', verify_token, signup_source,
         terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION,
         referred_by,
+        // Launch offer (lib/promo.js): 3 free months of full access counted
+        // from signup day, granted to every new account while the offer runs.
+        ...(promo.promoActive() ? { bonus_access_until: promo.promoBonusUntil() } : {}),
       })
       .select('id, email, name, role').single();
     if (error) throw error;
@@ -347,6 +351,7 @@ router.get('/google/callback', sec.limits.oauth, async (req, res) => {
           signup_source: state.s || 'google',
           terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION,
           referred_by,
+          ...(promo.promoActive() ? { bonus_access_until: promo.promoBonusUntil() } : {}),
         })
         .select('id, email, name, role').single();
       if (error) throw error;

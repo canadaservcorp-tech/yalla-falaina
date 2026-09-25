@@ -157,6 +157,7 @@ app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/concierge', require('./routes/concierge')); // the AI concierge — the product
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/cv', require('./routes/cv')); // CV export (PDF/Word) -- subscription-gated, see routes/cv.js
+app.use('/api/letter', require('./routes/letter')); // motivation/interest letters (PDF) -- same access gate as the CV
 app.use('/api/informal-listings', require('./routes/informal-listings'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/jobs', require('./routes/jobs'));      // public feed stats (the live count on the landing page)
@@ -190,6 +191,9 @@ app.get('/api/health', (_req, res) => res.json({
   medicalReportOcr: documentExtract.ocrConfigured(), // PDF text extraction always works; image OCR needs a vendor key
   google: require('./lib/googleOAuth').configured(),
   push: webPush.configured(),
+  // Launch offer (lib/promo.js): the landing shows the free-months line only
+  // while the offer is still being granted to new signups.
+  promo: require('./lib/promo').promoActive() ? { freeMonths: require('./lib/promo').PROMO_MONTHS, offerEnds: '2026-12-31' } : null,
 }));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 // the SPA is a single file, so give crawlers per-route <head> metadata on the way out
