@@ -708,9 +708,16 @@
   // unnecessary banner than a hidden one while enforcement is actually on.
   let paywallEnforced = true;
   let subActive = null;
+  // subscribeRequested: the visitor arrived via ?sub=subscribe (the expiry-
+  // warning email's CTA). subBonusOnly: access comes from bonus_access_until,
+  // not a paid subscription — the account the CTA was written FOR. For that
+  // account the paywall must stay open even though "active" is true.
+  let subscribeRequested = false;
+  let subBonusOnly = false;
   function renderPaywall() {
     if (subActive === null) return;
-    $('paywall').style.display = (paywallEnforced && !subActive) ? 'block' : 'none';
+    const gated = paywallEnforced && (!subActive || (subscribeRequested && subBonusOnly));
+    $('paywall').style.display = gated ? 'block' : 'none';
   }
   // Voice notes are a paid perk: lib/voiceNotes.js gives an unsubscribed
   // seeker 0 notes per day, so showing the mic to one produces a button whose
@@ -1189,6 +1196,16 @@
     document.body.classList.toggle('ctaMenuOpen', open);
     $('ctaAsideToggle').setAttribute('aria-expanded', String(open));
   };
+  // The popover floats over #jobsPane's top-right — exactly where the CV and
+  // letter buttons sit on a desktop — and it only used to close by toggling
+  // the whole menu off (hiding the panels with it). A click anywhere outside
+  // the menu now dismisses just the list: the panels stay revealed and fully
+  // clickable, and the Menu button brings the list back.
+  document.addEventListener('click', (e) => {
+    const body = $('ctaAsideBody');
+    if (body.classList.contains('open') && !e.target.closest('#ctaAside'))
+      body.classList.remove('open');
+  });
 
   // ---------- contact us (no account needed) ----------
   // Inside the header's "..." menu, which renders whether the visitor is
@@ -1288,6 +1305,10 @@
       const dateStr = d.periodEnd ? d.periodEnd.slice(0,10) : '—';
       const bonusDate = d.bonusAccessUntil ? d.bonusAccessUntil.slice(0, 10) : null;
       const bonusDays = d.bonusAccessUntil ? Math.max(0, Math.ceil((new Date(d.bonusAccessUntil) - Date.now()) / 86400000)) : null;
+      // Access is bonus-only when there's no paid subscription period behind
+      // it — the launch-offer / referral-grant accounts the subscribe CTA
+      // exists to convert.
+      subBonusOnly = !!(active && bonusDate && !d.periodEnd);
       $('subBar').textContent = !active ? ''
         : canceled ? t('subActiveCanceled', { date: dateStr })
         : (bonusDate && !d.periodEnd) ? t('freeAccessUntil', { date: bonusDate, n: bonusDays })
@@ -1605,7 +1626,8 @@
   else if (subParam === 'subscribe') {
     cleanSubParam();
     track('subscribe_cta', { source: 'expiry_email' });
-    $('paywall').style.display = 'block';
+    subscribeRequested = true;
+    renderPaywall();
   }
   // Covers the case none of the timers above do: a tab backgrounded during
   // the PayPal/Stripe redirect (phone locked, app-switched) that only comes

@@ -40,15 +40,25 @@ const TYPES = {
   },
 };
 
+// The generic salutation has to fit the letter's purpose — a scholarship
+// letter that opens "Dear Hiring Manager" reads as a job application no
+// matter what the heading says.
+const GENERIC_SALUTATION = {
+  motivation: '"Dear Hiring Manager"',
+  interest: '"Dear Admissions Committee"',
+  scholarship: '"Dear Scholarship Committee"',
+};
+
 function systemPrompt(type, lang, target) {
   const spec = TYPES[type][lang];
   const targetLine = target
     ? `The letter is addressed to/for: ${target}.`
-    : 'No specific recipient was named — keep the salutation generic and honest (e.g. "Dear Admissions Committee" / "Dear Hiring Manager").';
+    : `No specific recipient was named — keep the salutation generic and honest (e.g. ${GENERIC_SALUTATION[type]}).`;
   return `You draft ${spec.what} for the platform's seeker, written in ${lang === 'fr' ? 'French' : 'English'}, one page maximum.
 ${targetLine}
 
 Rules, all hard:
+- The letter's purpose is exactly: ${spec.what}. Every paragraph must serve that purpose — never drift into a different application type (e.g. employment when the letter is for a scholarship or a university). The seeker's profile may list a different primary goal; the letter still asks for what it says it asks for.
 - Use ONLY facts present in the seeker profile data given in the user message — never invent employers, degrees, dates, grades, achievements, skills, or a contact person's name. If a detail is missing, write around it honestly rather than filling it with a plausible-sounding fabrication.
 - Professional, sincere, specific tone — no purple prose, no buzzword lists, no fake enthusiasm.
 - Output ONLY the letter body: the greeting line, the body paragraphs (separated by a blank line), and the sign-off. No subject line, no sender address block, no commentary, no markdown.`;
