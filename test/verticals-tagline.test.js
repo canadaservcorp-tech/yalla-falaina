@@ -25,8 +25,8 @@ test('the three verticals appear right after the "Yalla Nsafer" title, each with
   assert.match(taglineBlock, /For studying abroad and educational scholarships/);
   assert.match(taglineBlock, /للعلاج في الخارج، بثقة وأمان/);
   assert.match(taglineBlock, /For treatment abroad, with trust and safety/);
-  assert.match(taglineBlock, /للعمل والهجرة في الخارج، خطوة بخطوة معك/);
-  assert.match(taglineBlock, /For work and immigration abroad, step by step with you/);
+  assert.match(taglineBlock, /للعمل والهجرة، خطوة بخطوة معك/);
+  assert.match(taglineBlock, /For work and immigration, step by step with you/);
 });
 
 test('the tagline block is static markup, not gated behind a data-i18n key (it should show regardless of ?lang=, like .subtitle above it)', () => {
