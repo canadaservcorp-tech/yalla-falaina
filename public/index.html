@@ -9,16 +9,15 @@
 <script src="/i18n.js"></script>
 <style>
   :root {
-    /* "Bleu gitane" palette (Hicham's ask, Sept 2026: calmer than the old
-       green/near-black scheme) -- a muted, dusty night-blue rather than a
-       bright/saturated one, on darker blue-tinted panels instead of the old
-       neutral near-black. --accent-contrast is the readable text color for
-       anything painted with --accent (dark text stopped being legible once
-       accent went from bright green to a mid-tone blue). */
-    --bg: #0d1826; --panel: #142234; --accent: #4a7fa6; --accent-dim: #365d7c;
-    --accent-contrast: #f3f8fc;
-    --text: #eef3f7; --text-dim: #93a8ba; --bubble-user: #1f3a52; --bubble-bot: #16283a;
-    --border: #223244; --warn: #d9a441; --danger: #d9614a;
+    /* Warm sand + eucalyptus palette (Hicham's ask, Sept 2026: the dark
+       night-blue read as cold and unwelcoming for a travel product — cream
+       paper, warm ink, and a green accent in the same family as the green
+       Send it leads toward). --accent-contrast is the readable text color
+       for anything painted with --accent. */
+    --bg: #f7f2e9; --panel: #fffdf8; --accent: #1d7a63; --accent-dim: #155e4c;
+    --accent-contrast: #ffffff;
+    --text: #2e2a24; --text-dim: #6f6859; --bubble-user: #d9eddf; --bubble-bot: #f4ead6;
+    --border: #e4d9c5; --warn: #a97714; --danger: #bf4f3a;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -107,7 +106,7 @@
               position: relative; overflow-x: hidden; overflow-y: auto; gap: 14px; }
   #authWrap::before {
     content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234a7fa6'%3E%3Cpath d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231d7a63'%3E%3Cpath d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: center 15%;
     background-size: min(60vw, 420px); opacity: 0.07; transform: rotate(18deg);
   }
@@ -254,10 +253,11 @@
   @media (prefers-reduced-motion: reduce) {
     #newsTrack { animation: none; overflow-x: auto; }
   }
-  /* Share bar (word of mouth is the cheapest channel we have): lighter than
-     --accent, 12px text needs ~4.5:1 on the dark card for AA. Same for the
-     guide links in the menu. */
-  #gccGuideLinks a, #guideLinks a { color: #8fbde0; }
+  /* Share bar (word of mouth is the cheapest channel we have): the accent
+     itself reads clearly on the warm card — the older lightened link blue
+     was picked for the previous dark theme and goes muddy on cream. Same
+     for the guide links in the menu. */
+  #gccGuideLinks a, #guideLinks a { color: var(--accent); }
   #shareBar .lbl { display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; }
   #shareBar .row { display: flex; gap: 6px; flex-wrap: wrap; }
   #shareBar a, #shareBar button { font-size: 12px; padding: 5px 10px; border-radius: 999px;
