@@ -55,3 +55,57 @@ test('both directory pages appear in the sitemap', async () => {
   assert.match(map, /<loc>[^<]*\/study-opportunities<\/loc>/);
   assert.match(map, /<loc>[^<]*\/medical-providers<\/loc>/);
 });
+
+test('per-country study page filters rows and names the country', async () => {
+  h.mock.__set('study_opportunities', { data: [
+    { kind: 'scholarship', title: 'Türkiye Bursları', country: 'Turkey', source_url: 'https://tb.gov.tr' },
+    { kind: 'program', title: 'KAUST Fellow', country: 'Saudi Arabia', source_url: 'https://kaust.edu.sa' },
+  ], error: null });
+  const body = await fetch(`${h.base}/study-opportunities/turkey`).then(x => x.text());
+  assert.ok(body.includes('Türkiye Bursları'));
+  assert.ok(!body.includes('KAUST Fellow'), 'other-country rows must not appear');
+  assert.ok(body.includes('Programs and scholarships in Turkey'));
+});
+
+test('unknown study country slugs redirect to the index page', async () => {
+  const res = await fetch(`${h.base}/study-opportunities/mars`, { redirect: 'manual' });
+  assert.equal(res.status, 302);
+  assert.match(res.headers.get('location'), /\/study-opportunities$/);
+});
+
+test('study country pages appear in the sitemap with localized meta', async () => {
+  const map = await fetch(`${h.base}/sitemap.xml`).then(x => x.text());
+  assert.match(map, /<loc>[^<]*\/study-opportunities\/turkey<\/loc>/);
+  assert.match(map, /<loc>[^<]*\/study-opportunities\/south-korea<\/loc>/);
+});
+
+test('directory pages emit ItemList JSON-LD over real rows', async () => {
+  h.mock.__set('study_opportunities', { data: [
+    { kind: 'scholarship', title: 'MEXT', country: 'Japan', source_url: 'https://mext.go.jp' },
+  ], error: null });
+  const body = await fetch(`${h.base}/study-opportunities/japan`).then(x => x.text());
+  assert.ok(body.includes('"@type":"ItemList"'));
+  assert.ok(body.includes('"name":"MEXT"'));
+  assert.ok(body.includes('"url":"https://mext.go.jp"'));
+});
+
+test('/faq renders real Q&A with FAQPage JSON-LD and joins the sitemap', async () => {
+  const body = await fetch(`${h.base}/faq`).then(x => x.text());
+  assert.ok(body.includes('Frequently asked questions'));
+  assert.ok(body.includes('"@type":"FAQPage"'));
+  assert.ok(body.includes('"@type":"Question"'));
+  const map = await fetch(`${h.base}/sitemap.xml`).then(x => x.text());
+  assert.match(map, /<loc>[^<]*\/faq<\/loc>/);
+});
+
+test('/faq renders Arabic on ?lang=ar', async () => {
+  const body = await fetch(`${h.base}/faq?lang=ar`).then(x => x.text());
+  assert.match(body, /<html lang="ar" dir="rtl">/);
+  assert.ok(body.includes('الأسئلة الشائعة'));
+});
+
+test('the IndexNow key file is served at /<key>.txt', async () => {
+  const { INDEXNOW_KEY } = require('../lib/indexnow');
+  const body = await fetch(`${h.base}/${INDEXNOW_KEY}.txt`).then(x => x.text());
+  assert.equal(body.trim(), INDEXNOW_KEY);
+});

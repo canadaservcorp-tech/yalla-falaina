@@ -75,6 +75,10 @@ app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()))
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
 // llms.txt — markdown site summary for AI agents (llmstxt.org convention).
 app.get('/llms.txt', (_req, res) => res.type('text/markdown; charset=utf-8').send(seo.llmsTxt()));
+// IndexNow key verification file — public by design; it only lets engines
+// confirm this host owns the submitted URLs.
+const { INDEXNOW_KEY } = require('./lib/indexnow');
+app.get(`/${INDEXNOW_KEY}.txt`, (_req, res) => res.type('text/plain').send(INDEXNOW_KEY));
 
 // Real, crawlable GCC work-sponsorship guide pages (lib/gccGuides.js) --
 // registered ahead of the catch-all below, same pattern and reasoning as
@@ -131,6 +135,23 @@ app.get('/study-opportunities', async (req, res) => {
   res.set('Cache-Control', 'private, no-cache');
   res.type('html').send(directories.renderStudyPage({ lang, rows, head: seo.head('/study-opportunities', lang, asked || 'en') }));
 });
+// Per-country study directory — same pattern as /medical-providers/<country>:
+// "scholarships in Turkey"-style searches rank per country, each covered
+// country gets its own indexable page (PAGES/sitemap via seo.js).
+app.get('/study-opportunities/:country', async (req, res) => {
+  const slug = String(req.params.country || '').toLowerCase();
+  const cc = directories.STUDY_COUNTRIES[slug];
+  if (!cc) return res.redirect(302, '/study-opportunities');
+  const asked = directories.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, directories.LANGS) || 'en';
+  const rows = (await directories.loadStudyOpportunities())
+    .filter(r => String(r.country).toLowerCase() === cc.db.toLowerCase());
+  res.set('Cache-Control', 'private, no-cache');
+  res.type('html').send(directories.renderStudyPage({
+    lang, rows, countrySlug: slug,
+    head: seo.head(`/study-opportunities/${slug}`, lang, asked || 'en'),
+  }));
+});
 app.get('/medical-providers', async (req, res) => {
   const asked = directories.LANGS.includes(req.query.lang) ? req.query.lang : null;
   const lang = asked || geo.pickLang(req, directories.LANGS) || 'en';
@@ -170,6 +191,17 @@ app.get('/express-entry-draws', async (req, res) => {
   // ingest schedule (lib/scheduler.js), not per request.
   res.set('Cache-Control', asked ? 'public, max-age=300' : 'private, no-cache');
   res.type('html').send(expressEntryPage.renderPage({ lang, draws, head }));
+});
+
+// Crawlable FAQ page (lib/faqPage.js) — FAQPage JSON-LD, the content format
+// answer engines quote most directly. Static, no inline script.
+const faqPage = require('./lib/faqPage');
+app.get('/faq', async (req, res) => {
+  const asked = faqPage.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, faqPage.LANGS) || 'en';
+  const head = seo.head('/faq', lang, asked || 'en');
+  res.set('Cache-Control', asked ? 'public, max-age=300' : 'private, no-cache');
+  res.type('html').send(faqPage.renderPage({ lang, head }));
 });
 
 app.use('/api/auth', require('./routes/auth'));
