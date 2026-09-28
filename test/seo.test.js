@@ -37,5 +37,18 @@ test('robots and sitemap exist and stay consistent', async () => {
   const robots = await fetch(h.base + '/robots.txt').then(r => r.text());
   assert.match(robots, /Disallow: \/api\//);
   const map = await fetch(h.base + '/sitemap.xml').then(r => r.text());
+  assert.match(robots, /User-agent: GPTBot/);
+  assert.match(robots, /User-agent: ClaudeBot/);
+  assert.match(robots, /User-agent: PerplexityBot/);
+  // AI-crawler blocks also keep /api/ out
+  const gptBlock = robots.split('User-agent: GPTBot')[1].split('User-agent:')[0];
+  assert.match(gptBlock, /Disallow: \/api\//);
+  // llms.txt exists and lists the real indexable surface
+  const llms = await fetch(h.base + '/llms.txt').then(r => r.text());
+  assert.match(llms, /^# Yalla Nsafer/m);
+  assert.match(llms, /\/study-opportunities/);
+  assert.match(llms, /\/medical-providers/);
+  assert.match(llms, /\/work-in-uae/);
+  assert.doesNotMatch(llms, /\/api\/news\?lang=xx/);
   for (const p of seo.INDEXABLE) assert.ok(map.includes(`<loc>`), p);
 });

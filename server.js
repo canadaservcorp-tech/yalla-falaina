@@ -73,6 +73,8 @@ app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'ignore', ind
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain').send(seo.robots()));
 app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(seo.sitemap()));
+// llms.txt — markdown site summary for AI agents (llmstxt.org convention).
+app.get('/llms.txt', (_req, res) => res.type('text/markdown; charset=utf-8').send(seo.llmsTxt()));
 
 // Real, crawlable GCC work-sponsorship guide pages (lib/gccGuides.js) --
 // registered ahead of the catch-all below, same pattern and reasoning as
