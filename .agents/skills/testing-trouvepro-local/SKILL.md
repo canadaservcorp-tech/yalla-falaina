@@ -6,6 +6,17 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
 # Local E2E testing of TrouvePro
 
 ## Yalla Nsafer fork: use the correct target
+- In shared checkouts, archive the exact approved commit to a temporary directory,
+  symlink installed node_modules, and run there. This prevents mixed server/static
+  revisions when another agent switches branches. Verify the server process cwd.
+- For fixed-bar overlap checks, compare against the parent at identical viewport
+  and form state. Scroll to the actual maximum; links existing in DOM does not
+  establish clickability. Check guide-link bottom versus footer top and exercise
+  footer expansion (Contact), then narrow-to-desktop resize.
+- Static guide pages can be tested against unavailable loopback Supabase, but a
+  positive jobs-count animation requires isolated jobs data; HTTP500/hidden counter
+  is not evidence of animation. Check supported guide locales separately from
+  homepage locales and verify sitemap alternates against languages actually served.
 - The Yalla Nsafer Phase 1 fork is a concierge, not the TrouvePro marketplace.
   Do not reuse the production URL, database, accounts, or marketplace assertions below
   when testing the fork. Read its blueprint, `server.js`, and `public/index.html` first.
