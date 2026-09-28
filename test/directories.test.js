@@ -109,3 +109,26 @@ test('the IndexNow key file is served at /<key>.txt', async () => {
   const body = await fetch(`${h.base}/${INDEXNOW_KEY}.txt`).then(x => x.text());
   assert.equal(body.trim(), INDEXNOW_KEY);
 });
+
+test('/community renders real groups and accommodation, states they are community posts', async () => {
+  h.mock.__set('community_groups', { data: [{
+    country: 'Germany', city: 'Berlin', platform: 'whatsapp',
+    name: 'Lebanese in Berlin', url: 'https://chat.whatsapp.com/abc', language: 'ar',
+  }], error: null });
+  h.mock.__set('accommodation_listings', { data: [{
+    type: 'roommate', country: 'Germany', city: 'Berlin',
+    budget_note: '€400/mo', description: 'Room in shared flat', contact: 'whatsapp +49…', expires_at: null,
+  }], error: null });
+  const body = await fetch(`${h.base}/community`).then(x => x.text());
+  assert.ok(body.includes('Lebanese in Berlin'));
+  assert.ok(body.includes('href="https://chat.whatsapp.com/abc"'));
+  assert.ok(body.includes('€400/mo'));
+  assert.ok(body.includes('community posts'), 'must disclose these are unverified posts');
+  const map = await fetch(`${h.base}/sitemap.xml`).then(x => x.text());
+  assert.match(map, /<loc>[^<]*\/community<\/loc>/);
+});
+
+test('sitemap entries carry lastmod freshness dates', async () => {
+  const map = await fetch(`${h.base}/sitemap.xml`).then(x => x.text());
+  assert.match(map, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
+});

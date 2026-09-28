@@ -193,6 +193,20 @@ app.get('/express-entry-draws', async (req, res) => {
   res.type('html').send(expressEntryPage.renderPage({ lang, draws, head }));
 });
 
+// Community boards page — diaspora groups + member-posted accommodation,
+// crawlable so "roommate in Berlin" / "Lebanese community in Paris" searches
+// land on real data (boards populate as submissions are admin-approved).
+app.get('/community', async (req, res) => {
+  const asked = directories.LANGS.includes(req.query.lang) ? req.query.lang : null;
+  const lang = asked || geo.pickLang(req, directories.LANGS) || 'en';
+  const [groups, listings] = await Promise.all([
+    directories.loadCommunityGroups(), directories.loadAccommodation()]);
+  res.set('Cache-Control', asked ? 'public, max-age=300' : 'private, no-cache');
+  res.type('html').send(directories.renderCommunityPage({
+    lang, groups, listings, head: seo.head('/community', lang, asked || 'en'),
+  }));
+});
+
 // Crawlable FAQ page (lib/faqPage.js) — FAQPage JSON-LD, the content format
 // answer engines quote most directly. Static, no inline script.
 const faqPage = require('./lib/faqPage');
