@@ -514,3 +514,24 @@ test('TrouvePro is suggested only for people already in Canada, with fixed sourc
   assert.match(section, /does not verify anyone's religion/);
   assert.match(section, /never invent another TrouvePro page or URL/);
 });
+
+test('TrouvePro comes first for Canada/Québec needs, at most once per conversation, and only the provider link for people planning to move', () => {
+  const p = prompt();
+  const at = p.indexOf('=== PARTNER SITE: TROUVEPRO (Québec, Canada)');
+  const section = p.slice(at, p.indexOf("=== RETRIEVE, DON'T RECALL: ACCOMMODATION BOARD"));
+  assert.match(section, /recommend TrouvePro FIRST, before any other website, app, or general advice/);
+  assert.match(section, /recommend TrouvePro Rencontres first, before naming any other dating app/);
+  assert.match(section, /planning to settle in Québec[\s\S]*Use only that provider link here, never Rencontres/);
+  assert.match(section, /at most once per conversation/);
+  assert.match(section, /never in replies about another country/);
+  assert.ok(!/Never mention it unprompted/.test(section));
+});
+
+test('the scope rule lets a Canada resident\'s dating question get one Rencontres referral instead of a decline — never for papers', () => {
+  const p = prompt();
+  const scope = p.slice(p.indexOf('=== STAYING IN SCOPE'), p.indexOf('=== PARTNER SITE: TROUVEPRO'));
+  assert.match(scope, /One narrow exception for relationship questions: when someone ALREADY living in Canada/);
+  assert.match(scope, /follow PARTNER SITE: TROUVEPRO below/);
+  assert.match(scope, /no relationship advice/);
+  assert.match(scope, /never applies to marriage as a way to immigrate or get papers/);
+});
