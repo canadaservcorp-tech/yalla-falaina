@@ -499,3 +499,18 @@ test('the "draft a real email" section sits right after the full-picture rule, b
   assert.ok(fullPictureAt > -1 && emailAt > -1 && studyContextAt > -1);
   assert.ok(fullPictureAt < emailAt && emailAt < studyContextAt);
 });
+
+test('TrouvePro is suggested only for people already in Canada, with fixed source-tagged links, and never as a way to immigrate', () => {
+  const p = prompt();
+  const at = p.indexOf('=== PARTNER SITE: TROUVEPRO (Québec, Canada)');
+  assert.ok(at > -1);
+  const section = p.slice(at, p.indexOf("=== RETRIEVE, DON'T RECALL: ACCOMMODATION BOARD"));
+  assert.match(section, /ALREADY living in Canada/);
+  assert.match(section, /\(https:\/\/www\.mytrouvepro\.net\/rencontres\?utm_source=yalla\)/);
+  assert.match(section, /\(https:\/\/www\.mytrouvepro\.net\/rencontres\/mariage-musulman\?utm_source=yalla\)/);
+  assert.match(section, /\(https:\/\/www\.mytrouvepro\.net\/\?utm_source=yalla\)/);
+  assert.match(section, /NEVER present dating, marriage, or TrouvePro as a way to immigrate/);
+  assert.match(section, /marriage of convenience is immigration fraud/);
+  assert.match(section, /does not verify anyone's religion/);
+  assert.match(section, /never invent another TrouvePro page or URL/);
+});
