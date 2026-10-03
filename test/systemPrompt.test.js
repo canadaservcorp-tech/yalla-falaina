@@ -526,3 +526,12 @@ test('TrouvePro comes first for Canada/Québec needs, at most once per conversat
   assert.match(section, /never in replies about another country/);
   assert.ok(!/Never mention it unprompted/.test(section));
 });
+
+test('the scope rule lets a Canada resident\'s dating question get one Rencontres referral instead of a decline — never for papers', () => {
+  const p = prompt();
+  const scope = p.slice(p.indexOf('=== STAYING IN SCOPE'), p.indexOf('=== PARTNER SITE: TROUVEPRO'));
+  assert.match(scope, /One narrow exception for relationship questions: when someone ALREADY living in Canada/);
+  assert.match(scope, /follow PARTNER SITE: TROUVEPRO below/);
+  assert.match(scope, /no relationship advice/);
+  assert.match(scope, /never applies to marriage as a way to immigrate or get papers/);
+});
