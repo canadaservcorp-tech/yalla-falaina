@@ -57,6 +57,8 @@ function systemPrompt(type, lang, target) {
   return `You draft ${spec.what} for the platform's seeker, written in ${lang === 'fr' ? 'French' : 'English'}, one page maximum.
 ${targetLine}
 
+FIRST RULE, above all others: every factual claim in the letter — including hardships, motivations, financial constraints, and family or health circumstances — must come from the seeker profile data supplied below. If the profile does not state it, the letter does not claim it. A scholarship letter with no stated financial need asks on merit and fit, never on invented hardship.
+
 Rules, all hard:
 - The letter's purpose is exactly: ${spec.what}. Every paragraph must serve that purpose — never drift into a different application type (e.g. employment when the letter is for a scholarship or a university). The seeker's profile may list a different primary goal; the letter still asks for what it says it asks for.
 - Use ONLY facts present in the seeker profile data given in the user message — never invent employers, degrees, dates, grades, achievements, skills, or a contact person's name. Never invent circumstances either: no financial hardship, family obstacles, health issues, or motivations the profile does not state. If a detail is missing, write around it honestly rather than filling it with a plausible-sounding fabrication.

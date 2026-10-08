@@ -535,16 +535,26 @@ router.post('/', sec.limits.concierge, authenticate, sec.requireActiveUser, asyn
     // after PROFILE extraction and the claim scrubs — lands in the 'done'
     // payload, and the client re-renders its bubble from that at the end.
     const PROFILE_MARKER = '---PROFILE---';
+    const END_MARKER = '---END---';
     let emittedChars = 0;
     const relayDelta = (full) => {
-      let safe = full.indexOf(PROFILE_MARKER);
-      if (safe === -1) {
-        safe = full.length;
-        for (let k = Math.min(safe, PROFILE_MARKER.length - 1); k > 0; k--) {
-          if (full.endsWith(PROFILE_MARKER.slice(0, k))) { safe = full.length - k; break; }
-        }
+      // The intake contract puts the block FIRST, so text after ---END--- is
+      // seeker-visible prose and should stream live — withholding it meant
+      // intake replies arrived only in the 'done' payload (verified live:
+      // zero delta frames on intake turns).
+      const mStart = full.indexOf(PROFILE_MARKER);
+      let visible;
+      if (mStart === -1) {
+        visible = full;
+      } else {
+        const e = full.indexOf(END_MARKER, mStart + PROFILE_MARKER.length);
+        visible = full.slice(0, mStart) + (e === -1 ? '' : full.slice(e + END_MARKER.length));
       }
-      if (safe > emittedChars) { sse('delta', { text: full.slice(emittedChars, safe) }); emittedChars = safe; }
+      let safe = visible.length;
+      for (let k = Math.min(safe, PROFILE_MARKER.length - 1); k > 0; k--) {
+        if (visible.endsWith(PROFILE_MARKER.slice(0, k))) { safe = visible.length - k; break; }
+      }
+      if (safe > emittedChars) { sse('delta', { text: visible.slice(emittedChars, safe) }); emittedChars = safe; }
     };
 
     // Profile completeness gate (Section 10) — checked before the paywall.
