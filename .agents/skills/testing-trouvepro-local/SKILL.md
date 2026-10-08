@@ -177,6 +177,60 @@ description: How to run and browser-test the TrouvePro Express + Supabase app, l
   and `Browser.setWindowBounds` with `windowState: "maximized"`; still inspect the
   actual recording frame because viewport screenshots omit browser chrome.
 
+### Bonus access, letter downloads, and acquisition-source checks
+- For a bonus-only countdown fixture, inspect the browser's subscription-status
+  response: future `bonusAccessUntil` plus null `periodEnd` reaches the free-access
+  copy. A paid fixture with both dates may instead take the renewal-copy branch.
+  Subscription and bonus fields live on `users`; `profiles` uses `id`, whereas
+  `seeker_profiles` uses `profile_id`. Do not guess a separate subscriptions table.
+- Check subscribe deep links after health/subscription initialization settles.
+  URL scrubbing and sustained paywall visibility are separate assertions; a later
+  state refresh may undo a panel opened by the query handler. Never initiate a
+  real payment merely to prove the deep link.
+- CV/letter controls need subscribed access and substantive CV content. Read the
+  actual `/api/cv/preview` readiness response; complete synthetic conversational
+  education/work intake and explicit confirmation through the UI rather than
+  manufacturing ready DOM. Test controls for visibility and hit-testability:
+  opening Menu can expose the CV pane while also placing a popover above it.
+- Browser automation may immediately accept native JavaScript prompts with empty
+  text. Capture the real `Page.javascriptDialogOpening` event passively, but do
+  not claim visible prompt pixels, named-target entry, or cancellation unless
+  actually observed. Avoid racing a second CDP dialog handler; handle a
+  "No dialog is showing" rejection without losing network/error observation.
+- If the browser wrapper is unavailable or retains a closed PDF target, native
+  CDP mouse/keyboard input is a viable GUI fallback. Prefer the existing Chrome;
+  if a fresh launch is necessary, use an isolated temporary profile and a free
+  debugging port, retaining the real app/backend. Maximize and dismiss Chrome's
+  password-saving popup before recording. Log in via native input, never by
+  injecting a token or bypassing authentication.
+  CDP `Input.dispatchMouseEvent` can remain pending while a native prompt is
+  open. Keep dialog handling on a concurrent connection/request, and allow the
+  click call to finish after accepting/cancelling rather than timing it out.
+  Capture native dialog pixels from the desktop, since Page.captureScreenshot
+  captures the web page rather than browser chrome/dialogs.
+- For a local bootstrap that sets environment variables before loading Express,
+  `require('./server')` returns the app without listening. Explicitly call
+  `app.listen(port)`; leave the scheduler unstarted for UI-only tests. Confirm
+  runtime health flags for disabled mail/analytics; `/proc/<pid>/environ` may
+  not reflect environment values changed inside the running Node process.
+- For a letter suggestion chip, mark the network baseline immediately before the
+  click. Require the correct prompt/type, a real letter response/download, and no
+  new concierge POST. A visible chip alone does not prove action routing.
+- Verify actual downloaded PDF bytes, not just MIME, filename, or HTTP200.
+  CDP `Network.getResponseBody` can return an empty body for a download even when
+  the browser saved a valid file. Parse the browser download and check recipient,
+  purpose, and target: a scholarship heading alone does not prove scholarship
+  prose. The installed pdf-parse API may be
+  `new PDFParse({data:new Uint8Array(buffer)}).getText()`; `getScreenshot()` can
+  render evidence without opening a local PDF viewer tab that may disrupt tools.
+- For source forwarding without creating an account, visit `?src=instagram`
+  before opening signup, submit a synthetic `.invalid` email with a deliberately
+  short password and checked consent, and observe the registration payload.
+  Expected weak-password rejection proves no successful signup, not persistence.
+  A placeholder local Google client can expose first-party source/ref forwarding;
+  its provider `invalid_client` error is an environment limitation, not evidence
+  of successful OAuth. Never complete OAuth for this routing-only check.
+
 ### Devin Secrets Needed — Yalla Nsafer
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for the Yalla Nsafer project,
   with its schema applied, are required for real signup/login, seed jobs and concierge.
