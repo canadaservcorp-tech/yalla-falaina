@@ -131,6 +131,7 @@
        viewport's physical right edge in both LTR and RTL) reserves it via
        physical padding-right, and the decorative airplane there would collide. */
     body.hasPartners #authWrap { padding-right: 186px; }
+    body.hasPartners.signedIn #appMain { padding-right: 186px; }
     body.hasPartners .sideSlot.right { display: none; }
   }
   /* "Why Yalla Nsafer" lives INSIDE the "..." menu, not on the landing —
@@ -239,8 +240,12 @@
   #newsTicker { display: none; align-items: center; gap: 10px; overflow: hidden;
                 background: var(--panel); border-bottom: 1px solid var(--border);
                 padding: 6px 12px; font-size: 12px; }
+  /* position+background+z-index: the translated track slides left through
+     the row, so without a painted, stacked label the headlines visibly
+     pass UNDER it mid-scroll (verified live). */
   #newsTicker .tag { flex: 0 0 auto; color: var(--accent); font-weight: 600;
-                     text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
+                     text-transform: uppercase; letter-spacing: .04em; font-size: 11px;
+                     position: relative; z-index: 1; background: var(--panel); }
   #newsTrack { display: flex; gap: 40px; white-space: nowrap; flex: 1;
                animation: newsScroll 90s linear infinite; }
   #newsTicker:hover #newsTrack { animation-play-state: paused; }
@@ -279,7 +284,11 @@
   .sideSlot.left  { left: 5vw;  transform: translateY(-50%) rotate(-10deg); }
   .sideSlot.right { right: 5vw; transform: translateY(-50%) rotate(10deg); }
   .sideSlot svg { display: block; width: min(12vw, 160px); height: auto; }
-  @media (min-width: 1100px) { .sideSlot { display: block; } }
+  /* Decorations belong to the sign-in screen only: signed in, the panes
+     reach the viewport edges and fixed-position glyphs/rail would paint
+     over real content (verified live: plane over chat, logos over the
+     medical panel). hasPartners gets a matching gutter on #appMain. */
+  @media (min-width: 1100px) { body:not(.signedIn) .sideSlot { display: block; } }
   #authMsg { font-size: 13px; color: var(--warn); min-height: 18px; margin-top: 8px; }
   .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
   .tabs button { flex: 1; background: var(--bg); color: var(--text-dim); }
@@ -502,7 +511,7 @@
     </div>
     <label data-i18n="labelEmail">Email</label><input type="email" id="email">
     <label data-i18n="labelPassword">Password</label><input type="password" id="password">
-    <div id="googlePasswordHint" style="display:none;font-size:12px;color:var(--text-dim);margin:-8px 0 8px" data-i18n="googlePasswordHint">Signed up with Google? Just tap "Continue with Google" above — you don't need a password.</div>
+    <div id="googlePasswordHint" style="display:none;font-size:12px;color:var(--text-dim);margin:4px 0 8px" data-i18n="googlePasswordHint">Signed up with Google? Just tap "Continue with Google" above — you don't need a password.</div>
     <div id="totpRow" style="display:none">
       <label data-i18n="labelTotp">Authentication code</label>
       <input type="text" id="totpToken" inputmode="numeric" maxlength="6" autocomplete="one-time-code" data-i18n-ph="totpCodePlaceholder" placeholder="6-digit code">
@@ -1274,6 +1283,7 @@
   async function enter() {
     $('authWrap').style.display = 'none';
     $('appMain').style.display = 'flex';
+    document.body.classList.add('signedIn');
     $('logoutBtn').style.display = 'inline-block';
     $('accountSection').style.display = 'block';
     refreshSub();
