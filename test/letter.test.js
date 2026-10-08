@@ -108,3 +108,41 @@ test('POST /api/letter returns a real PDF attachment on the happy path', async (
     assert.equal(buf.subarray(0, 5).toString(), '%PDF-');
   } finally { globalThis.fetch = realFetch; }
 });
+
+const anthropicText = (text) => Promise.resolve(new Response(JSON.stringify({
+  content: [{ type: 'text', text }],
+}), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+test('POST /api/letter regenerates once when the draft asserts an unstated hardship', async () => {
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = (url, opts) => String(url).includes('api.anthropic.com')
+    ? (calls.push(JSON.parse(opts.body)),
+       calls.length === 1
+         ? anthropicText('Dear Scholarship Committee,\n\nI cannot afford my tuition due to my family\'s financial hardship and the loss of my father.\n\nSincerely,\nJean')
+         : anthropicText('Dear Scholarship Committee,\n\n' + 'I am eager to pursue graduate study in agriculture and to contribute to my field through dedicated research and honest work over the coming years. '.repeat(3) + '\n\nSincerely,\nJean'))
+    : realFetch(url, opts);
+  try {
+    const token = caller({ subscription_status: 'active' }, READY_PROFILE, READY_SEEKER);
+    const r = await post(token, { type: 'scholarship' });
+    assert.equal(r.status, 200);
+    assert.equal(calls.length, 2);
+    assert.match(calls[1].messages[0].content, /cannot afford/);
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('POST /api/letter strips ungrounded sentences if the retry still violates', async () => {
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (url, opts) => String(url).includes('api.anthropic.com')
+    ? (++calls && anthropicText('Dear Scholarship Committee,\n\n' + 'I am eager to pursue graduate study in agriculture and to contribute to my field through dedicated research and honest work over the coming years. '.repeat(3) + 'I fled the war in my country which destroyed my family home.\n\nSincerely,\nJean'))
+    : realFetch(url, opts);
+  try {
+    const token = caller({ subscription_status: 'active' }, READY_PROFILE, READY_SEEKER);
+    const r = await post(token, { type: 'scholarship' });
+    assert.equal(r.status, 200); // scrubbed body still renders a PDF
+    assert.equal(calls, 2);
+  } finally { globalThis.fetch = realFetch; }
+});
