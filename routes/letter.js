@@ -66,7 +66,40 @@ Rules, all hard:
 - Output ONLY the letter body: the greeting line, the body paragraphs (separated by a blank line), and the sign-off. No subject line, no sender address block, no commentary, no markdown.`;
 }
 
-async function draftLetter(system, profileSummary) {
+// Deterministic backstop for the FIRST RULE: the model sometimes still
+// asserts circumstances the profile never states (verified live — an
+// invented financial hardship). Each group is a claim the letter may ONLY
+// make if the profile JSON contains a matching grounding token.
+const CIRCUMSTANCE_GROUPS = [
+  { name: 'financial_need', grounds: ['income', 'sponsor', 'financial', 'scholarship_need', 'afford'],
+    re: /\b(financial(?:ly)?[^.]{0,40}(hardship|constraint|difficult|need|burden|struggle)|cannot afford|unable to afford|could not afford|poverty|impoverish|low-income|economically disadvantag|struggling to (pay|afford|finance))\b/i },
+  { name: 'family_crisis', grounds: ['father', 'mother', 'parent', 'sibling', 'family', 'breadwinner', 'orphan', 'widow'],
+    re: /\b(my (late|deceased|sick|ill|ailing|elderly) (father|mother|parent|sibling|family)|family['’]s (illness|medical|financial|death)|sole breadwinner|caring for my (father|mother|parent|family|sibling)|lost my (father|mother|parent|job|home)|death of my|orphan(ed)?\b|widow(ed)?\b)/i },
+  { name: 'displacement', grounds: ['refugee', 'asylum', 'displaced', 'fled', 'refuge'],
+    re: /\b(fled|fleeing|forced to (flee|leave|escape)|escaped|refugee camp|displaced (my|me|persons|people|by|from)|war (forced|pushed|made me)|conflict (forced|displaced)|seeking asylum|as a refugee)\b/i },
+  { name: 'personal_health', grounds: ['disability', 'disabled', 'illness', 'disease', 'condition', 'medical', 'chronic', 'cancer'],
+    re: /\b(my (illness|disease|condition|disability|diagnosis)|suffering from|living with (a |an )?(disability|illness|condition|chronic)|chronic (illness|disease|condition)|recovering from (illness|surgery|injury))\b/i },
+];
+
+function ungroundedSentences(text, profileSummary) {
+  const profile = (profileSummary || '').toLowerCase();
+  const sentences = String(text).split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+  const bad = [];
+  for (const s of sentences) {
+    for (const g of CIRCUMSTANCE_GROUPS) {
+      if (g.re.test(s) && !g.grounds.some(t => profile.includes(t))) { bad.push(s); break; }
+    }
+  }
+  return bad;
+}
+
+function stripSentences(text, sentences) {
+  const bad = new Set(sentences.map(s => s.trim()));
+  return String(text).split(/\n+/).map(p => p.split(/(?<=[.!?])\s+/).filter(s => !bad.has(s.trim())).join(' '))
+    .filter(p => p.trim()).join('\n\n').trim();
+}
+
+async function draftLetter(system, profileSummary, extra) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -78,7 +111,7 @@ async function draftLetter(system, profileSummary) {
       model: MODEL,
       max_tokens: 1600,
       system,
-      messages: [{ role: 'user', content: 'Seeker profile data (the ONLY facts you may use):\n' + profileSummary + '\n\nWrite the letter now.' }],
+      messages: [{ role: 'user', content: 'Seeker profile data (the ONLY facts you may use):\n' + profileSummary + (extra ? '\n\n' + extra : '') + '\n\nWrite the letter now.' }],
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
@@ -134,9 +167,31 @@ router.post('/', sec.limits.cv, authenticate, sec.requireActiveUser, async (req,
       return res.status(502).json({ error: 'Could not draft the letter right now — please try again', code: 'ERR_LETTER_DRAFT_FAILED' });
     }
 
+    // Server-side honesty gate: a draft asserting circumstances the profile
+    // never stated is rejected — one regeneration naming the offenders, then
+    // a deterministic strip if the model repeats them.
+    let letter = text;
+    let offenders = ungroundedSentences(letter, profileSummary);
+    if (offenders.length) {
+      console.warn('letter ungrounded claims; retrying', { user: req.user.id, count: offenders.length });
+      const retry = await draftLetter(systemPrompt(type, lang, target), profileSummary,
+        'Your previous draft claimed circumstances not present in the profile — remove every assertion of this kind and rewrite honestly: ' +
+        offenders.map(s => `"${s.slice(0, 160)}"`).join('; '));
+      if (retry.status === 200 && retry.text) {
+        const retryBad = ungroundedSentences(retry.text, profileSummary);
+        letter = retryBad.length ? stripSentences(retry.text, retryBad) : retry.text;
+        if (retryBad.length) console.warn('letter scrubbed ungrounded sentences', { user: req.user.id, count: retryBad.length });
+      } else {
+        letter = stripSentences(letter, offenders);
+      }
+      if (!letter || letter.split(/\s+/).length < 60) {
+        return res.status(502).json({ error: 'Could not draft the letter right now — please try again', code: 'ERR_LETTER_DRAFT_FAILED' });
+      }
+    }
+
     const buf = await renderLetterPdf({
       name: data.name, email: data.email, phone: data.phone,
-      city: data.city, country: data.country, subject, body: text, lang,
+      city: data.city, country: data.country, subject, body: letter, lang,
     });
     const slug = (data.name || 'yalla-nsafer').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'letter';
     res.setHeader('Content-Type', 'application/pdf');
