@@ -116,17 +116,20 @@ test('customer.subscription.updated (still active, not cancelling) refreshes the
 
 test('customer.subscription.updated with cancel_at_period_end -> only subscription_cancel_at is written (a GRACE patch, same as PayPal cancellation)', async () => {
   h.mock.__set('users', { data: { id: 42, subscription_period_end: null }, error: null });
+  // Relative future date — a hardcoded one would rot into the past (the
+  // GRACE path falls back to now() when the period end is already gone).
+  const periodEndIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '.000Z');
   const r = await webhook({
     type: 'customer.subscription.updated',
     data: { object: {
       id: 'sub_42', status: 'active', cancel_at_period_end: true,
-      current_period_end: Math.floor(new Date('2026-10-08T00:00:00.000Z').getTime() / 1000),
+      current_period_end: Math.floor(new Date(periodEndIso).getTime() / 1000),
     } },
   });
   assert.equal(r.status, 200);
   const patch = h.mock.__writes('users', 'update')[0].payload;
   assert.deepEqual(Object.keys(patch), ['subscription_cancel_at']);
-  assert.equal(patch.subscription_cancel_at, '2026-10-08T00:00:00.000Z');
+  assert.equal(patch.subscription_cancel_at, periodEndIso);
 });
 
 test('customer.subscription.deleted ends access: status canceled, tier none, retention countdown started', async () => {
