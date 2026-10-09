@@ -132,3 +132,15 @@ test('sitemap entries carry lastmod freshness dates', async () => {
   const map = await fetch(`${h.base}/sitemap.xml`).then(x => x.text());
   assert.match(map, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
 });
+
+test('unknown paths return 404 status but still serve the app shell (no soft-404)', async () => {
+  const r = await fetch(`${h.base}/this-page-does-not-exist-xyz`);
+  assert.equal(r.status, 404);
+  const body = await r.text();
+  assert.match(body, /<html/);
+});
+
+test('known indexable paths keep their 200', async () => {
+  const r = await fetch(`${h.base}/faq`);
+  assert.equal(r.status, 200);
+});
