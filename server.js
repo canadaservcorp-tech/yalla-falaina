@@ -265,7 +265,11 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 // the SPA is a single file, so give crawlers per-route <head> metadata on the way out
 const SHELL = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
 app.get('*', (req, res) => {
-  const route = seo.INDEXABLE.includes(req.path) ? req.path : '/';
+  // Soft-404 fix: an unknown path gets the shell (the app still boots) but a
+  // real 404 status — crawlers/Search Console otherwise record a 200 soft-404
+  // and waste crawl budget on URLs that don't exist.
+  const known = seo.INDEXABLE.includes(req.path);
+  const route = known ? req.path : '/';
   // ?lang= is the visitor's own choice and always wins; without it the country
   // the request comes from picks the first page's language (lib/geo.js).
   const asked = seo.LANGS.includes(req.query.lang) ? req.query.lang : null;
@@ -280,7 +284,7 @@ app.get('*', (req, res) => {
   const html = SHELL.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, () => seo.head(route, lang, asked || 'en'))
     .replace('<!--analytics-->', () => analytics.head())
     .replace(/<html lang="[a-z]+">/, `<html lang="${lang}"${lang === 'ar' ? ' dir="rtl"' : ''} data-sub-price="${geo.priceLabel(req)}">`);
-  res.type('html').send(sec.applyNonce(html, res.locals.cspNonce));
+  res.status(known ? 200 : 404).type('html').send(sec.applyNonce(html, res.locals.cspNonce));
 });
 
 // last resort: log the detail, never leak internals (stack traces, SQL) to clients
